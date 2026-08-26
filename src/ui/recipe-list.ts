@@ -1,4 +1,5 @@
 import { setIcon } from "obsidian";
+import { guarded } from "../guard";
 import { DRAG_MIME } from "./planner";
 import { enableTouchDrag } from "./touch-drag";
 import type PantryPlugin from "../main";
@@ -399,9 +400,11 @@ export class RecipeList {
 		card.onclick = (event: MouseEvent) => {
 			const file = this.plugin.app.vault.getFileByPath(recipe.path);
 			if (!file) return;
-			void this.plugin.app.workspace
-				.getLeaf(event.metaKey || event.ctrlKey ? "tab" : false)
-				.openFile(file);
+			guarded(`could not open ${recipe.name}`, () =>
+				this.plugin.app.workspace
+					.getLeaf(event.metaKey || event.ctrlKey ? "tab" : false)
+					.openFile(file)
+			);
 		};
 	}
 }

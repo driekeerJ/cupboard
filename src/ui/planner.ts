@@ -1,4 +1,5 @@
 import { Notice, setIcon } from "obsidian";
+import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import {
 	addDays,
@@ -276,27 +277,35 @@ export class PlannerGrid {
 			attr: { "aria-label": "Open this week's note" },
 		});
 		setIcon(openNote, "file-text");
-		openNote.onclick = () => void this.openWeekNote();
+		openNote.onclick = () =>
+			guarded("could not open this week's note", () => this.openWeekNote());
 
 		const previous = nav.createEl("button", {
 			cls: "pantry-icon-button",
 			attr: { "aria-label": "Previous week" },
 		});
 		setIcon(previous, "chevron-left");
-		previous.onclick = () => void this.goTo(addDays(this.weekStart, -7));
+		previous.onclick = () =>
+			guarded("could not load that week", () =>
+				this.goTo(addDays(this.weekStart, -7))
+			);
 
 		const today = nav.createEl("button", {
 			cls: "pantry-text-button",
 			text: "Today",
 		});
-		today.onclick = () => void this.goTo(new Date());
+		today.onclick = () =>
+			guarded("could not load this week", () => this.goTo(new Date()));
 
 		const next = nav.createEl("button", {
 			cls: "pantry-icon-button",
 			attr: { "aria-label": "Next week" },
 		});
 		setIcon(next, "chevron-right");
-		next.onclick = () => void this.goTo(addDays(this.weekStart, 7));
+		next.onclick = () =>
+			guarded("could not load that week", () =>
+				this.goTo(addDays(this.weekStart, 7))
+			);
 	}
 
 	private async openWeekNote(): Promise<void> {
@@ -433,7 +442,9 @@ export class PlannerGrid {
 			timer = 0;
 			if (noteAt(this.plan, isoDate) === input.value.trim()) return;
 			setNote(this.plan, isoDate, input.value);
-			void this.saveQuietly();
+			// saveQuietly meldt zelf al wat er misgaat; hier alleen de promise
+			// netjes afhandelen zonder het veld onder de cursor te herbouwen.
+			void this.saveQuietly().catch(() => undefined);
 		};
 
 		input.addEventListener("input", () => {
@@ -492,7 +503,9 @@ export class PlannerGrid {
 		add.onclick = (event: MouseEvent) => {
 			event.stopPropagation();
 			new AddRecipeModal(this.plugin, (recipe) => {
-				void this.handleDrop({ kind: "recipe", name: recipe.name }, isoDate, meal);
+				guarded(`could not plan ${recipe.name}`, () =>
+					this.handleDrop({ kind: "recipe", name: recipe.name }, isoDate, meal)
+				);
 			}).open();
 		};
 
@@ -509,7 +522,11 @@ export class PlannerGrid {
 			event.preventDefault();
 			slot.removeClass("is-drop-target");
 			const payload = readPayload(event);
-			if (payload) void this.handleDrop(payload, isoDate, meal);
+			if (payload) {
+				guarded("could not plan that", () =>
+					this.handleDrop(payload, isoDate, meal)
+				);
+			}
 		});
 	}
 
@@ -534,9 +551,11 @@ export class PlannerGrid {
 		setIcon(remove, "x");
 		remove.onclick = (event: MouseEvent) => {
 			event.stopPropagation();
-			void this.mutate((plan) => {
-				removeRecipe(plan, date, meal, index);
-			});
+			guarded("could not remove that meal", () =>
+				this.mutate((plan) => {
+					removeRecipe(plan, date, meal, index);
+				})
+			);
 		};
 
 		const servings = servingsFor(this.plugin, entry);
@@ -572,13 +591,21 @@ export class PlannerGrid {
 			label: () => name,
 			drop: (payload, toDate, toMeal) => {
 				const destination = findMeal(this.plugin.settings.meals, toMeal);
-				if (destination) void this.handleDrop(payload, toDate, destination);
+				if (destination) {
+					guarded("could not move that meal", () =>
+						this.handleDrop(payload, toDate, destination)
+					);
+				}
 			},
 		});
 
 		const openNote = () => {
 			const file = this.plugin.app.metadataCache.getFirstLinkpathDest(name, "");
-			if (file) void this.plugin.app.workspace.getLeaf(false).openFile(file);
+			if (file) {
+				guarded(`could not open ${name}`, () =>
+					this.plugin.app.workspace.getLeaf(false).openFile(file)
+				);
+			}
 		};
 
 		card.onclick = (event: MouseEvent) => {
@@ -590,7 +617,7 @@ export class PlannerGrid {
 				this.plugin,
 				entry,
 				card.getBoundingClientRect(),
-				() => void this.persist(),
+				() => guarded("could not save your meal plan", () => this.persist()),
 				openNote,
 				{
 					date,
@@ -598,9 +625,13 @@ export class PlannerGrid {
 					days: this.weekDayOptions(),
 					meals: this.plugin.settings.meals.map(mealLabel),
 					move: (targetDate: string, targetMeal: string) =>
-						void this.moveEntry(date, meal, index, targetDate, targetMeal),
+						guarded("could not move that meal", () =>
+							this.moveEntry(date, meal, index, targetDate, targetMeal)
+						),
 					cook: () =>
-						void this.plugin.openCook(name, servingsFor(this.plugin, entry)),
+						guarded("could not open cook mode", () =>
+							this.plugin.openCook(name, servingsFor(this.plugin, entry))
+						),
 				}
 			);
 		};
@@ -626,7 +657,9 @@ export class PlannerGrid {
 			setIcon(button, icon);
 			button.onclick = (event: MouseEvent) => {
 				event.stopPropagation();
-				void this.setStatus(entry, status === value ? null : value);
+				guarded("could not book that meal", () =>
+					this.setStatus(entry, status === value ? null : value)
+				);
 			};
 		};
 
@@ -638,6 +671,12 @@ export class PlannerGrid {
 	 * Moves a meal between planned, eaten and skipped, keeping the stock counts
 	 * in step. An earlier "eaten" is always given back first, so switching from
 	 * eaten to skipped is a clean reversal rather than a second subtraction.
+	 *
+	 * Wat er ook misgaat, het plan moet vastleggen wat er van de voorraad af
+	 * ging. Klapte deze keten halverwege, dan stonden er producten afgeboekt
+	 * terwijl het plan nog "niet gegeten" zei — en boekte de volgende tik ze
+	 * nog een keer af. Vandaar de `finally`: eerst opschrijven wat er gebeurd
+	 * is, dan pas de fout melden.
 	 */
 	private async setStatus(
 		entry: PlannedRecipe,
@@ -647,33 +686,56 @@ export class PlannerGrid {
 		if (current === next) return;
 
 		let given: StockChange | null = null;
-		if (current === "eaten" && entry.used) {
-			given = await returnToStock(this.plugin, entry.used);
-		}
-
 		let taken: StockChange | null = null;
-		if (next === "eaten") {
-			const amounts = await consumptionOf(this.plugin, entry);
-			taken = await takeFromStock(this.plugin, amounts);
+
+		try {
+			if (current === "eaten" && entry.used) {
+				given = await returnToStock(this.plugin, entry.used);
+			}
+
+			if (next === "eaten") {
+				const amounts = await consumptionOf(this.plugin, entry);
+				taken = await takeFromStock(this.plugin, amounts);
+			}
+		} finally {
+			await this.mutate(() => {
+				if (next) entry.status = next;
+				else delete entry.status;
+
+				if (taken && Object.keys(taken.used).length > 0) entry.used = taken.used;
+				else delete entry.used;
+			});
+
+			this.plugin.refreshStockViews();
+			guarded("could not refresh your grocery list", () =>
+				this.plugin.list.refresh()
+			);
 		}
 
-		await this.mutate(() => {
-			if (next) entry.status = next;
-			else delete entry.status;
+		this.reportStockChange(taken, given);
+	}
 
-			if (taken && Object.keys(taken.used).length > 0) entry.used = taken.used;
-			else delete entry.used;
-		});
-
-		this.plugin.refreshStockViews();
-		void this.plugin.list.refresh();
+	/** Vertelt wat er niet geboekt kon worden, en waarom niet. */
+	private reportStockChange(
+		taken: StockChange | null,
+		given: StockChange | null
+	): void {
+		const list = (names: string[]): string => {
+			const shown = names.slice(0, 3).join(", ");
+			return names.length > 3 ? `${shown} and ${names.length - 3} more` : shown;
+		};
 
 		const unsure = [...(taken?.unsure ?? []), ...(given?.unsure ?? [])];
 		if (unsure.length > 0) {
-			const shown = unsure.slice(0, 3).join(", ");
-			const rest = unsure.length > 3 ? ` and ${unsure.length - 3} more` : "";
 			new Notice(
-				`No count to work from for ${shown}${rest}. Flagged to check instead.`
+				`No count to work from for ${list(unsure)}. Flagged to check instead.`
+			);
+		}
+
+		const failed = [...(taken?.failed ?? []), ...(given?.failed ?? [])];
+		if (failed.length > 0) {
+			new Notice(
+				`Pantry could not update ${list(failed)}. See the console for details.`
 			);
 		}
 	}

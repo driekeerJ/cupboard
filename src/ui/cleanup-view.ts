@@ -1,4 +1,5 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
+import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import {
 	commonUnit,
@@ -64,7 +65,7 @@ export class CleanupView extends ItemView {
 	}
 
 	refresh(): void {
-		void this.reload();
+		guarded("could not refresh the cleanup list", () => this.reload());
 	}
 
 	private async reload(): Promise<void> {
@@ -198,7 +199,10 @@ export class CleanupView extends ItemView {
 			choices,
 			"Per piece",
 			"You count them one by one — three onions, one lemon.",
-			() => void this.answer(product, { unit: "piece", size: "", amount: "" })
+			() =>
+				guarded(`could not save your answer for ${product.name}`, () =>
+					this.answer(product, { unit: "piece", size: "", amount: "" })
+				)
 		);
 
 		const pack = this.choice(
@@ -216,7 +220,10 @@ export class CleanupView extends ItemView {
 			choices,
 			"Amount does not matter",
 			"Salt, oil, spices: you keep them in the house, you do not measure them onto a list.",
-			() => void this.answer(product, { amount: "any" })
+			() =>
+				guarded(`could not save your answer for ${product.name}`, () =>
+					this.answer(product, { amount: "any" })
+				)
 		);
 
 		if (this.expanded === product.path) {
@@ -288,11 +295,13 @@ export class CleanupView extends ItemView {
 				Number.isFinite(value) && value > 0 && unit.value.trim()
 					? `${value} ${unit.value.trim()}`
 					: "";
-			void this.answer(product, {
-				unit: name.value.trim() || "pack",
-				size,
-				amount: "",
-			});
+			guarded(`could not save your answer for ${product.name}`, () =>
+				this.answer(product, {
+					unit: name.value.trim() || "pack",
+					size,
+					amount: "",
+				})
+			);
 		};
 		save.onclick = commit;
 		[name, amount, unit].forEach((field) =>
@@ -320,7 +329,8 @@ export class CleanupView extends ItemView {
 			choices,
 			"Make it a product",
 			`Creates "${entry.name}" in your product folder.`,
-			() => void this.create(entry)
+			() =>
+				guarded(`could not create ${entry.name}`, () => this.create(entry))
 		);
 
 		const link = this.choice(
@@ -361,7 +371,10 @@ export class CleanupView extends ItemView {
 						cls: "pantry-picker-row",
 						text: product.name,
 					});
-					row.onclick = () => void this.link(entry, product);
+					row.onclick = () =>
+						guarded(`could not link ${entry.name} to ${product.name}`, () =>
+							this.link(entry, product)
+						);
 				});
 		};
 		search.addEventListener("input", () => {
@@ -426,7 +439,9 @@ export class CleanupView extends ItemView {
 		setIcon(open.createSpan({ cls: "pantry-button-icon" }), "file-text");
 		open.createSpan({ text: "Open note" });
 		open.onclick = () => {
-			void this.app.workspace.getLeaf(false).openFile(product.file);
+			guarded(`could not open ${product.name}`, () =>
+				this.app.workspace.getLeaf(false).openFile(product.file)
+			);
 		};
 	}
 
@@ -477,14 +492,17 @@ export class CleanupView extends ItemView {
 				text: "Answer again",
 			});
 			again.onclick = () => {
-				void this.plugin.products
-					.update(issue.product, { unit: "", size: "", amount: "" })
-					.then(() => {
-						this.mode = "todo";
-						this.skipped.delete(issue.product.path);
-						this.draw();
-						return this.reload();
+				guarded(`could not reopen ${issue.product.name}`, async () => {
+					await this.plugin.products.update(issue.product, {
+						unit: "",
+						size: "",
+						amount: "",
 					});
+					this.mode = "todo";
+					this.skipped.delete(issue.product.path);
+					this.draw();
+					await this.reload();
+				});
 			};
 		});
 	}

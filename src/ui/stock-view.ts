@@ -1,5 +1,6 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import { startOfWeek } from "../date";
+import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import { UNASSIGNED, type Count, type Product, type ProductPatch } from "../products";
 import { drawBackLink } from "./nav";
@@ -82,7 +83,10 @@ export class StockView extends ItemView {
 			})
 		);
 		this.draw();
-		void this.reload().then(() => this.restoreScroll());
+		guarded("could not load your stock", async () => {
+			await this.reload();
+			this.restoreScroll();
+		});
 	}
 
 	/**
@@ -108,7 +112,7 @@ export class StockView extends ItemView {
 	}
 
 	refresh(): void {
-		void this.reload();
+		guarded("could not refresh your stock", () => this.reload());
 	}
 
 	private async reload(): Promise<void> {
@@ -161,7 +165,7 @@ export class StockView extends ItemView {
 				this.plugin.ui.stock.scroll = 0;
 				this.draw();
 				this.contentEl.scrollTop = 0;
-				void this.reload();
+				guarded("could not refresh your stock", () => this.reload());
 			};
 		});
 
@@ -224,7 +228,10 @@ export class StockView extends ItemView {
 	 * same row starts the wait over, so correcting a count is never a race.
 	 */
 	private change(product: Product, patch: ProductPatch): void {
-		void this.plugin.products.update(product, patch).then(() => {
+		// De redraw hoort binnen de guard: mislukt de schrijfactie, dan mag het
+		// scherm geen getal tonen dat niet op schijf staat.
+		guarded(`could not update ${product.name}`, async () => {
+			await this.plugin.products.update(product, patch);
 			this.hold(product);
 			this.drawList();
 		});

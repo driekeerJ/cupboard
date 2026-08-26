@@ -28,6 +28,7 @@ import { HOME_VIEW_TYPE, HomeView } from "./ui/home-view";
 import { PlanStore } from "./plan";
 import { ViewMemory } from "./ui/view-memory";
 import { fromISODate, startOfWeek, toISODate } from "./date";
+import { guarded } from "./guard";
 import { PlannerGrid } from "./ui/planner";
 import { RecipeIndex } from "./recipes";
 import type { PantrySettings } from "./types";
@@ -67,7 +68,7 @@ export default class PantryPlugin extends Plugin {
 		// Skip the echo of our own write; the grid already shows that change.
 		if (this.plans.recentlyWrote()) return;
 		this.refreshViews();
-		void this.list.refresh();
+		guarded("could not refresh your grocery list", () => this.list.refresh());
 	}, 250, true);
 
 	async onload(): Promise<void> {
@@ -75,7 +76,10 @@ export default class PantryPlugin extends Plugin {
 
 		this.app.workspace.onLayoutReady(() => {
 			this.products.build();
-			void this.shops.build().then(() => this.list.refresh());
+			guarded("could not read your shops", async () => {
+				await this.shops.build();
+				await this.list.refresh();
+			});
 		});
 
 		this.registerView(
@@ -120,7 +124,7 @@ export default class PantryPlugin extends Plugin {
 
 		// One door into the plugin; the screens behind it navigate to each other.
 		this.addRibbonIcon("chef-hat", "Open Pantry", () => {
-			void this.activateHome();
+			guarded("could not open Pantry", () => this.activateHome());
 		});
 
 		// The only screen the palette offers. Everything else is reached from
@@ -130,7 +134,7 @@ export default class PantryPlugin extends Plugin {
 		this.addCommand({
 			id: "open-pantry",
 			name: "Open Pantry",
-			callback: () => void this.activateHome(),
+			callback: () => guarded("could not open Pantry", () => this.activateHome()),
 		});
 
 		this.addCommand({
@@ -142,7 +146,10 @@ export default class PantryPlugin extends Plugin {
 		this.addCommand({
 			id: "products-from-recipes",
 			name: "Create products from recipes",
-			callback: () => void this.productsFromRecipes(),
+			callback: () =>
+				guarded("could not add products from your recipes", () =>
+					this.productsFromRecipes()
+				),
 		});
 
 		this.addCommand({
@@ -151,7 +158,9 @@ export default class PantryPlugin extends Plugin {
 			checkCallback: (checking: boolean) => {
 				const file = this.app.workspace.getActiveFile();
 				if (!file || !this.isRecipe(file)) return false;
-				if (!checking) void this.openCook(file.path);
+				if (!checking) {
+					guarded("could not open cook mode", () => this.openCook(file.path));
+				}
 				return true;
 			},
 		});
@@ -164,7 +173,9 @@ export default class PantryPlugin extends Plugin {
 					item
 						.setTitle("Cook this recipe")
 						.setIcon("chef-hat")
-						.onClick(() => void this.openCook(file.path))
+						.onClick(() =>
+							guarded("could not open cook mode", () => this.openCook(file.path))
+						)
 				);
 			})
 		);
@@ -208,7 +219,7 @@ export default class PantryPlugin extends Plugin {
 			child.register(() => {
 				if (grid.element().parentElement === el) grid.detach();
 			});
-			void grid.render();
+			guarded("could not draw the planner", () => grid.render());
 		});
 
 		this.addSettingTab(new PantrySettingTab(this.app, this));
@@ -216,13 +227,20 @@ export default class PantryPlugin extends Plugin {
 		this.registerEvent(
 			this.app.metadataCache.on("changed", (file: TFile) => {
 				if (this.shops.isShopNote(file.path)) {
-					void this.shops.build().then(() => this.list.refresh());
+					guarded("could not read your shops", async () => {
+						await this.shops.build();
+						await this.list.refresh();
+					});
 					this.refreshViews();
 					return;
 				}
 				if (this.list.isListNote(file.path)) {
 					// Someone ticked a box in the note itself; skip our own echo.
-					if (!this.list.recentlyWrote()) void this.list.syncFromNote();
+					if (!this.list.recentlyWrote()) {
+						guarded("could not read your grocery note", () =>
+							this.list.syncFromNote()
+						);
+					}
 					return;
 				}
 				this.scheduleRefresh();

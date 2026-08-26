@@ -1,4 +1,5 @@
 import { ItemView, Notice, TFile, ViewStateResult, WorkspaceLeaf } from "obsidian";
+import { guarded } from "../guard";
 
 import type PantryPlugin from "../main";
 import {
@@ -82,7 +83,9 @@ export class CookView extends ItemView {
 	async onOpen(): Promise<void> {
 		this.registerEvent(
 			this.app.vault.on("modify", (file) => {
-				if (file.path === this.path) void this.reload();
+				if (file.path === this.path) {
+					guarded("could not reload the recipe", () => this.reload());
+				}
 			})
 		);
 		// Half a second keeps the seconds flipping over cleanly without churn.
@@ -92,7 +95,9 @@ export class CookView extends ItemView {
 
 	async onClose(): Promise<void> {
 		this.chips = [];
-		void this.audio?.close();
+		// Geluid is versiering: mislukt het sluiten, dan is dat geen boodschap
+		// voor de kok. Wel opvangen, want een losse rejection is geen stijl.
+		this.audio?.close().catch(() => undefined);
 		this.audio = null;
 	}
 
@@ -162,14 +167,19 @@ export class CookView extends ItemView {
 			attr: { "aria-label": "Open recipe note" },
 		});
 		openNote.onclick = () => {
-			if (this.file) void this.app.workspace.getLeaf(false).openFile(this.file);
+			const file = this.file;
+			if (file) {
+				guarded("could not open the recipe note", () =>
+					this.app.workspace.getLeaf(false).openFile(file)
+				);
+			}
 		};
 
 		const reset = actions.createEl("button", {
 			cls: "pantry-text-button",
 			text: "Start over",
 		});
-		reset.onclick = () => void this.reset();
+		reset.onclick = () => guarded("could not start over", () => this.reset());
 
 		const row = header.createDiv({ cls: "pantry-servings-row" });
 
@@ -180,7 +190,10 @@ export class CookView extends ItemView {
 			text: "−",
 			attr: { "aria-label": "Fewer servings" },
 		});
-		minus.onclick = () => void this.setServings(this.servings - SERVINGS_STEP);
+		minus.onclick = () =>
+			guarded("could not change the servings", () =>
+				this.setServings(this.servings - SERVINGS_STEP)
+			);
 
 		row.createSpan({
 			cls: "pantry-servings-value",
@@ -194,7 +207,10 @@ export class CookView extends ItemView {
 			text: "+",
 			attr: { "aria-label": "More servings" },
 		});
-		plus.onclick = () => void this.setServings(this.servings + SERVINGS_STEP);
+		plus.onclick = () =>
+			guarded("could not change the servings", () =>
+				this.setServings(this.servings + SERVINGS_STEP)
+			);
 
 		const base = this.file ? this.plugin.cook.baseServings(this.file) : null;
 		row.createSpan({
@@ -253,7 +269,7 @@ export class CookView extends ItemView {
 
 			row.onclick = () => {
 				this.session.ingredients[index] = !ticked;
-				void this.persist();
+				guarded("could not save your ticks", () => this.persist());
 				this.draw();
 			};
 		});
@@ -293,7 +309,7 @@ export class CookView extends ItemView {
 			// A tap on a timer must not also tick the step off.
 			if ((event.target as HTMLElement).closest(".pantry-timer")) return;
 			this.session.steps[index] = !ticked;
-			void this.persist();
+			guarded("could not save your ticks", () => this.persist());
 			this.draw();
 		};
 		box.onclick = toggle;
@@ -317,7 +333,9 @@ export class CookView extends ItemView {
 
 			chip.onclick = (event: MouseEvent) => {
 				event.stopPropagation();
-				void this.toggleTimer(key, duration.seconds);
+				guarded("could not start the timer", () =>
+					this.toggleTimer(key, duration.seconds)
+				);
 			};
 
 			this.chips.push({ key, seconds: duration.seconds, el: chip, clockEl: clock });
@@ -377,7 +395,8 @@ export class CookView extends ItemView {
 					.webkitAudioContext;
 			if (!Ctor) return;
 			this.audio = this.audio ?? new Ctor();
-			void this.audio.resume();
+			// Zie onClose: geluid mag stil mislukken.
+			this.audio.resume().catch(() => undefined);
 		} catch {
 			this.audio = null;
 		}
@@ -388,7 +407,7 @@ export class CookView extends ItemView {
 		const ctx = this.audio;
 		if (!ctx) return;
 		try {
-			void ctx.resume();
+			ctx.resume().catch(() => undefined);
 			[0, 0.3, 0.6].forEach((offset) => {
 				const start = ctx.currentTime + offset;
 				const osc = ctx.createOscillator();

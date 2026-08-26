@@ -1,6 +1,7 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type PantryPlugin from "./main";
 import { WEEKDAY_NAMES } from "./date";
+import { guarded } from "./guard";
 import type { HouseholdMember, MealType, PantrySettings } from "./types";
 
 export const DEFAULT_SETTINGS: PantrySettings = {
@@ -97,7 +98,9 @@ export class PantrySettingTab extends PluginSettingTab {
 		});
 		input.addEventListener("blur", () => {
 			const after = current();
-			void this.migrateName(kind, before, after);
+			guarded("could not rename that everywhere", () =>
+				this.migrateName(kind, before, after)
+			);
 			before = after;
 		});
 	}

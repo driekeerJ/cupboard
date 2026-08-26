@@ -1,4 +1,5 @@
 import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
+import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import { UNASSIGNED, missingFields, type Product } from "../products";
 import { drawBackLink } from "./nav";
@@ -80,13 +81,17 @@ export class ProductsView extends ItemView {
 			cls: "pantry-text-button",
 			text: "From recipes",
 		});
-		fromRecipes.onclick = () => void this.plugin.productsFromRecipes();
+		fromRecipes.onclick = () =>
+			guarded("could not add products from your recipes", () =>
+				this.plugin.productsFromRecipes()
+			);
 
 		const add = actions.createEl("button", {
 			cls: "pantry-text-button pantry-primary-button",
 			text: "New product",
 		});
-		add.onclick = () => void this.createProduct();
+		add.onclick = () =>
+			guarded("could not create the product", () => this.createProduct());
 
 		const search = inner.createEl("input", {
 			cls: "pantry-field-search",

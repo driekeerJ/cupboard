@@ -8,9 +8,9 @@
  * `ignoreVoid: false`: een kale `void promise` is géén afhandeling, alleen het
  * wegdrukken van de waarschuwing.
  *
- * Niveau `warn`, niet `error`, zolang de refactor loopt: er staan er nog
- * tientallen open en de build moet groen kunnen blijven. Zodra batch B klaar is
- * mag dit op `error`.
+ * Sinds batch B staat de teller op nul en de regel op `error`: elke nieuwe
+ * ongevangen schrijfactie is vanaf nu een fout, geen achterstand. De ene plek
+ * die bewust niet afwacht is `guarded()` in src/guard.ts, met de reden erbij.
  */
 import tseslint from "typescript-eslint";
 import obsidianmd from "eslint-plugin-obsidianmd";
@@ -37,7 +37,7 @@ export default tseslint.config(
 		rules: {
 			// De kern van 0b. Zie de kop van dit bestand.
 			"@typescript-eslint/no-floating-promises": [
-				"warn",
+				"error",
 				{ ignoreVoid: false, ignoreIIFE: false },
 			],
 

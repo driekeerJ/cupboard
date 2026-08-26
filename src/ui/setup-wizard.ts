@@ -1,6 +1,7 @@
 import { Modal, Notice, setIcon, TFolder } from "obsidian";
 import type PantryPlugin from "../main";
 import { WEEKDAY_NAMES } from "../date";
+import { guarded } from "../guard";
 import { makeId } from "../settings";
 import type { HouseholdMember, MealType, PantrySettings } from "../types";
 
@@ -85,7 +86,8 @@ export class SetupWizard extends Modal {
 			cls: "pantry-text-button",
 			text: "Skip",
 		});
-		skip.onclick = () => void this.finish(false);
+		skip.onclick = () =>
+			guarded("could not close the setup", () => this.finish(false));
 
 		this.backEl = actions.createEl("button", {
 			cls: "pantry-text-button",
@@ -96,7 +98,9 @@ export class SetupWizard extends Modal {
 		this.nextEl = actions.createEl("button", { cls: "mod-cta", text: "Next" });
 		this.nextEl.onclick = () => {
 			if (this.step < this.steps.length - 1) this.go(this.step + 1);
-			else void this.finish(true);
+			else {
+				guarded("could not save your settings", () => this.finish(true));
+			}
 		};
 
 		this.go(0);
@@ -151,7 +155,7 @@ export class SetupWizard extends Modal {
 
 		if (apply) {
 			new Notice("Pantry is ready. Drag a recipe onto the week to get started.");
-			void this.plugin.activatePlanner();
+			guarded("could not open the planner", () => this.plugin.activatePlanner());
 		}
 	}
 

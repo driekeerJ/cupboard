@@ -1,4 +1,5 @@
 import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
+import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import type { Product } from "../products";
 import type { Shop } from "../shops";
@@ -44,7 +45,10 @@ export class ShelvesView extends ItemView {
 		this.registerEvent(
 			this.app.metadataCache.on("changed", (file) => {
 				if (this.plugin.shops.isShopNote(file.path)) {
-					void this.plugin.shops.build().then(() => this.draw());
+					guarded("could not read your shops", async () => {
+						await this.plugin.shops.build();
+						this.draw();
+					});
 					return;
 				}
 				if (file.path.startsWith(`${this.plugin.products.folder()}/`)) {
@@ -174,7 +178,7 @@ export class ShelvesView extends ItemView {
 			const value = input.value.trim();
 			if (value.length === 0) return;
 			input.value = "";
-			void apply(value);
+			guarded("could not save that", () => apply(value));
 		};
 		button.onclick = commit;
 		input.addEventListener("keydown", (event: KeyboardEvent) => {
@@ -221,7 +225,10 @@ export class ShelvesView extends ItemView {
 					order.length === shop.shelves.length &&
 					order.every((name, index) => name === shop.shelves[index]);
 				if (same) return;
-				void this.plugin.shops.setShelves(shop, order).then(() => this.draw());
+				guarded(`could not save the route for ${shop.name}`, async () => {
+					await this.plugin.shops.setShelves(shop, order);
+					this.draw();
+				});
 			},
 		};
 
@@ -249,7 +256,8 @@ export class ShelvesView extends ItemView {
 			const remove = row.createEl("button", { cls: "pantry-icon-button" });
 			setIcon(remove, "x");
 			remove.setAttr("aria-label", "Remove this shelf");
-			remove.onclick = () => void this.removeShelf(shop, shelf);
+			remove.onclick = () =>
+				guarded(`could not remove ${shelf}`, () => this.removeShelf(shop, shelf));
 		});
 
 		this.drawAdd(section, "Shelf name", "Add shelf", async (value) => {
@@ -263,7 +271,10 @@ export class ShelvesView extends ItemView {
 				text: "Start over with an empty route",
 			});
 			wipe.onclick = () => {
-				void this.plugin.shops.setShelves(shop, []).then(() => this.draw());
+				guarded(`could not clear the route for ${shop.name}`, async () => {
+					await this.plugin.shops.setShelves(shop, []);
+					this.draw();
+				});
 			};
 		}
 
@@ -277,7 +288,11 @@ export class ShelvesView extends ItemView {
 		});
 		open.onclick = () => {
 			const file = this.app.vault.getFileByPath(shop.path);
-			if (file) void this.app.workspace.getLeaf(false).openFile(file);
+			if (file) {
+				guarded(`could not open ${shop.name}`, () =>
+					this.app.workspace.getLeaf(false).openFile(file)
+				);
+			}
 		};
 		this.drawAdd(noteBody, "Shop name", "Add shop", async (value) => {
 			const file = await this.plugin.shops.createShop(value);
@@ -424,7 +439,8 @@ export class ShelvesView extends ItemView {
 		setIcon(glyph, "check");
 		tick.setAttr("aria-pressed", ticked ? "true" : "false");
 		tick.setAttr("aria-label", ticked ? "Take off this shelf" : "Put on this shelf");
-		tick.onclick = () => void apply();
+		tick.onclick = () =>
+			guarded(`could not move ${product.name}`, () => apply());
 
 		const main = row.createDiv({ cls: "pantry-buy-main" });
 		main.createDiv({ cls: "pantry-buy-name", text: product.name });

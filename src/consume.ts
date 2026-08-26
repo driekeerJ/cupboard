@@ -18,6 +18,15 @@ export interface StockChange {
 	used: Record<string, number>;
 	/** Products whose count was unknown, so they were flagged to check instead. */
 	unsure: string[];
+	/**
+	 * Producten waarvan de notitie niet geschreven kon worden — verwijderd,
+	 * hernoemd, op slot.
+	 *
+	 * Verzameld in plaats van de lus te laten klappen. Brak hij halverwege af,
+	 * dan stonden de eerste producten wél afgeboekt terwijl het plan nog "niet
+	 * gegeten" zei, en boekte de volgende tik ze nog een keer af.
+	 */
+	failed: string[];
 }
 
 /**
@@ -73,7 +82,7 @@ async function apply(
 	amounts: Map<string, number>,
 	direction: 1 | -1
 ): Promise<StockChange> {
-	const change: StockChange = { used: {}, unsure: [] };
+	const change: StockChange = { used: {}, unsure: [], failed: [] };
 
 	for (const [path, amount] of amounts) {
 		if (!(amount > 0)) continue;
@@ -86,15 +95,31 @@ async function apply(
 		if (!moved) {
 			// The count is unknown, so no honest number can be produced. Ask
 			// rather than invent: the check flag is exactly that question.
-			if (!product.check) await plugin.products.update(product, { check: true });
+			if (!product.check) {
+				try {
+					await plugin.products.update(product, { check: true });
+				} catch (error) {
+					console.error(`Pantry: could not flag ${product.name}`, error);
+					change.failed.push(product.name);
+					continue;
+				}
+			}
 			change.unsure.push(product.name);
 			continue;
 		}
 
-		await plugin.products.update(product, moved.patch);
+		try {
+			await plugin.products.update(product, moved.patch);
+		} catch (error) {
+			console.error(`Pantry: could not update ${product.name}`, error);
+			change.failed.push(product.name);
+			continue;
+		}
+
 		// Wat er wérkelijk af ging, niet wat het recept vroeg. Er stond er één
 		// en de maaltijd vroeg er twee: dan ging er één af, en hoort undo er
-		// ook één terug te zetten.
+		// ook één terug te zetten. Alleen wat geschreven is telt mee, zodat
+		// undo niets terugboekt wat nooit is afgegaan.
 		if (direction === 1 && moved.applied > 0) {
 			change.used[path] = moved.applied;
 		}

@@ -75,3 +75,30 @@ test("stuks uit een verpakking worden verpakkingen, geen stuks", async () => {
 	const amounts = await consumptionOf(h.plugin, entry("[[Omelet]]"));
 	assert.equal(amounts.get("Products/Eieren.md"), 1);
 });
+
+test("een product dat niet geschreven kan worden laat de rest doorgaan", async () => {
+	// H3. Klapte de lus halverwege, dan stonden de eerste producten wél
+	// afgeboekt terwijl het plan nog "niet gegeten" zei — en boekte de
+	// volgende tik ze nog een keer af.
+	const h = makeHarness(loadFixture("schrijffout"));
+	h.plugin.products.build();
+	h.vault.refuseWrites.add("Products/Passata.md");
+
+	const change = await takeFromStock(
+		h.plugin,
+		await consumptionOf(h.plugin, entry("[[Schotel]]"))
+	);
+
+	assert.deepEqual(change.failed, ["Passata"], "en het wordt gemeld");
+	assert.deepEqual(
+		change.used,
+		{ "Products/Rijst.md": 1 },
+		"alleen wat écht geschreven is telt mee voor undo"
+	);
+	assert.equal(h.plugin.products.byPath("Products/Rijst.md")!.count, 2);
+	assert.equal(
+		h.plugin.products.byPath("Products/Passata.md")!.count,
+		3,
+		"het mislukte product blijft staan zoals het stond"
+	);
+});

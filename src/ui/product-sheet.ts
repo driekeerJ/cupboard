@@ -1,4 +1,5 @@
 import { Modal, Notice, setIcon } from "obsidian";
+import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import type { NeedSource } from "../needs";
 import {
@@ -268,7 +269,8 @@ export class ProductSheet extends Modal {
 				cls: "pantry-text-button pantry-danger-button",
 				text: "Delete",
 			});
-			remove.onclick = () => void this.remove();
+			remove.onclick = () =>
+				guarded(`could not delete ${this.product.name}`, () => this.remove());
 		}
 
 		const open = foot.createEl("button", {
@@ -277,7 +279,9 @@ export class ProductSheet extends Modal {
 		});
 		open.onclick = () => {
 			this.close();
-			void this.app.workspace.getLeaf(false).openFile(this.product.file);
+			guarded(`could not open ${this.product.name}`, () =>
+				this.app.workspace.getLeaf(false).openFile(this.product.file)
+			);
 		};
 
 		const last = !this.run || this.run.index >= this.run.queue.length - 1;
@@ -394,7 +398,9 @@ export class ProductSheet extends Modal {
 			chip.onclick = () => {
 				// Tapping the one that is already set clears it, so a wrong value
 				// never needs a detour through the note.
-				void this.apply(spec.apply(active ? "" : option));
+				guarded(`could not update ${this.product.name}`, () =>
+					this.apply(spec.apply(active ? "" : option))
+				);
 			};
 		});
 
@@ -412,7 +418,9 @@ export class ProductSheet extends Modal {
 					this.render();
 					return;
 				}
-				void this.apply(spec.apply(value));
+				guarded(`could not update ${this.product.name}`, () =>
+					this.apply(spec.apply(value))
+				);
 			};
 			input.addEventListener("keydown", (event: KeyboardEvent) => {
 				if (event.key === "Enter") commit();
@@ -458,7 +466,9 @@ export class ProductSheet extends Modal {
 		const commit = (): void => {
 			const raw = input.value.trim();
 			if (raw === value) return;
-			void this.applyQuietly({ size: raw });
+			guarded(`could not update ${this.product.name}`, () =>
+				this.applyQuietly({ size: raw })
+			);
 		};
 		input.addEventListener("blur", commit);
 		input.addEventListener("keydown", (event: KeyboardEvent) => {
@@ -475,7 +485,9 @@ export class ProductSheet extends Modal {
 		skip.toggleClass("is-active", !this.product.amountMatters);
 		skip.setAttr("aria-pressed", this.product.amountMatters ? "false" : "true");
 		skip.onclick = () => {
-			void this.apply({ amount: this.product.amountMatters ? "any" : "" });
+			guarded(`could not update ${this.product.name}`, () =>
+				this.apply({ amount: this.product.amountMatters ? "any" : "" })
+			);
 		};
 	}
 
@@ -503,7 +515,10 @@ export class ProductSheet extends Modal {
 		const set = (value: number): void => {
 			const next = Math.max(0, Math.round(value));
 			if (next === this.product.minimum) return;
-			void this.applyQuietly({ minimum: next }).then(paint);
+			guarded(`could not update ${this.product.name}`, async () => {
+				await this.applyQuietly({ minimum: next });
+				paint();
+			});
 		};
 		down.onclick = () => set(this.product.minimum - 1);
 		up.onclick = () => set(this.product.minimum + 1);
@@ -544,7 +559,9 @@ export class ProductSheet extends Modal {
 					input.value = value;
 					return;
 				}
-				void this.applyQuietly(patch);
+				guarded(`could not update ${this.product.name}`, () =>
+					this.applyQuietly(patch)
+				);
 			};
 			input.addEventListener("blur", commit);
 			input.addEventListener("keydown", (event: KeyboardEvent) => {

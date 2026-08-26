@@ -1,4 +1,5 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
+import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import { PlannerGrid } from "../ui/planner";
 import { RecipeList } from "../ui/recipe-list";
@@ -47,13 +48,16 @@ export class PlannerView extends ItemView {
 		const sidebar = layout.createDiv({ cls: "pantry-sidebar" });
 		this.recipeList = new RecipeList(this.plugin, sidebar, {
 			touchDrop: (recipe, date, meal) =>
-				void this.grid?.dropRecipe(recipe.name, date, meal),
+				guarded(`could not plan ${recipe.name}`, async () => {
+					await this.grid?.dropRecipe(recipe.name, date, meal);
+				}),
 		});
 		this.recipeList.render();
 
 		const main = layout.createDiv({ cls: "pantry-main" });
-		this.grid = new PlannerGrid(this.plugin, main);
-		void this.grid.render();
+		const grid = new PlannerGrid(this.plugin, main);
+		this.grid = grid;
+		guarded("could not draw the planner", () => grid.render());
 
 		this.applyWidth();
 		this.watchWidth();
@@ -77,7 +81,9 @@ export class PlannerView extends ItemView {
 	}
 
 	refresh(): void {
-		void this.grid?.render();
+		guarded("could not draw the planner", async () => {
+			await this.grid?.render();
+		});
 		this.recipeList?.refresh();
 	}
 

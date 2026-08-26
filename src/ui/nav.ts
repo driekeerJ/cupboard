@@ -1,4 +1,5 @@
 import { ItemView, setIcon } from "obsidian";
+import { guarded } from "../guard";
 
 export const HOME_VIEW_TYPE = "pantry-home";
 
@@ -24,6 +25,7 @@ export function drawBackLink(parent: HTMLElement, view: ItemView): HTMLElement {
 	setIcon(back.createSpan({ cls: "pantry-back-icon" }), "arrow-left");
 	back.createSpan({ cls: "pantry-back-label", text: "Pantry" });
 	back.setAttr("aria-label", "Back to Pantry");
-	back.onclick = () => void openHere(view, HOME_VIEW_TYPE);
+	back.onclick = () =>
+		guarded("could not open the home screen", () => openHere(view, HOME_VIEW_TYPE));
 	return back;
 }

@@ -46,6 +46,14 @@ export class FakeVault {
 	/** Pad → markdown. Dit is de hele vault. */
 	readonly files = new Map<string, string>();
 	private folders = new Set<string>();
+	/**
+	 * Paden waarvan elke schrijfactie weigert.
+	 *
+	 * Zo is na te spelen wat er in het echt gebeurt als een notitie halverwege
+	 * verwijderd, hernoemd of gelockt wordt: één product klapt, de rest moet
+	 * gewoon doorgaan.
+	 */
+	readonly refuseWrites = new Set<string>();
 
 	constructor(files: Record<string, string> = {}) {
 		for (const [path, content] of Object.entries(files)) this.write(path, content);
@@ -145,6 +153,9 @@ export class FakeVault {
 			file: TFile,
 			fn: (frontmatter: Record<string, unknown>) => void
 		): Promise<void> => {
+			if (this.refuseWrites.has(file.path)) {
+				return Promise.reject(new Error(`refused: ${file.path}`));
+			}
 			const { data, body } = splitFrontMatter(this.read(file.path));
 			fn(data);
 			this.write(file.path, joinFrontMatter(data, body));

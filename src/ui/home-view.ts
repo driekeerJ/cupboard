@@ -2,6 +2,7 @@ import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import type PantryPlugin from "../main";
 import { missingFields } from "../products";
 import { formatRange, isoWeek, startOfWeek, toISODate } from "../date";
+import { guarded } from "../guard";
 import { HOME_VIEW_TYPE, openHere } from "./nav";
 import { PLANNER_VIEW_TYPE } from "../view/planner-view";
 import { STOCK_VIEW_TYPE } from "./stock-view";
@@ -64,7 +65,7 @@ export class HomeView extends ItemView {
 	}
 
 	refresh(): void {
-		void this.reload();
+		guarded("could not refresh the home screen", () => this.reload());
 	}
 
 	/** Everything a tile can say has to be read before the tiles are drawn. */
@@ -252,7 +253,8 @@ export class HomeView extends ItemView {
 			const chevron = button.createDiv({ cls: "pantry-tile-chevron" });
 			setIcon(chevron, "chevron-right");
 
-			button.onclick = () => void openHere(this, tile.type);
+			button.onclick = () =>
+				guarded("could not open that screen", () => openHere(this, tile.type));
 		});
 	}
 }

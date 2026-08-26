@@ -1,4 +1,5 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
+import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import type { Product } from "../products";
 import { drawBackLink } from "./nav";
@@ -62,7 +63,10 @@ export class ShoppingView extends ItemView {
 			})
 		);
 		this.draw();
-		void this.reload().then(() => this.restoreScroll());
+		guarded("could not load your grocery list", async () => {
+			await this.reload();
+			this.restoreScroll();
+		});
 	}
 
 	/**
@@ -84,7 +88,7 @@ export class ShoppingView extends ItemView {
 	}
 
 	refresh(): void {
-		void this.reload();
+		guarded("could not refresh your grocery list", () => this.reload());
 	}
 
 	private async reload(): Promise<void> {
@@ -278,7 +282,8 @@ export class ShoppingView extends ItemView {
 		setIcon(glyph, "check");
 		tick.setAttr("aria-pressed", done ? "true" : "false");
 		tick.setAttr("aria-label", done ? "Not bought after all" : "In the basket");
-		tick.onclick = () => void this.toggle(product);
+		tick.onclick = () =>
+			guarded(`could not tick ${product.name} off`, () => this.toggle(product));
 
 		const main = row.createDiv({ cls: "pantry-buy-main is-tappable" });
 		main.createDiv({ cls: "pantry-buy-name", text: product.name });
@@ -339,7 +344,9 @@ export class ShoppingView extends ItemView {
 	 */
 	private edit(product: Product): void {
 		this.editing = null;
-		new ProductSheet(this.plugin, product, "shop", () => void this.reload()).open();
+		new ProductSheet(this.plugin, product, "shop", () =>
+			guarded("could not refresh your grocery list", () => this.reload())
+		).open();
 	}
 
 	private nudge(product: Product, step: number): void {
@@ -349,8 +356,10 @@ export class ShoppingView extends ItemView {
 			product.path,
 			(this.plugin.list.nudge.get(product.path) ?? 0) + step
 		);
-		void this.plugin.list.write();
-		this.drawList();
+		guarded("could not update your grocery list", async () => {
+			await this.plugin.list.write();
+			this.drawList();
+		});
 	}
 
 	/**
