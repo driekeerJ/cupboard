@@ -506,22 +506,37 @@ export class ProductSheet extends Modal {
 		});
 		suffix.toggleClass("is-quiet", true);
 
+		// De gewenste stand, los van wat er op schijf staat.
+		//
+		// `set()` las eerst `this.product.minimum` op kliktijd en wachtte dan
+		// een frontmatter-write af. Twee snelle tikken lazen allebei dezelfde
+		// waarde, en de tweede viel bovendien weg via de gelijkheidscontrole:
+		// je tikte drie keer en zag er één bij. Nu telt het scherm meteen door
+		// en volgt de schrijfactie erachteraan.
+		let wanted = this.product.minimum;
+		let pending = 0;
+
 		const paint = (): void => {
-			shown.setText(`${this.product.minimum}`);
-			down.toggleClass("is-disabled", this.product.minimum <= 0);
+			shown.setText(`${wanted}`);
+			down.toggleClass("is-disabled", wanted <= 0);
 		};
 		paint();
 
 		const set = (value: number): void => {
 			const next = Math.max(0, Math.round(value));
-			if (next === this.product.minimum) return;
-			guarded(`could not update ${this.product.name}`, async () => {
-				await this.applyQuietly({ minimum: next });
-				paint();
-			});
+			if (next === wanted) return;
+			wanted = next;
+			paint();
+
+			window.clearTimeout(pending);
+			pending = window.setTimeout(() => {
+				guarded(`could not update ${this.product.name}`, () =>
+					this.applyQuietly({ minimum: wanted })
+				);
+			}, 400);
 		};
-		down.onclick = () => set(this.product.minimum - 1);
-		up.onclick = () => set(this.product.minimum + 1);
+		down.onclick = () => set(wanted - 1);
+		up.onclick = () => set(wanted + 1);
 	}
 
 	/** The rest of the product, as plain fields — rarely needed in a shop. */

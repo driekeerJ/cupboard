@@ -268,9 +268,16 @@ export class CookView extends ItemView {
 			text.createDiv({ cls: "pantry-check-text", text: scaled.text });
 
 			row.onclick = () => {
-				this.session.ingredients[index] = !ticked;
+				// Alleen deze rij bijwerken. `draw()` leegt `contentEl`, en dat
+				// ís de scroller: je stond bij stap zeven van een lang recept,
+				// vinkte er een af, en stond weer bovenaan — met natte handen,
+				// op de telefoon.
+				const now = this.session.ingredients[index] !== true;
+				this.session.ingredients[index] = now;
+				row.toggleClass("is-done", now);
+				row.setAttr("aria-pressed", `${now}`);
+				box.setText(now ? "✓" : "");
 				guarded("could not save your ticks", () => this.persist());
-				this.draw();
 			};
 		});
 	}
@@ -308,9 +315,13 @@ export class CookView extends ItemView {
 		const toggle = (event: MouseEvent): void => {
 			// A tap on a timer must not also tick the step off.
 			if ((event.target as HTMLElement).closest(".pantry-timer")) return;
-			this.session.steps[index] = !ticked;
+			// Zie drawIngredients: niet hertekenen, want dat springt terug naar
+			// de bovenkant van het recept.
+			const now = this.session.steps[index] !== true;
+			this.session.steps[index] = now;
+			row.toggleClass("is-done", now);
+			box.setText(now ? "✓" : "");
 			guarded("could not save your ticks", () => this.persist());
-			this.draw();
 		};
 		box.onclick = toggle;
 		body.onclick = toggle;

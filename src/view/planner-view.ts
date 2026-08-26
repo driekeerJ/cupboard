@@ -1,5 +1,6 @@
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import { guarded } from "../guard";
+import { EatersPopover } from "../ui/eaters-popover";
 import type PantryPlugin from "../main";
 import { PlannerGrid } from "../ui/planner";
 import { RecipeList } from "../ui/recipe-list";
@@ -88,6 +89,7 @@ export class PlannerView extends ItemView {
 	}
 
 	async onClose(): Promise<void> {
+		EatersPopover.closeAny();
 		this.resizeObserver?.disconnect();
 		this.resizeObserver = null;
 		this.grid?.destroy();

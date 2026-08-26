@@ -115,6 +115,9 @@ export class PlannerGrid {
 		// Re-derive in case the start-of-week setting changed since last render.
 		this.weekStart = startOfWeek(this.weekStart, this.plugin.settings.weekStartDay);
 
+		// Een lopende opslag van een dagnotitie hoort bij het plan dat straks
+		// vervangen wordt; laten staan zou hem in de verkeerde week landen.
+		this.clearNoteTimer();
 		EatersPopover.closeAny();
 
 		const token = ++this.renderToken;
@@ -143,6 +146,8 @@ export class PlannerGrid {
 
 	/** Stops the width watcher; call when the host view or block goes away. */
 	destroy(): void {
+		this.clearNoteTimer();
+		EatersPopover.closeAny();
 		this.resizeObserver?.disconnect();
 		this.resizeObserver = null;
 		this.root.detach();
@@ -174,6 +179,8 @@ export class PlannerGrid {
 
 	/** Takes the planner out of its host without throwing it away. */
 	detach(): void {
+		this.clearNoteTimer();
+		EatersPopover.closeAny();
 		this.resizeObserver?.disconnect();
 		this.resizeObserver = null;
 		this.root.detach();
@@ -212,6 +219,8 @@ export class PlannerGrid {
 
 	/** (Re)builds the grid container itself, which differs per layout. */
 	private drawBody(): void {
+		// Het veld waar de timer bij hoort wordt hieronder opnieuw opgebouwd.
+		this.clearNoteTimer();
 		const scroller = this.scrollerEl;
 		if (!scroller) return;
 		scroller.empty();
@@ -244,6 +253,26 @@ export class PlannerGrid {
 		}
 	}
 
+	/**
+	 * De lopende opslagtimer van een dagnotitie.
+	 *
+	 * Als klasseveld en niet als closure, want die timer overleefde elke
+	 * hertekening. Draai je de telefoon terwijl je typt, dan herbouwt
+	 * `drawBody()` het rooster inclusief het veld — en 800 ms later schreef de
+	 * closure van het losgekoppelde veld de oude tekst alsnog weg. Vuurde hij
+	 * ná een `render()` die een andere week had geladen, dan landde de notitie
+	 * in het plan van die andere week, onder een datum die daar niet in staat;
+	 * `serialise` bewaarde die dag netjes en je zag hem nooit meer terug.
+	 *
+	 * En het derde: een uitgeschakelde plugin hoort niet meer te schrijven.
+	 */
+	private noteTimer = 0;
+
+	private clearNoteTimer(): void {
+		if (this.noteTimer !== 0) window.clearTimeout(this.noteTimer);
+		this.noteTimer = 0;
+	}
+
 	/** Applies a change, writes it to the week note and redraws just the grid. */
 	private async mutate(change: (plan: WeekPlan) => void): Promise<void> {
 		change(this.plan);
@@ -253,6 +282,10 @@ export class PlannerGrid {
 		} catch (error) {
 			console.error("Pantry: could not save the meal plan", error);
 			new Notice("Pantry could not save your meal plan. See the console for details.");
+			// Het rooster is al getekend met de wijziging erin, maar op schijf
+			// staat hij niet. Opnieuw laden, zodat het scherm de waarheid toont
+			// in plaats van iets wat bij de volgende render toch verdwijnt.
+			await this.render();
 		}
 	}
 
@@ -436,10 +469,8 @@ export class PlannerGrid {
 		// Not laid out yet on the first draw, so scrollHeight is still 0.
 		window.requestAnimationFrame(grow);
 
-		let timer = 0;
 		const store = (): void => {
-			window.clearTimeout(timer);
-			timer = 0;
+			this.clearNoteTimer();
 			if (noteAt(this.plan, isoDate) === input.value.trim()) return;
 			setNote(this.plan, isoDate, input.value);
 			// saveQuietly meldt zelf al wat er misgaat; hier alleen de promise
@@ -450,8 +481,8 @@ export class PlannerGrid {
 		input.addEventListener("input", () => {
 			grow();
 			wrap.toggleClass("has-note", input.value.trim().length > 0);
-			window.clearTimeout(timer);
-			timer = window.setTimeout(store, 800);
+			this.clearNoteTimer();
+			this.noteTimer = window.setTimeout(store, 800);
 		});
 		input.addEventListener("blur", store);
 		input.addEventListener("keydown", (event) => {
@@ -685,6 +716,21 @@ export class PlannerGrid {
 		const current = entry.status ?? null;
 		if (current === next) return;
 
+		// Tussen de tik en `mutate()` zitten een reeks frontmatter-writes, en
+		// tot dat moment is `entry.status` nog het oude. Een tweede tik in dat
+		// venster — op de telefoon zo gebeurd — liep dus volledig door en
+		// boekte alles nog een keer af. `mutate()` overschreef daarna
+		// `entry.used` met alleen de laatste boeking, dus uitvinken gaf één
+		// maaltijd terug en bleef de voorraad permanent te laag.
+		if (this.booking.has(entry)) return;
+		this.booking.add(entry);
+
+		// Meteen tekenen, zodat de tik voelbaar landt in plaats van een halve
+		// seconde niets te doen. `mutate()` schrijft straks hetzelfde.
+		if (next) entry.status = next;
+		else delete entry.status;
+		this.drawGrid();
+
 		let given: StockChange | null = null;
 		let taken: StockChange | null = null;
 
@@ -706,6 +752,7 @@ export class PlannerGrid {
 				else delete entry.used;
 			});
 
+			this.booking.delete(entry);
 			this.plugin.refreshStockViews();
 			guarded("could not refresh your grocery list", () =>
 				this.plugin.list.refresh()
@@ -714,6 +761,9 @@ export class PlannerGrid {
 
 		this.reportStockChange(taken, given);
 	}
+
+	/** Maaltijden waarvan de boeking nu loopt; zie setStatus. */
+	private booking: Set<PlannedRecipe> = new Set();
 
 	/** Vertelt wat er niet geboekt kon worden, en waarom niet. */
 	private reportStockChange(

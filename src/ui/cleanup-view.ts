@@ -1,4 +1,4 @@
-import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
+import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import {
@@ -275,9 +275,13 @@ export class CleanupView extends ItemView {
 
 		form.createDiv({ cls: "pantry-form-label", text: "How much is in one?" });
 		const sizeRow = form.createDiv({ cls: "pantry-form-row" });
+		// `type="text"`, want een `type="number"`-veld geeft voor "1,5" een lege
+		// string terug — de komma wordt weggegooid vóórdat de code hem kan
+		// omzetten. Het product gold daarna als beantwoord en verdween naar
+		// "Answered, still ignored" met alleen zijn eenheid.
 		const amount = sizeRow.createEl("input", {
 			cls: "pantry-field-number",
-			attr: { type: "number", inputmode: "decimal", placeholder: "400" },
+			attr: { type: "text", inputmode: "decimal", placeholder: "400" },
 		});
 		if (product.size) amount.value = `${product.size.amount}`;
 		const unit = sizeRow.createEl("input", {
@@ -299,11 +303,20 @@ export class CleanupView extends ItemView {
 			text: "Save",
 		});
 		const commit = (): void => {
-			const value = Number(amount.value.replace(",", "."));
-			const size =
-				Number.isFinite(value) && value > 0 && unit.value.trim()
-					? `${value} ${unit.value.trim()}`
-					: "";
+			const value = Number(amount.value.trim().replace(",", "."));
+			const measure = unit.value.trim();
+			const filled = amount.value.trim().length > 0 || measure.length > 0;
+			const valid = Number.isFinite(value) && value > 0 && measure.length > 0;
+
+			// Half ingevuld is geen antwoord: wegschrijven zou het product als
+			// beantwoord markeren terwijl het nog steeds niet te converteren is.
+			if (filled && !valid) {
+				new Notice("Give the contents as a number and a unit, like 400 g.");
+				amount.focus();
+				return;
+			}
+
+			const size = valid ? `${value} ${measure}` : "";
 			guarded(`could not save your answer for ${product.name}`, () =>
 				this.answer(product, {
 					unit: name.value.trim() || "pack",

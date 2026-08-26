@@ -209,6 +209,11 @@ export class StockView extends ItemView {
 					.join(" ")
 					.toLowerCase();
 				if (!haystack.includes(query)) return false;
+				// Wie een naam intypt zoekt dát product, niet een selectie.
+				// `irrelevant()` verbergt een product met minimum 0 waar deze
+				// week geen recept om vraagt — dus je typte "bakpapier" en
+				// kreeg "No matches", terwijl het gewoon bestond.
+				return true;
 			}
 			return this.belongs(product) || this.leaving.has(product.path);
 		});
@@ -430,47 +435,59 @@ export class StockView extends ItemView {
 	private drawStepper(parent: HTMLElement, product: Product): void {
 		const wrap = parent.createDiv({ cls: "pantry-stepper" });
 		const max = Math.max(this.need(product), 1);
-		const current =
+
+		// De stand zoals de gebruiker hem aan het maken is, los van wat er op
+		// schijf staat. − en + lazen eerst allebei `product.count` op kliktijd
+		// en wachtten dan een frontmatter-write af; twee snelle tikken lazen
+		// dus dezelfde waarde en telden er samen één bij.
+		let wanted: Count | null =
 			product.count === "plus"
-				? max
+				? "plus"
 				: typeof product.count === "number"
 					? product.count
 					: null;
+		let pending = 0;
 
-		const set = (next: Count | null): void => {
-			this.change(product, { count: next, check: false });
-		};
+		const asNumber = (): number =>
+			wanted === "plus" ? max : typeof wanted === "number" ? wanted : 0;
 
 		const none = wrap.createEl("button", {
 			cls: "pantry-stepper-edge",
 			text: "0",
 		});
-		none.toggleClass("is-active", product.count === 0);
-		none.onclick = () => set(0);
-
 		const minus = wrap.createEl("button", { cls: "pantry-stepper-step" });
 		setIcon(minus, "minus");
-		minus.onclick = () => set(Math.max(0, (current ?? 0) - 1));
-
-		wrap.createDiv({
-			cls: "pantry-stepper-value",
-			text:
-				product.count === "plus"
-					? `${max}+`
-					: current === null
-						? "–"
-						: `${current}`,
-		});
-
+		const value = wrap.createDiv({ cls: "pantry-stepper-value" });
 		const plus = wrap.createEl("button", { cls: "pantry-stepper-step" });
 		setIcon(plus, "plus");
-		plus.onclick = () => set(Math.min(max, (current ?? 0) + 1));
-
 		const plenty = wrap.createEl("button", {
 			cls: "pantry-stepper-edge",
 			text: `${max}+`,
 		});
-		plenty.toggleClass("is-active", product.count === "plus");
+
+		const paint = (): void => {
+			none.toggleClass("is-active", wanted === 0);
+			plenty.toggleClass("is-active", wanted === "plus");
+			value.setText(
+				wanted === "plus" ? `${max}+` : wanted === null ? "–" : `${wanted}`
+			);
+		};
+		paint();
+
+		const set = (next: Count | null): void => {
+			wanted = next;
+			paint();
+			window.clearTimeout(pending);
+			// Wachten tot de vingers stilliggen; anders is elke tik een
+			// schrijfactie naar de frontmatter.
+			pending = window.setTimeout(() => {
+				this.change(product, { count: wanted, check: false });
+			}, 350);
+		};
+
+		none.onclick = () => set(0);
+		minus.onclick = () => set(Math.max(0, asNumber() - 1));
+		plus.onclick = () => set(Math.min(max, asNumber() + 1));
 		plenty.onclick = () => set("plus");
 	}
 }

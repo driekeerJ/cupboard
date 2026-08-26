@@ -30,6 +30,7 @@ import { PlanStore } from "./plan";
 import { ViewMemory } from "./ui/view-memory";
 import { fromISODate, startOfWeek, toISODate } from "./date";
 import { guarded } from "./guard";
+import { EatersPopover } from "./ui/eaters-popover";
 import { PlannerGrid } from "./ui/planner";
 import { RecipeIndex } from "./recipes";
 import type { PantrySettings } from "./types";
@@ -102,10 +103,20 @@ export default class PantryPlugin extends Plugin {
 	 * samengetrokken.
 	 */
 	private scheduleRefresh = debounce(() => {
+		const planner = this.plannerDirty;
+		this.plannerDirty = false;
+
 		this.products.build();
-		this.refreshViews();
+		// De planner alleen als er iets veranderd is wat hij toont. `render()`
+		// laadt de hele week opnieuw en gooit je scrollpositie weg, en dit pad
+		// loopt bij élke metadata-wijziging, create, delete of rename — precies
+		// wat het commentaar bij refreshStockViews zegt te willen vermijden.
+		this.refreshViews(...(planner ? [] : [PLANNER_VIEW_TYPE]));
 		guarded("could not refresh your grocery list", () => this.list.refresh());
 	}, 250, true);
+
+	/** Of er sinds de vorige ronde iets veranderde dat de planner toont. */
+	private plannerDirty = false;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -296,12 +307,24 @@ export default class PantryPlugin extends Plugin {
 				// productwijziging op die toevallig binnen hetzelfde venster
 				// viel, en dat pad is nu het enige dat er is.
 				if (this.plans.isPlanNote(file.path) && this.plans.recentlyWrote()) return;
+				if (this.plans.isPlanNote(file.path) || this.isRecipe(file)) {
+					this.plannerDirty = true;
+				}
 				this.scheduleRefresh();
 			})
 		);
-		this.registerEvent(this.app.vault.on("create", () => this.scheduleRefresh()));
-		this.registerEvent(this.app.vault.on("delete", () => this.scheduleRefresh()));
-		this.registerEvent(this.app.vault.on("rename", () => this.scheduleRefresh()));
+		// Aanmaken, verwijderen en hernoemen geven geen `changed`, dus dit is het
+		// enige pad waarlangs die de schermen bereiken. Een recept of weeknotitie
+		// die verdwijnt of van naam verandert gaat de planner wél aan.
+		const touched = (file: TAbstractFile): void => {
+			if (file instanceof TFile && (this.plans.isPlanNote(file.path) || this.isRecipe(file))) {
+				this.plannerDirty = true;
+			}
+			this.scheduleRefresh();
+		};
+		this.registerEvent(this.app.vault.on("create", touched));
+		this.registerEvent(this.app.vault.on("delete", touched));
+		this.registerEvent(this.app.vault.on("rename", touched));
 
 		// First run: walk the user through the handful of settings that matter.
 		this.app.workspace.onLayoutReady(() => {
@@ -443,6 +466,10 @@ export default class PantryPlugin extends Plugin {
 	onunload(): void {
 		this.embedded.forEach((grid) => grid.destroy());
 		this.embedded.clear();
+		// Paneel en achtergrond hangen aan document.body, buiten elke Component:
+		// zonder dit blijven ze staan als de plugin wordt uitgezet.
+		EatersPopover.closeAny();
+		this.scheduleRefresh.cancel();
 	}
 
 	async activatePlanner(): Promise<void> {

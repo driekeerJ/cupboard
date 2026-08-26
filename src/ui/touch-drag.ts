@@ -71,6 +71,13 @@ export function enableTouchDrag(card: HTMLElement, spec: TouchDragSpec): void {
 	const step = (): void => {
 		frame = 0;
 		if (!dragging) return;
+		// De kaart kan tijdens de sleep uit de DOM verdwijnen — een redraw van
+		// het rooster is genoeg. Zijn eigen touchend komt dan nooit meer, en
+		// deze lus plande zichzelf oneindig opnieuw in.
+		if (!card.isConnected) {
+			finish(false);
+			return;
+		}
 		if (speed !== 0 && scroller) scroller.scrollTop += speed;
 		frame = window.requestAnimationFrame(step);
 	};
@@ -93,8 +100,17 @@ export function enableTouchDrag(card: HTMLElement, spec: TouchDragSpec): void {
 		target?.addClass("is-drop-target");
 	};
 
+	// Op window en niet op de kaart: een kaart die tijdens de sleep vervangen
+	// wordt neemt haar eigen listeners mee, en dan eindigt de sleep nooit.
+	// Alleen aangehangen zolang er gesleept wordt, zodat ze niet opstapelen bij
+	// elke hertekening van het rooster.
+	const endDrag = (): void => finish(true);
+	const cancelDrag = (): void => finish(false);
+
 	const begin = (x: number, y: number): void => {
 		dragging = true;
+		window.addEventListener("touchend", endDrag);
+		window.addEventListener("touchcancel", cancelDrag);
 		card.addClass("is-touch-dragging");
 		scroller = scrollParent(card);
 		ghost = document.body.createDiv({
@@ -122,6 +138,8 @@ export function enableTouchDrag(card: HTMLElement, spec: TouchDragSpec): void {
 		if (!dragging) return;
 		dragging = false;
 
+		window.removeEventListener("touchend", endDrag);
+		window.removeEventListener("touchcancel", cancelDrag);
 		card.removeClass("is-touch-dragging");
 		ghost?.remove();
 		ghost = null;
@@ -177,6 +195,7 @@ export function enableTouchDrag(card: HTMLElement, spec: TouchDragSpec): void {
 		{ passive: false }
 	);
 
-	card.addEventListener("touchend", () => finish(true));
+	// De kaart houdt alleen de start bij; het einde loopt via window, zie begin().
+	card.addEventListener("touchend", () => cancelTimer());
 	card.addEventListener("touchcancel", () => finish(false));
 }

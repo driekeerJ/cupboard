@@ -131,6 +131,11 @@ export class ShoppingView extends ItemView {
 
 		const { buy } = this.buckets();
 		const shops = this.shops(buy);
+		// Het filter leeft in ViewMemory, dus het overleeft het verdwijnen van
+		// de chips. Zet je het laatste Lidl-product op een andere winkel, dan
+		// was er geen "All"-knop meer, bleef `this.shop` op "Lidl" staan, en was
+		// de lijst leeg en onbereikbaar tot Obsidian herstartte.
+		if (this.shop !== "" && !shops.includes(this.shop)) this.shop = "";
 		if (shops.length > 1) {
 			const filters = inner.createDiv({ cls: "pantry-segment" });
 			const all = filters.createEl("button", {
