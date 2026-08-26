@@ -8,3 +8,6 @@ _t.txt
 
 # Prullenbak voor cloudsessies die niet mogen verwijderen
 _to_delete/
+
+# JetBrains-IDE, staat per machine anders
+.idea/

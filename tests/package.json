@@ -1,0 +1,4 @@
+{
+  "//": "Alleen om Node te vertellen dat alles onder tests/ ESM is. De plugin zelf blijft CJS: main.js wordt door Obsidian geladen, niet door Node.",
+  "type": "module"
+}

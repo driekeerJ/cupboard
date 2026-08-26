@@ -100,8 +100,11 @@ async function apply(
  * The arithmetic for one product. `delta` is positive when eating and negative
  * when giving back. Returns null when the count is not a number, i.e. when the
  * product was never counted or stands at "more than enough".
+ *
+ * Exported for `tests/unit/move.test.ts`: clamping, negative carry and the
+ * epsilon boundary are branches no scenario can steer into on purpose.
  */
-function move(product: Product, delta: number): ProductPatch | null {
+export function move(product: Product, delta: number): ProductPatch | null {
 	if (typeof product.count !== "number") return null;
 
 	let carried = product.used + delta;

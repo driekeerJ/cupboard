@@ -23,5 +23,5 @@
 
     "lib": ["DOM", "ES2020"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
 }
