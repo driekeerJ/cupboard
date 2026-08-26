@@ -392,7 +392,7 @@ export class RecipeList {
 			enableTouchDrag(card, {
 				payload: () => ({ kind: "recipe", name: recipe.name }),
 				label: () => recipe.name,
-				drop: (unused, date, meal) => touchDrop(recipe, date, meal),
+				drop: (_unused, date, meal) => touchDrop(recipe, date, meal),
 			});
 		}
 

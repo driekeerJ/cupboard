@@ -687,7 +687,7 @@ export class PlannerGrid {
 
 	/** The seven days of the shown week, as options for the move picker. */
 	private weekDayOptions(): { value: string; label: string }[] {
-		return Array.from({ length: 7 }, (unused, offset) => {
+		return Array.from({ length: 7 }, (_unused, offset) => {
 			const date = addDays(this.weekStart, offset);
 			const { weekday, day } = formatDayHeader(date);
 			return { value: toISODate(date), label: `${weekday} ${day}` };

@@ -4,7 +4,6 @@ import type { NeedSource } from "../needs";
 import {
 	UNASSIGNED,
 	missingFields,
-	type MandatoryField,
 	type Product,
 	type ProductPatch,
 } from "../products";

@@ -137,13 +137,16 @@ export class CookStore {
 	session(path: string): CookSession {
 		const stored = this.plugin.settings.cook[path];
 		if (!stored) return emptySession();
-		return {
+		const session: CookSession = {
 			ingredients: stored.ingredients ?? [],
 			steps: stored.steps ?? [],
 			timers: stored.timers ?? {},
-			servings: stored.servings,
 			updatedAt: stored.updatedAt ?? 0,
 		};
+		// `servings` is optioneel; met exactOptionalPropertyTypes is het zetten
+		// van een expliciete `undefined` iets anders dan het weglaten.
+		if (stored.servings !== undefined) session.servings = stored.servings;
+		return session;
 	}
 
 	async write(path: string, session: CookSession): Promise<void> {

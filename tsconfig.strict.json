@@ -1,0 +1,15 @@
+{
+  // De achterstand, apart gehouden. `noUncheckedIndexedAccess` maakt van elke
+  // `arr[i]` en `obj[key]` een `T | undefined`; dat is precies goed voor een
+  // plugin die alles uit frontmatter en gebruikersinvoer haalt, maar het geeft
+  // op dit moment nog vijftig fouten in zeventien bestanden.
+  //
+  // Daarom niet in tsconfig.json: de dagelijkse `npm run build` moet groen
+  // blijven. `npm run typecheck:strict` laat de restlijst zien. Raak je een
+  // bestand aan in een batch, trek het dan meteen schoon. Zodra de teller op
+  // nul staat verhuist de vlag naar tsconfig.json en mag dit bestand weg.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": true
+  }
+}

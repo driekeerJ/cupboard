@@ -12,6 +12,15 @@
     "isolatedModules": true,
     "strictNullChecks": true,
     "strict": true,
+
+    // Toegevoegd in stap 0c. Alle vier gaven samen vier fouten, allemaal
+    // meteen opgelost. noUncheckedIndexedAccess staat bewust niet hier maar
+    // in tsconfig.strict.json: die geeft er nog vijftig.
+    "noImplicitReturns": true,
+    "exactOptionalPropertyTypes": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+
     "lib": ["DOM", "ES2020"]
   },
   "include": ["src/**/*.ts"]
