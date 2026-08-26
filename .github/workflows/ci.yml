@@ -1,0 +1,35 @@
+# Minimale CI: bouwt de plugin precies zoals je hem lokaal bouwt.
+#
+# `npm run build` draait achtereenvolgens de tests, `tsc -noEmit` en esbuild, dus
+# deze ene stap dekt alle drie. De linter staat er bewust niet in: die telt nog
+# 85 openstaande waarschuwingen en zou de boel permanent rood zetten. Zodra
+# batch B klaar is en `no-floating-promises` op `error` mag, komt `npm run lint`
+# hier als eigen stap bij.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # De datumtests gaan over de zomertijdgrens, en `date.ts` rekent bewust in
+      # lokale tijd. Op een runner die in UTC staat slagen die tests zonder ook
+      # maar iets te bewijzen.
+      TZ: Europe/Amsterdam
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Node 22 draait TypeScript rechtstreeks (type stripping); daar leunen
+          # de tests op, die de bronbestanden zonder bouwstap importeren.
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
