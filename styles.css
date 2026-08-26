@@ -1,0 +1,4095 @@
+/* ------------------------------------------------------------------ *
+ * Pantry
+ * ------------------------------------------------------------------ */
+
+.pantry-view {
+	padding: 0;
+	overflow: hidden;
+}
+
+.pantry-layout {
+	display: flex;
+	height: 100%;
+	min-height: 0;
+}
+
+.pantry-sidebar {
+	flex: 0 0 268px;
+	min-width: 220px;
+	max-width: 380px;
+	display: flex;
+	flex-direction: column;
+	padding: 20px 14px 24px;
+	border-right: 1px solid var(--background-modifier-border);
+	overflow-y: auto;
+}
+
+.pantry-sidebar-title {
+	margin: 0;
+	font-size: var(--font-ui-medium);
+	font-weight: 600;
+	letter-spacing: 0.01em;
+}
+
+.pantry-main {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: auto;
+}
+
+/* --- Toolbar ------------------------------------------------------- */
+
+.pantry-planner {
+	padding: 24px 28px 32px;
+	min-width: 0;
+}
+
+.pantry-planner.is-narrow {
+	min-width: 0;
+	padding: 16px 14px 32px;
+}
+
+.pantry-toolbar {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 16px;
+	margin-bottom: 20px;
+}
+
+.pantry-toolbar-titles {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.pantry-title {
+	margin: 0;
+	font-size: 1.7em;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	line-height: 1.1;
+}
+
+.pantry-subtitle {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.pantry-nav {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.pantry-icon-button,
+.pantry-text-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 30px;
+	padding: 0 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-primary);
+	color: var(--text-muted);
+	cursor: pointer;
+	box-shadow: none;
+	transition: background-color 120ms ease, color 120ms ease;
+}
+
+.pantry-icon-button {
+	width: 30px;
+	padding: 0;
+}
+
+.pantry-icon-button:hover,
+.pantry-text-button:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+/* --- Grid ---------------------------------------------------------- */
+
+.pantry-grid {
+	display: grid;
+	grid-template-columns: 104px repeat(var(--pantry-columns, 7), minmax(120px, 1fr));
+	gap: 8px;
+	align-items: stretch;
+	min-width: 720px;
+}
+
+.pantry-corner {
+	/* Empty cell above the meal labels. */
+}
+
+.pantry-day-header {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	padding: 4px 6px 10px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.pantry-day-header.is-today {
+	color: var(--text-normal);
+	font-weight: 600;
+	border-bottom-color: var(--text-accent);
+}
+
+.pantry-day-number {
+	font-variant-numeric: tabular-nums;
+}
+
+.pantry-meal-label {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	padding: 10px 12px;
+	border-radius: 8px;
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: hsl(var(--pantry-hue, 150) 45% 28%);
+	background: hsl(var(--pantry-hue, 150) 60% 92%);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.theme-dark .pantry-meal-label {
+	color: hsl(var(--pantry-hue, 150) 55% 82%);
+	background: hsl(var(--pantry-hue, 150) 30% 22%);
+}
+
+.pantry-slot {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-height: 78px;
+	padding: 6px;
+	border: 1px dashed transparent;
+	border-radius: 10px;
+	background: var(--background-secondary);
+	transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.pantry-slot.is-today {
+	background: var(--background-secondary-alt);
+}
+
+.pantry-slot:hover {
+	border-color: var(--background-modifier-border);
+}
+
+.pantry-slot-placeholder {
+	margin: auto;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	text-align: center;
+	opacity: 0;
+	transition: opacity 120ms ease;
+	pointer-events: none;
+}
+
+.pantry-slot:hover .pantry-slot-placeholder {
+	opacity: 1;
+}
+
+/* --- Shared -------------------------------------------------------- */
+
+.pantry-empty-state {
+	padding: 16px;
+	border-radius: 10px;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	line-height: 1.5;
+}
+
+.pantry-row .setting-item-control {
+	gap: 6px;
+}
+
+.pantry-factor-input {
+	width: 72px;
+}
+
+.pantry-settings-list {
+	display: flex;
+	flex-direction: column;
+}
+
+.pantry-settings-hint {
+	padding: 10px 0 4px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+/* --- Recipe sidebar ------------------------------------------------ */
+
+.pantry-recipes {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	min-height: 0;
+}
+
+.pantry-recipes-header {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.pantry-recipes-count {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.pantry-search-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.pantry-search {
+	position: relative;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.pantry-search-icon {
+	position: absolute;
+	top: 50%;
+	left: 8px;
+	display: flex;
+	transform: translateY(-50%);
+	color: var(--text-faint);
+	pointer-events: none;
+}
+
+.pantry-search-icon svg {
+	width: 15px;
+	height: 15px;
+}
+
+/* Element + class beats Obsidian's own input[type="text"] rule. */
+.pantry-search input.pantry-search-input {
+	width: 100%;
+	height: 30px;
+	padding: 0 10px 0 30px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-primary);
+	font-size: var(--font-ui-small);
+	line-height: 30px;
+}
+
+.pantry-search input.pantry-search-input::placeholder {
+	color: var(--text-faint);
+}
+
+.pantry-filter-button.is-active,
+.pantry-sort-button.is-active {
+	border-color: var(--interactive-accent);
+	color: var(--interactive-accent);
+}
+
+/* --- Filter panel -------------------------------------------------- */
+
+.pantry-filter-panel {
+	display: none;
+	flex-direction: column;
+	gap: 12px;
+	padding: 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 10px;
+	background: var(--background-secondary);
+}
+
+.pantry-filter-panel.is-open {
+	display: flex;
+	animation: pantry-fade-in 140ms ease;
+}
+
+@keyframes pantry-fade-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.pantry-filter-group {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.pantry-filter-field {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.pantry-filter-values {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.pantry-filter-value {
+	padding: 3px 9px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	background: var(--background-primary);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+	cursor: pointer;
+	box-shadow: none;
+	transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.pantry-filter-value:hover {
+	color: var(--text-normal);
+	border-color: var(--text-faint);
+}
+
+.pantry-filter-value.is-selected {
+	border-color: var(--interactive-accent);
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.pantry-filter-footer {
+	display: flex;
+	justify-content: flex-end;
+}
+
+/* --- Sort panel ----------------------------------------------------- */
+
+.pantry-sort-value {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.pantry-sort-arrow {
+	display: inline-flex;
+}
+
+.pantry-sort-arrow svg {
+	width: 12px;
+	height: 12px;
+}
+
+/* --- Active filter chips ------------------------------------------- */
+
+.pantry-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.pantry-chips.is-empty {
+	display: none;
+}
+
+.pantry-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 3px 6px 3px 9px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	background: var(--background-secondary);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+	cursor: pointer;
+	box-shadow: none;
+}
+
+.pantry-chip-field {
+	color: var(--text-faint);
+}
+
+.pantry-chip-value {
+	color: var(--text-normal);
+}
+
+.pantry-chip-remove {
+	display: flex;
+	color: var(--text-faint);
+}
+
+.pantry-chip-remove svg {
+	width: 13px;
+	height: 13px;
+}
+
+.pantry-chip:hover .pantry-chip-remove {
+	color: var(--text-normal);
+}
+
+/* --- Recipe cards -------------------------------------------------- */
+
+.pantry-recipe-cards {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-height: 0;
+}
+
+.pantry-recipe-card {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 9px 11px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 10px;
+	background: var(--background-primary);
+	cursor: pointer;
+	transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.pantry-recipe-card:hover {
+	border-color: var(--text-faint);
+	transform: translateY(-1px);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.pantry-recipe-name {
+	font-size: var(--font-ui-small);
+	font-weight: 500;
+	line-height: 1.35;
+}
+
+.pantry-recipe-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.pantry-recipe-field {
+	padding: 1px 7px;
+	border-radius: 999px;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+}
+
+/* --- Drag and drop ------------------------------------------------- */
+
+.pantry-recipe-card.is-dragging,
+.pantry-planned-card.is-dragging {
+	opacity: 0.4;
+	transform: scale(0.97);
+}
+
+.pantry-slot.is-drop-target {
+	border-color: hsl(var(--pantry-hue, 205) 60% 55%);
+	border-style: dashed;
+	background: hsl(var(--pantry-hue, 205) 60% 92%);
+}
+
+.theme-dark .pantry-slot.is-drop-target {
+	background: hsl(var(--pantry-hue, 205) 35% 20%);
+}
+
+.pantry-slot.is-drop-target .pantry-slot-placeholder {
+	opacity: 1;
+	color: var(--text-muted);
+}
+
+/* --- Planned recipe cards ------------------------------------------ */
+
+.pantry-planned-card {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 7px 8px 8px;
+	border-radius: 8px;
+	background: hsl(var(--pantry-hue, 205) 62% 90%);
+	color: hsl(var(--pantry-hue, 205) 45% 24%);
+	cursor: grab;
+	transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.theme-dark .pantry-planned-card {
+	background: hsl(var(--pantry-hue, 205) 32% 24%);
+	color: hsl(var(--pantry-hue, 205) 55% 88%);
+}
+
+.pantry-planned-card:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+}
+
+.pantry-planned-card:active {
+	cursor: grabbing;
+}
+
+.pantry-planned-card.is-new {
+	animation: pantry-pop-in 320ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+@keyframes pantry-pop-in {
+	from {
+		opacity: 0;
+		transform: scale(0.85);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.pantry-planned-top {
+	display: flex;
+	align-items: flex-start;
+	gap: 4px;
+}
+
+.pantry-planned-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	line-height: 1.3;
+	overflow-wrap: anywhere;
+}
+
+.pantry-planned-remove {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: none;
+	border-radius: 5px;
+	background: transparent;
+	color: currentColor;
+	opacity: 0;
+	cursor: pointer;
+	box-shadow: none;
+	transition: opacity 120ms ease, background-color 120ms ease;
+}
+
+.pantry-planned-remove svg {
+	width: 13px;
+	height: 13px;
+}
+
+.pantry-planned-card:hover .pantry-planned-remove {
+	opacity: 0.65;
+}
+
+.pantry-planned-remove:hover {
+	opacity: 1;
+	background: rgba(0, 0, 0, 0.08);
+}
+
+.pantry-planned-servings {
+	font-size: var(--font-ui-smaller);
+	opacity: 0.75;
+}
+
+/* --- Eaten / skipped ------------------------------------------------
+ *
+ * Two small buttons on the card itself. Nothing is ever booked behind
+ * your back, so this is the only place stock is told what happened, and
+ * tapping the button that is already on takes the answer back again.
+ */
+
+.pantry-planned-ticks {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-top: 3px;
+}
+
+.pantry-planned-card.is-eaten,
+.pantry-planned-card.is-skipped {
+	opacity: 0.62;
+}
+
+.pantry-planned-card.is-skipped .pantry-planned-name {
+	text-decoration: line-through;
+	text-decoration-thickness: 1px;
+}
+
+.pantry-planned-card.is-eaten:hover,
+.pantry-planned-card.is-skipped:hover {
+	opacity: 0.85;
+}
+
+/* --- Eaters popover ------------------------------------------------ */
+
+.pantry-popover {
+	position: fixed;
+	z-index: var(--layer-popover, 30);
+	display: flex;
+	flex-direction: column;
+	width: 248px;
+	padding: 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 12px;
+	background: var(--background-primary);
+	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+	animation: pantry-fade-in 130ms ease;
+}
+
+.pantry-popover-header {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	padding-bottom: 8px;
+	margin-bottom: 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.pantry-popover-title {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	line-height: 1.3;
+	overflow-wrap: anywhere;
+}
+
+.pantry-icon-button.pantry-popover-open {
+	flex: 0 0 auto;
+	width: 26px;
+	height: 26px;
+}
+
+.pantry-popover-body {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.pantry-eaters {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.pantry-eater {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 5px 6px;
+	border: none;
+	border-radius: 7px;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	text-align: left;
+	cursor: pointer;
+	box-shadow: none;
+	transition: background-color 110ms ease, color 110ms ease;
+}
+
+.pantry-eater:hover {
+	background: var(--background-modifier-hover);
+}
+
+.pantry-eater.is-selected {
+	color: var(--text-normal);
+}
+
+.pantry-eater-box {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 17px;
+	height: 17px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 5px;
+	color: var(--text-on-accent);
+	transition: background-color 110ms ease, border-color 110ms ease;
+}
+
+.pantry-eater-box svg {
+	width: 12px;
+	height: 12px;
+}
+
+.pantry-eater.is-selected .pantry-eater-box {
+	border-color: var(--interactive-accent);
+	background: var(--interactive-accent);
+}
+
+.pantry-eater-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.pantry-eater-factor {
+	flex: 0 0 auto;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.pantry-guests {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 4px 6px 0;
+}
+
+.pantry-guests-label {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.pantry-guests input.pantry-guests-input {
+	width: 62px;
+	height: 26px;
+	padding: 0 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	background: var(--background-primary);
+	font-size: var(--font-ui-small);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.pantry-guests input.pantry-guests-input.is-invalid {
+	border-color: var(--text-error);
+}
+
+.pantry-popover-footer {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+	padding-top: 8px;
+	margin-top: 2px;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.pantry-popover-servings {
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+}
+
+.pantry-popover-scale {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	text-align: right;
+}
+
+/* --- Setup wizard --------------------------------------------------- */
+
+.pantry-wizard-modal {
+	width: min(560px, 90vw);
+}
+
+.pantry-wizard {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+}
+
+.pantry-wizard-header {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.pantry-wizard-eyebrow {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.pantry-wizard-title {
+	margin: 0;
+	font-size: 1.4em;
+	font-weight: 700;
+	letter-spacing: -0.015em;
+	line-height: 1.2;
+}
+
+.pantry-wizard-intro {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	line-height: 1.5;
+}
+
+.pantry-wizard-body {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	min-height: 168px;
+}
+
+.pantry-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.pantry-field-label {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+}
+
+.pantry-wizard input.pantry-field-input {
+	width: 100%;
+	height: 32px;
+	padding: 0 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-primary);
+	font-size: var(--font-ui-small);
+}
+
+.pantry-wizard input.pantry-field-input.is-invalid {
+	border-color: var(--text-error);
+}
+
+.pantry-wizard-note {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+}
+
+.pantry-weekday-picker {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+	gap: 6px;
+}
+
+.pantry-weekday {
+	padding: 9px 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 9px;
+	background: var(--background-primary);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+	box-shadow: none;
+	transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.pantry-weekday:hover {
+	color: var(--text-normal);
+	border-color: var(--text-faint);
+}
+
+.pantry-weekday.is-selected {
+	border-color: var(--interactive-accent);
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-weight: 600;
+}
+
+.pantry-wizard-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.pantry-wizard-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.pantry-wizard-row input.pantry-factor-input {
+	flex: 0 0 auto;
+	width: 74px;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.pantry-add-button {
+	align-self: flex-start;
+}
+
+.pantry-wizard-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding-top: 14px;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.pantry-wizard-dots {
+	display: flex;
+	gap: 6px;
+}
+
+.pantry-wizard-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--background-modifier-border);
+	transition: background-color 150ms ease, transform 150ms ease;
+}
+
+.pantry-wizard-dot.is-done {
+	background: var(--text-faint);
+}
+
+.pantry-wizard-dot.is-current {
+	background: var(--interactive-accent);
+	transform: scale(1.25);
+}
+
+.pantry-wizard-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.pantry-wizard-actions .is-hidden {
+	visibility: hidden;
+}
+
+/* --- Add button in a slot ------------------------------------------ */
+
+.pantry-slot-add {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: none;
+	border-radius: 6px;
+	background: var(--background-primary);
+	color: var(--text-muted);
+	opacity: 0;
+	cursor: pointer;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+	transition: opacity 120ms ease, color 120ms ease;
+}
+
+.pantry-slot-add svg {
+	width: 13px;
+	height: 13px;
+}
+
+.pantry-slot:hover .pantry-slot-add {
+	opacity: 1;
+}
+
+.pantry-slot-add:hover {
+	color: var(--text-normal);
+}
+
+.pantry-slot {
+	position: relative;
+}
+
+/* --- Recipe suggester ---------------------------------------------- */
+
+.pantry-suggestion-name {
+	font-size: var(--font-ui-small);
+}
+
+.pantry-suggestion-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-top: 3px;
+}
+
+/* --- Embedded planner ---------------------------------------------- */
+
+.pantry-grid-scroll {
+	overflow-x: auto;
+	padding-bottom: 2px;
+}
+
+.pantry-planner.is-embedded {
+	min-width: 0;
+	padding: 0;
+}
+
+.pantry-planner.is-embedded .pantry-toolbar {
+	margin-bottom: 14px;
+}
+
+.pantry-planner.is-embedded .pantry-title {
+	font-size: 1.25em;
+}
+
+.pantry-planner.is-embedded .pantry-grid {
+	grid-template-columns: 92px repeat(var(--pantry-columns, 7), minmax(108px, 1fr));
+	min-width: 720px;
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Narrow layout (phones, and any pane under 640px)
+ * ------------------------------------------------------------------ */
+
+/* No room for the recipe list beside the week; the + button replaces it. */
+.pantry-layout.is-narrow .pantry-sidebar {
+	display: none;
+}
+
+.pantry-planner.is-narrow .pantry-grid-scroll {
+	overflow-x: visible;
+}
+
+.pantry-planner.is-narrow .pantry-toolbar {
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 16px;
+}
+
+.pantry-planner.is-narrow .pantry-daylist {
+	min-width: 0;
+}
+
+.pantry-planner.is-narrow .pantry-title {
+	font-size: 1.35em;
+}
+
+/* --- Day list ------------------------------------------------------ */
+
+.pantry-daylist {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+
+.pantry-day {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.pantry-day-heading {
+	display: flex;
+	align-items: baseline;
+	gap: 7px;
+	padding-bottom: 6px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	letter-spacing: 0.01em;
+}
+
+.pantry-day.is-today .pantry-day-heading {
+	color: var(--text-normal);
+	border-bottom-color: var(--text-accent);
+}
+
+.pantry-day-meals {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.pantry-meal-row {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.pantry-meal-row .pantry-meal-label {
+	align-self: flex-start;
+	padding: 4px 11px;
+	border-radius: 999px;
+}
+
+.pantry-meal-row .pantry-slot {
+	min-height: 0;
+	padding: 8px;
+	gap: 8px;
+}
+
+/* --- Touch affordances --------------------------------------------- *
+ * There is no hover on touch, so anything hover-revealed must be shown.
+ */
+
+.pantry-planner.is-narrow .pantry-slot-placeholder {
+	margin: 0;
+	padding: 2px 2px 0;
+	text-align: left;
+	opacity: 1;
+}
+
+.pantry-planner.is-narrow .pantry-slot-add {
+	position: static;
+	width: 100%;
+	height: 40px;
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: 8px;
+	background: transparent;
+	opacity: 1;
+	box-shadow: none;
+}
+
+.pantry-planner.is-narrow .pantry-slot-add svg {
+	width: 17px;
+	height: 17px;
+}
+
+.pantry-planner.is-narrow .pantry-planned-card {
+	padding: 10px 11px 11px;
+	gap: 3px;
+}
+
+.pantry-planner.is-narrow .pantry-planned-name {
+	font-size: var(--font-ui-small);
+}
+
+.pantry-planner.is-narrow .pantry-planned-remove {
+	width: 28px;
+	height: 28px;
+	margin: -4px -4px 0 0;
+}
+
+.pantry-planner.is-narrow .pantry-planned-remove svg {
+	width: 15px;
+	height: 15px;
+}
+
+.pantry-planner.is-narrow .pantry-icon-button,
+.pantry-planner.is-narrow .pantry-text-button {
+	height: 36px;
+	min-width: 36px;
+}
+
+.pantry-planner.is-narrow .pantry-icon-button {
+	width: 36px;
+}
+
+/* --- Eaters as a bottom sheet -------------------------------------- */
+
+.pantry-sheet-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: var(--layer-popover, 30);
+	background: rgba(0, 0, 0, 0.32);
+	animation: pantry-fade-in 130ms ease;
+}
+
+.pantry-popover.is-sheet {
+	top: auto;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	width: 100%;
+	max-height: 82vh;
+	padding: 14px 16px calc(18px + env(safe-area-inset-bottom));
+	border-width: 1px 0 0;
+	border-radius: 16px 16px 0 0;
+	overflow-y: auto;
+	animation: pantry-sheet-up 180ms cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+@keyframes pantry-sheet-up {
+	from {
+		opacity: 0;
+		transform: translateY(20px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.pantry-popover.is-sheet .pantry-popover-title {
+	font-size: var(--font-ui-medium);
+}
+
+.pantry-popover.is-sheet .pantry-eater {
+	padding: 11px 8px;
+	font-size: var(--font-ui-medium);
+}
+
+.pantry-popover.is-sheet .pantry-eater-box {
+	width: 21px;
+	height: 21px;
+}
+
+.pantry-icon-button.pantry-popover-close {
+	flex: 0 0 auto;
+	width: 30px;
+	height: 30px;
+}
+
+.pantry-popover.is-sheet .pantry-icon-button.pantry-popover-open,
+.pantry-popover.is-sheet .pantry-icon-button.pantry-popover-close {
+	width: 34px;
+	height: 34px;
+}
+
+.pantry-popover.is-sheet input.pantry-guests-input {
+	height: 38px;
+	font-size: var(--font-ui-medium);
+}
+
+
+/* --- Move to another slot ------------------------------------------ */
+
+.pantry-move {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding-top: 9px;
+	margin-top: 2px;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.pantry-move-label {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+}
+
+.pantry-move-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.pantry-move select.pantry-move-select {
+	flex: 1 1 104px;
+	min-width: 0;
+	height: 30px;
+	font-size: var(--font-ui-smaller);
+}
+
+.pantry-move-button {
+	flex: 1 1 auto;
+	height: 30px;
+	padding: 0 14px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-primary);
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	cursor: not-allowed;
+	box-shadow: none;
+	transition: background-color 120ms ease, color 120ms ease;
+}
+
+.pantry-move-button.is-ready {
+	border-color: transparent;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	cursor: pointer;
+}
+
+.pantry-move-button.is-ready:hover {
+	background: var(--interactive-accent-hover);
+}
+
+/* Roomier on the sheet, where this is the main way to move a recipe. */
+.pantry-popover.is-sheet .pantry-move-row {
+	gap: 8px;
+}
+
+.pantry-popover.is-sheet .pantry-move-label {
+	font-size: var(--font-ui-small);
+}
+
+.pantry-popover.is-sheet select.pantry-move-select {
+	flex: 1 1 132px;
+	height: 40px;
+	font-size: var(--font-ui-small);
+}
+
+.pantry-popover.is-sheet .pantry-move-button {
+	height: 40px;
+	padding: 0 20px;
+	font-size: var(--font-ui-small);
+}
+
+/* --- Recipe picker modal (the + button) ---------------------------- */
+
+.pantry-pick-modal {
+	width: min(460px, 94vw);
+}
+
+.pantry-pick-modal .pantry-recipes {
+	gap: 10px;
+}
+
+.pantry-pick-modal .pantry-recipe-cards {
+	max-height: min(54vh, 440px);
+	overflow-y: auto;
+	padding-right: 2px;
+}
+
+.pantry-pick-modal .pantry-filter-panel.is-open {
+	max-height: 34vh;
+	overflow-y: auto;
+}
+
+.pantry-recipe-card.is-pickable {
+	cursor: pointer;
+}
+
+/* Thumb-sized controls once the picker is the only way in. */
+@media (max-width: 640px) {
+	.pantry-pick-modal .pantry-search input.pantry-search-input {
+		height: 38px;
+		line-height: 38px;
+		font-size: var(--font-ui-medium);
+	}
+
+	.pantry-pick-modal .pantry-icon-button {
+		width: 38px;
+		height: 38px;
+	}
+
+	.pantry-pick-modal .pantry-recipe-card {
+		padding: 12px 13px;
+	}
+
+	.pantry-pick-modal .pantry-recipe-name {
+		font-size: var(--font-ui-medium);
+	}
+
+	.pantry-pick-modal .pantry-filter-value {
+		padding: 8px 12px;
+	}
+
+	.pantry-pick-modal .pantry-recipe-cards {
+		max-height: 56vh;
+	}
+}
+
+/* --- Press-and-hold drag (touch) ----------------------------------- */
+
+/* The iOS text-selection callout would fire during the hold otherwise. */
+.pantry-planned-card,
+.pantry-recipe-card {
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+.pantry-planned-card.is-touch-dragging,
+.pantry-recipe-card.is-touch-dragging {
+	opacity: 0.4;
+	transform: scale(0.97);
+}
+
+.pantry-drag-ghost {
+	position: fixed;
+	z-index: var(--layer-menu, 60);
+	max-width: 62vw;
+	padding: 9px 13px;
+	border-radius: 10px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	box-shadow: 0 10px 26px rgba(0, 0, 0, 0.3);
+	transform: translate(-50%, -150%);
+	pointer-events: none;
+	animation: pantry-lift 140ms cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+@keyframes pantry-lift {
+	from {
+		opacity: 0;
+		transform: translate(-50%, -110%) scale(0.9);
+	}
+	to {
+		opacity: 1;
+		transform: translate(-50%, -150%) scale(1);
+	}
+}
+
+/* ------------------------------------------------------------------ *
+ * Cook view
+ * ------------------------------------------------------------------ */
+
+.pantry-cook {
+	padding: 22px 20px 40px;
+	max-width: 720px;
+	margin: 0 auto;
+}
+
+.pantry-cook-header {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding-bottom: 16px;
+	margin-bottom: 18px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.pantry-cook-top {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.pantry-cook-title {
+	margin: 0;
+	font-size: 1.5em;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	line-height: 1.15;
+}
+
+.pantry-cook-actions {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 0 0 auto;
+}
+
+.pantry-servings-row {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.pantry-servings-value {
+	min-width: 92px;
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+.pantry-cook-scale {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.pantry-cook-section {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-bottom: 26px;
+}
+
+.pantry-cook-heading {
+	margin-bottom: 6px;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-weight: 700;
+	letter-spacing: 0.09em;
+	text-transform: uppercase;
+}
+
+/* --- Tickable rows -------------------------------------------------- */
+
+.pantry-check-row,
+.pantry-step {
+	display: flex;
+	align-items: flex-start;
+	gap: 11px;
+	width: 100%;
+	padding: 11px 10px;
+	border: none;
+	border-radius: 10px;
+	background: transparent;
+	color: var(--text-normal);
+	font-size: var(--font-ui-medium);
+	text-align: left;
+	cursor: pointer;
+	box-shadow: none;
+	transition: background-color 110ms ease, opacity 110ms ease;
+}
+
+.pantry-check-row:hover,
+.pantry-step:hover {
+	background: var(--background-modifier-hover);
+}
+
+.pantry-check-row.is-done,
+.pantry-step.is-done {
+	opacity: 0.45;
+}
+
+.pantry-check-row.is-done .pantry-check-text,
+.pantry-step.is-done .pantry-step-text {
+	text-decoration: line-through;
+}
+
+.pantry-check-box {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	margin-top: 1px;
+	border: 1.5px solid var(--background-modifier-border);
+	border-radius: 7px;
+	color: var(--text-on-accent);
+	cursor: pointer;
+}
+
+.pantry-check-row.is-done .pantry-check-box,
+.pantry-step.is-done .pantry-check-box {
+	border-color: transparent;
+	background: var(--interactive-accent);
+}
+
+.pantry-check-box svg {
+	width: 15px;
+	height: 15px;
+}
+
+.pantry-check-body {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.pantry-check-text {
+	line-height: 1.35;
+}
+
+.pantry-check-note {
+	margin-top: 2px;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.pantry-step-body {
+	flex: 1 1 auto;
+	min-width: 0;
+	line-height: 1.45;
+}
+
+.pantry-step-number {
+	margin-right: 6px;
+	color: var(--text-faint);
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+}
+
+/* --- Timers --------------------------------------------------------- */
+
+.pantry-timer {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 6px;
+	padding: 2px 9px;
+	margin: 0 1px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: inherit;
+	font-weight: 600;
+	line-height: 1.35;
+	cursor: pointer;
+	box-shadow: none;
+	transition: background-color 120ms ease, color 120ms ease;
+}
+
+.pantry-timer:hover {
+	background: var(--background-modifier-hover);
+}
+
+.pantry-timer.is-running {
+	border-color: transparent;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.pantry-timer.is-finished {
+	background: var(--text-error);
+	color: var(--text-on-accent);
+	animation: pantry-pulse 1s ease-in-out infinite;
+}
+
+.pantry-timer-clock {
+	font-variant-numeric: tabular-nums;
+	font-size: 0.92em;
+}
+
+.pantry-timer-clock:empty {
+	display: none;
+}
+
+@keyframes pantry-pulse {
+	0%, 100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.62;
+	}
+}
+
+/* A step that is struck through must not hide a running timer. */
+.pantry-step.is-done .pantry-timer {
+	text-decoration: none;
+}
+
+@media (max-width: 640px) {
+	.pantry-cook {
+		padding: 16px 14px 44px;
+	}
+
+	.pantry-check-row,
+	.pantry-step {
+		padding: 13px 8px;
+	}
+
+	.pantry-timer {
+		padding: 4px 11px;
+	}
+}
+
+/* ------------------------------------------------------------------ *
+ * Theme guard
+ * ------------------------------------------------------------------ *
+ * Themes style bare <button> elements, often through a selector that
+ * outranks a single class of ours. Anywhere a button has to look like a
+ * row or a chip rather than a button, the rule is repeated here with the
+ * element and an ancestor in front, so it wins without !important.
+ */
+
+.pantry-cook button.pantry-check-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 11px;
+	width: 100%;
+	/* Obsidian pins every button to --input-height; these are rows, not buttons. */
+	height: auto;
+	min-height: 0;
+	padding: 11px 10px;
+	border: none;
+	border-radius: 10px;
+	background: transparent;
+	color: var(--text-normal);
+	font-size: var(--font-ui-medium);
+	font-weight: inherit;
+	text-align: left;
+	box-shadow: none;
+}
+
+.pantry-cook button.pantry-check-row:hover {
+	background: var(--background-modifier-hover);
+}
+
+.pantry-cook button.pantry-timer {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 6px;
+	width: auto;
+	height: auto;
+	min-height: 0;
+	padding: 2px 9px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: inherit;
+	font-weight: 600;
+	box-shadow: none;
+}
+
+.pantry-cook button.pantry-timer.is-running {
+	border-color: transparent;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.pantry-cook button.pantry-timer.is-finished {
+	background: var(--text-error);
+	color: var(--text-on-accent);
+}
+
+.pantry-popover button.pantry-eater {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	height: auto;
+	min-height: 0;
+	padding: 5px 6px;
+	border: none;
+	border-radius: 7px;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	font-weight: inherit;
+	text-align: left;
+	box-shadow: none;
+}
+
+.pantry-popover.is-sheet button.pantry-eater {
+	padding: 11px 8px;
+	font-size: var(--font-ui-medium);
+}
+
+.pantry-popover button.pantry-eater:hover {
+	background: var(--background-modifier-hover);
+}
+
+/* Selected needs its own mark now that the theme no longer supplies one. */
+.pantry-popover button.pantry-eater.is-selected {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+	font-weight: 600;
+}
+
+.pantry-recipes button.pantry-sort-value,
+.pantry-pick-modal button.pantry-sort-value {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.pantry-recipes button.pantry-filter-value {
+	height: auto;
+	min-height: 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	background: var(--background-primary);
+	color: var(--text-muted);
+	box-shadow: none;
+}
+
+.pantry-recipes button.pantry-filter-value.is-selected {
+	border-color: transparent;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.pantry-recipes button.pantry-chip {
+	height: auto;
+	min-height: 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	box-shadow: none;
+}
+
+/* The tick box has to stay visible against whatever the row ends up being. */
+.pantry-cook .pantry-check-box {
+	flex: 0 0 auto;
+	width: 24px;
+	height: 24px;
+	border: 1.5px solid var(--background-modifier-border);
+	border-radius: 7px;
+	background: transparent;
+	color: var(--text-on-accent);
+}
+
+.pantry-cook .is-done .pantry-check-box {
+	border-color: transparent;
+	background: var(--interactive-accent);
+}
+
+
+/* Cards and slot buttons are boxes too, not fixed-height controls. */
+.pantry-planner button.pantry-slot-add,
+.pantry-planner button.pantry-planned-remove,
+.pantry-pick-modal button.pantry-filter-value,
+.pantry-pick-modal button.pantry-chip {
+	min-height: 0;
+}
+
+.pantry-planner button.pantry-slot-add {
+	height: 20px;
+}
+
+.pantry-planner.is-narrow button.pantry-slot-add {
+	height: 40px;
+}
+
+.pantry-planner button.pantry-planned-remove {
+	height: 18px;
+}
+
+.pantry-planner.is-narrow button.pantry-planned-remove {
+	height: 28px;
+}
+
+/* Obsidian's mobile toolbar floats over the content, so the last row needs
+   room to clear it — plus whatever the home indicator takes. */
+.is-mobile .pantry-cook,
+.is-mobile .pantry-planner {
+	padding-bottom: calc(112px + env(safe-area-inset-bottom));
+}
+
+.is-mobile .pantry-sheet-backdrop {
+	bottom: 0;
+}
+
+.is-mobile .pantry-popover.is-sheet {
+	padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
+/* Both header buttons in the eaters panel must be the same square. */
+.pantry-popover button.pantry-icon-button {
+	flex: 0 0 auto;
+	width: 26px;
+	height: 26px;
+	min-height: 0;
+	padding: 0;
+}
+
+.pantry-popover button.pantry-icon-button svg {
+	width: 15px;
+	height: 15px;
+}
+
+.pantry-popover.is-sheet button.pantry-icon-button {
+	width: 34px;
+	height: 34px;
+}
+
+.pantry-popover.is-sheet button.pantry-icon-button svg {
+	width: 19px;
+	height: 19px;
+}
+
+/* Icons must be sized explicitly; left to inherit they collapse on iPadOS. */
+.pantry-cook .pantry-icon-button svg,
+.pantry-cook .pantry-icon-button .svg-icon,
+.pantry-planner .pantry-icon-button svg,
+.pantry-planner .pantry-icon-button .svg-icon,
+.pantry-recipes .pantry-icon-button svg,
+.pantry-recipes .pantry-icon-button .svg-icon,
+.pantry-popover .pantry-icon-button svg,
+.pantry-popover .pantry-icon-button .svg-icon {
+	width: 17px;
+	height: 17px;
+	color: currentColor;
+}
+
+.pantry-popover.is-sheet .pantry-icon-button svg,
+.pantry-popover.is-sheet .pantry-icon-button .svg-icon {
+	width: 19px;
+	height: 19px;
+}
+
+/* The servings stepper: plain characters, sized for a thumb. */
+.pantry-cook button.pantry-step-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	min-height: 0;
+	padding: 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 9px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: 1.05em;
+	font-weight: 600;
+	line-height: 1;
+	cursor: pointer;
+	box-shadow: none;
+}
+
+.pantry-cook button.pantry-step-button:hover {
+	background: var(--background-modifier-hover);
+}
+
+.pantry-cook button.pantry-text-button {
+	height: auto;
+	min-height: 0;
+	padding: 6px 12px;
+}
+
+.pantry-cook .pantry-check-box {
+	font-size: 15px;
+	font-weight: 700;
+	line-height: 1;
+}
+
+/* ------------------------------------------------------------------ *
+ * Products — the base list
+ * ------------------------------------------------------------------ */
+
+.pantry-products {
+	padding: 22px 20px 40px;
+	max-width: 760px;
+	margin: 0 auto;
+}
+
+.pantry-products-header {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding-bottom: 14px;
+	margin-bottom: 16px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.pantry-products-top {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+
+.pantry-products-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.pantry-products button.pantry-text-button {
+	height: auto;
+	min-height: 0;
+	padding: 7px 13px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	box-shadow: none;
+}
+
+.pantry-products button.pantry-primary-button {
+	border-color: transparent;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-weight: 600;
+}
+
+.pantry-products button.pantry-danger-button {
+	color: var(--text-error);
+}
+
+.pantry-products-filters {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.pantry-products select.pantry-products-shop {
+	height: 32px;
+	font-size: var(--font-ui-small);
+}
+
+.pantry-products .pantry-search input.pantry-search-input {
+	height: 32px;
+	line-height: 32px;
+}
+
+/* --- Groups by storage place --------------------------------------- */
+
+.pantry-group {
+	margin-bottom: 18px;
+}
+
+.pantry-group-heading {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	padding: 6px 2px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	color: var(--text-muted);
+	cursor: pointer;
+	user-select: none;
+}
+
+.pantry-group-caret {
+	width: 12px;
+	color: var(--text-faint);
+}
+
+.pantry-group-name {
+	font-size: var(--font-ui-smaller);
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.pantry-group-count {
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.pantry-group-body {
+	display: flex;
+	flex-direction: column;
+}
+
+/* --- One product ---------------------------------------------------- */
+
+.pantry-product {
+	border-bottom: 1px solid var(--background-modifier-border-hover);
+}
+
+.pantry-product:last-child {
+	border-bottom: none;
+}
+
+.pantry-product-summary {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 11px 6px;
+	border-radius: 8px;
+	cursor: pointer;
+}
+
+.pantry-product-summary:hover {
+	background: var(--background-modifier-hover);
+}
+
+.pantry-product-name {
+	font-size: var(--font-ui-medium);
+	line-height: 1.3;
+}
+
+.pantry-product-facts {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.pantry-product-editor {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 10px;
+	padding: 4px 6px 12px;
+}
+
+.pantry-products input.pantry-field-input {
+	width: 100%;
+	height: 32px;
+	padding: 0 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+}
+
+.pantry-product-footer {
+	display: flex;
+	gap: 8px;
+	padding: 0 6px 14px;
+}
+
+@media (max-width: 640px) {
+	.pantry-products {
+		padding: 16px 14px 40px;
+	}
+
+	.pantry-product-editor {
+		grid-template-columns: 1fr 1fr;
+	}
+
+	.pantry-products input.pantry-field-input {
+		height: 38px;
+	}
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Toolbar buttons on touch — theme guard + hover guard
+ * ------------------------------------------------------------------ *
+ * Two things hid these buttons on iPadOS at once:
+ *  - A theme styles bare <button> with a selector that outranks a single
+ *    class of ours. Its horizontal padding shrinks a 30px square to a
+ *    zero-wide content box and WebKit clips the icon away, so the button
+ *    paints as an empty tile. Every size here is therefore repeated with
+ *    the element and an ancestor in front, and the icon is sized too.
+ *  - The add and remove buttons only appeared on :hover, which a finger
+ *    never fires — invisible for the whole wide layout on a tablet.
+ */
+
+.pantry-planner button.pantry-icon-button,
+.pantry-planner button.pantry-text-button,
+.pantry-recipes button.pantry-icon-button,
+.pantry-recipes button.pantry-text-button,
+.pantry-cook button.pantry-icon-button,
+.pantry-cook button.pantry-text-button,
+.pantry-pick-modal button.pantry-icon-button,
+.pantry-pick-modal button.pantry-text-button {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+	height: 30px;
+	min-height: 0;
+	padding: 0 10px;
+	overflow: visible;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-primary);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	font-weight: inherit;
+	box-shadow: none;
+}
+
+.pantry-planner button.pantry-icon-button,
+.pantry-recipes button.pantry-icon-button,
+.pantry-cook button.pantry-icon-button,
+.pantry-pick-modal button.pantry-icon-button {
+	width: 30px;
+	min-width: 30px;
+	padding: 0;
+}
+
+.pantry-planner button.pantry-icon-button svg,
+.pantry-recipes button.pantry-icon-button svg,
+.pantry-cook button.pantry-icon-button svg,
+.pantry-pick-modal button.pantry-icon-button svg {
+	flex: 0 0 auto;
+	width: 17px;
+	height: 17px;
+	color: currentColor;
+	stroke: currentColor;
+}
+
+.pantry-planner.is-narrow button.pantry-icon-button,
+.pantry-planner.is-narrow button.pantry-text-button {
+	height: 36px;
+	min-width: 36px;
+}
+
+.pantry-planner.is-narrow button.pantry-icon-button {
+	width: 36px;
+}
+
+@media (max-width: 640px) {
+	.pantry-pick-modal button.pantry-icon-button {
+		width: 38px;
+		min-width: 38px;
+		height: 38px;
+	}
+}
+
+/* The eaters panel keeps its own smaller squares. */
+.pantry-popover button.pantry-icon-button {
+	width: 26px;
+	min-width: 26px;
+	height: 26px;
+	padding: 0;
+	overflow: visible;
+}
+
+.pantry-popover button.pantry-icon-button svg {
+	flex: 0 0 auto;
+	width: 15px;
+	height: 15px;
+	stroke: currentColor;
+}
+
+.pantry-popover.is-sheet button.pantry-icon-button {
+	width: 34px;
+	min-width: 34px;
+	height: 34px;
+}
+
+.pantry-popover.is-sheet button.pantry-icon-button svg {
+	width: 19px;
+	height: 19px;
+}
+
+/* The + in a slot and the x on a card, same treatment. */
+.pantry-planner button.pantry-slot-add {
+	width: 20px;
+	min-width: 20px;
+	padding: 0;
+	overflow: visible;
+	background: var(--background-primary);
+	color: var(--text-muted);
+}
+
+.pantry-planner button.pantry-slot-add svg {
+	flex: 0 0 auto;
+	width: 13px;
+	height: 13px;
+	stroke: currentColor;
+}
+
+.pantry-planner.is-narrow button.pantry-slot-add {
+	width: 100%;
+	background: transparent;
+}
+
+.pantry-planner.is-narrow button.pantry-slot-add svg {
+	width: 17px;
+	height: 17px;
+}
+
+.pantry-planner button.pantry-planned-remove {
+	width: 18px;
+	min-width: 18px;
+	padding: 0;
+	overflow: visible;
+	background: transparent;
+	color: currentColor;
+}
+
+.pantry-planner button.pantry-planned-remove svg {
+	flex: 0 0 auto;
+	width: 13px;
+	height: 13px;
+	stroke: currentColor;
+}
+
+.pantry-planner.is-narrow button.pantry-planned-remove {
+	width: 28px;
+	min-width: 28px;
+}
+
+.pantry-planner.is-narrow button.pantry-planned-remove svg {
+	width: 15px;
+	height: 15px;
+}
+
+/* Obsidian gives every button a height and a background of its own, so
+   both are stated here rather than inherited. */
+.pantry-planner button.pantry-tick {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	min-width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 1px solid currentColor;
+	border-radius: 999px;
+	background: transparent;
+	color: currentColor;
+	opacity: 0.45;
+	box-shadow: none;
+	cursor: pointer;
+	transition: opacity 120ms ease, background-color 120ms ease;
+}
+
+.pantry-planner button.pantry-tick svg {
+	flex: 0 0 auto;
+	width: 12px;
+	height: 12px;
+	stroke: currentColor;
+}
+
+.pantry-planner button.pantry-tick:hover {
+	opacity: 0.9;
+}
+
+.pantry-planner button.pantry-tick.is-on {
+	opacity: 1;
+	border-color: transparent;
+}
+
+.pantry-planner button.pantry-tick.is-eaten.is-on {
+	color: var(--text-on-accent, #fff);
+	background: var(--text-success, #3a9a52);
+}
+
+.pantry-planner button.pantry-tick.is-skipped.is-on {
+	color: var(--text-on-accent, #fff);
+	background: var(--text-muted);
+}
+
+.pantry-planner.is-narrow button.pantry-tick {
+	width: 28px;
+	min-width: 28px;
+	height: 28px;
+}
+
+.pantry-planner.is-narrow button.pantry-tick svg {
+	width: 15px;
+	height: 15px;
+}
+
+/* Without hover there is nothing to reveal them, so show them up front
+   and give them a finger-sized target. */
+@media (hover: none) {
+	.pantry-planner button.pantry-slot-add {
+		width: 28px;
+		min-width: 28px;
+		height: 28px;
+		opacity: 0.85;
+	}
+
+	.pantry-planner button.pantry-slot-add svg {
+		width: 15px;
+		height: 15px;
+	}
+
+	.pantry-planner.is-narrow button.pantry-slot-add {
+		width: 100%;
+		height: 40px;
+		opacity: 1;
+	}
+
+	.pantry-planner button.pantry-planned-remove {
+		width: 24px;
+		min-width: 24px;
+		height: 24px;
+		opacity: 0.7;
+	}
+
+	.pantry-planner button.pantry-planned-remove svg {
+		width: 14px;
+		height: 14px;
+	}
+
+	.pantry-planner button.pantry-tick {
+		width: 30px;
+		min-width: 30px;
+		height: 30px;
+	}
+
+	.pantry-planner button.pantry-tick svg {
+		width: 15px;
+		height: 15px;
+	}
+}
+
+/* ====================================================================
+ * Pantry app surface — Stock and Groceries
+ *
+ * One design for both screens: a full-bleed sticky header over a column
+ * of content that never grows wider than a comfortable reading measure,
+ * rows built around a single primary action, and numbers kept quiet
+ * until you reach for them.
+ *
+ * Every button is written as `.pantry-app button.x` with an explicit
+ * height, because Obsidian hands every <button> a fixed height and
+ * themes repaint them.
+ * ==================================================================== */
+
+.workspace-leaf-content[data-type="pantry-stock"] .view-content,
+.workspace-leaf-content[data-type="pantry-cleanup"] .view-content,
+.workspace-leaf-content[data-type="pantry-home"] .view-content,
+.workspace-leaf-content[data-type="pantry-shopping"] .view-content,
+.workspace-leaf-content[data-type="pantry-products"] .view-content {
+	padding: 0;
+	overflow-x: hidden;
+}
+
+.pantry-app {
+	--pantry-measure: 680px;
+	--pantry-gutter: 18px;
+	--pantry-radius: 12px;
+}
+
+/* --- Header ----------------------------------------------------------- */
+
+.pantry-app .pantry-head {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	background: var(--background-primary);
+	border-bottom: 1px solid var(--background-modifier-border);
+	padding: 16px var(--pantry-gutter) 12px;
+}
+
+/* Nothing may appear between the tab bar and the header. */
+.pantry-app .pantry-head::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 100%;
+	height: 80px;
+	background: var(--background-primary);
+	pointer-events: none;
+}
+
+.pantry-app .pantry-head-inner {
+	max-width: var(--pantry-measure);
+	margin: 0 auto;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.pantry-app .pantry-head-titles {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.pantry-app h1.pantry-head-title {
+	margin: 0;
+	font-size: 1.65em;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	line-height: 1.15;
+}
+
+.pantry-app .pantry-head-sub {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.pantry-app input.pantry-field-search {
+	width: 100%;
+	height: 38px;
+	padding: 0 12px;
+	border-radius: var(--pantry-radius);
+	border: 1px solid transparent;
+	background: var(--background-modifier-form-field, var(--background-secondary));
+	font-size: var(--font-ui-medium);
+	box-shadow: none;
+}
+
+.pantry-app input.pantry-field-search:focus {
+	border-color: var(--interactive-accent);
+	box-shadow: none;
+}
+
+/* --- Segmented control ------------------------------------------------ */
+
+.pantry-app .pantry-segment {
+	display: inline-flex;
+	align-self: flex-start;
+	max-width: 100%;
+	flex-wrap: wrap;
+	gap: 2px;
+	padding: 3px;
+	border-radius: 10px;
+	background: var(--background-modifier-hover);
+}
+
+.pantry-app button.pantry-segment-item {
+	height: 30px;
+	min-height: 0;
+	padding: 0 14px;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.pantry-app button.pantry-segment-item.is-active {
+	background: var(--background-primary);
+	color: var(--text-normal);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+}
+
+/* --- Progress --------------------------------------------------------- */
+
+.pantry-app .pantry-progress {
+	height: 4px;
+	border-radius: 999px;
+	background: var(--background-modifier-border);
+	overflow: hidden;
+}
+
+.pantry-app .pantry-progress.is-hidden {
+	display: none;
+}
+
+.pantry-app .pantry-progress-bar {
+	height: 100%;
+	width: 0;
+	border-radius: 999px;
+	background: var(--interactive-accent);
+	transition: width 220ms ease;
+}
+
+/* --- Body and sections ------------------------------------------------ */
+
+.pantry-app .pantry-body {
+	max-width: var(--pantry-measure);
+	margin: 0 auto;
+	padding: 4px var(--pantry-gutter) 72px;
+}
+
+.pantry-app .pantry-section {
+	margin-top: 18px;
+}
+
+.pantry-app .pantry-section-head,
+.pantry-app button.pantry-section-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	height: auto;
+	min-height: 0;
+	padding: 10px 2px 8px;
+	border: none;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-faint);
+	font-size: 0.72em;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	text-align: left;
+	cursor: pointer;
+}
+
+.pantry-app .pantry-section-head.is-static {
+	cursor: default;
+}
+
+.pantry-app .pantry-section-caret {
+	display: inline-flex;
+	color: var(--text-faint);
+}
+
+.pantry-app .pantry-section-caret svg {
+	width: 14px;
+	height: 14px;
+}
+
+.pantry-app .pantry-section-count {
+	margin-left: auto;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0;
+}
+
+.pantry-app .pantry-shelf {
+	padding: 16px 2px 4px;
+	color: var(--text-faint);
+	font-size: 0.72em;
+	font-weight: 700;
+	letter-spacing: 0.09em;
+	text-transform: uppercase;
+}
+
+/* --- Empty state ------------------------------------------------------ */
+
+.pantry-app .pantry-empty {
+	padding: 56px 16px;
+	text-align: center;
+}
+
+.pantry-app .pantry-empty-title {
+	font-weight: 600;
+	margin-bottom: 4px;
+}
+
+.pantry-app .pantry-empty-hint {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+/* ====================================================================
+ * Groceries — one row, one decision
+ * ==================================================================== */
+
+.pantry-buy-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 54px;
+	padding: 6px 2px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.pantry-buy-row:last-child {
+	border-bottom: none;
+}
+
+.pantry-buy-row.is-done {
+	opacity: 0.5;
+}
+
+.pantry-app button.pantry-tick {
+	position: relative;
+	flex: none;
+	width: 26px;
+	height: 26px;
+	min-height: 0;
+	padding: 0;
+	display: grid;
+	place-items: center;
+	border: 2px solid var(--background-modifier-border-hover);
+	border-radius: 50%;
+	background: transparent;
+	box-shadow: none;
+	cursor: pointer;
+	transition: background 140ms ease, border-color 140ms ease;
+}
+
+/* A 26px circle is too small for a thumb; the hit area is not. */
+.pantry-app button.pantry-tick::after {
+	content: "";
+	position: absolute;
+	inset: -11px;
+}
+
+.pantry-app button.pantry-tick .pantry-tick-glyph {
+	display: grid;
+	place-items: center;
+	opacity: 0;
+	color: var(--text-on-accent);
+	transition: opacity 120ms ease;
+}
+
+.pantry-app button.pantry-tick .pantry-tick-glyph svg {
+	width: 15px;
+	height: 15px;
+	stroke-width: 3.2;
+}
+
+.pantry-app button.pantry-tick[aria-pressed="true"] {
+	background: var(--color-green, var(--interactive-accent));
+	border-color: var(--color-green, var(--interactive-accent));
+}
+
+.pantry-app button.pantry-tick[aria-pressed="true"] .pantry-tick-glyph {
+	opacity: 1;
+}
+
+.pantry-buy-main {
+	flex: 1;
+	min-width: 0;
+}
+
+.pantry-buy-name {
+	font-size: var(--font-ui-medium);
+	font-weight: 500;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.is-done .pantry-buy-name {
+	text-decoration: line-through;
+	color: var(--text-muted);
+}
+
+.pantry-buy-meta {
+	margin-top: 1px;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+/* --- The amount, quiet until you reach for it ------------------------- */
+
+.pantry-app button.pantry-quantity,
+.pantry-app .pantry-quantity.is-static {
+	flex: none;
+	height: 30px;
+	min-height: 0;
+	padding: 0 12px;
+	display: inline-flex;
+	align-items: center;
+	border: none;
+	border-radius: 999px;
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+	font-size: var(--font-ui-smaller);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.pantry-app .pantry-quantity.is-static {
+	background: transparent;
+	color: var(--text-faint);
+	cursor: default;
+}
+
+.pantry-quantity-edit {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px;
+	border-radius: 999px;
+	background: var(--background-modifier-hover);
+}
+
+.pantry-quantity-value {
+	min-width: 52px;
+	text-align: center;
+	font-size: var(--font-ui-smaller);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.pantry-app button.pantry-stepper-step,
+.pantry-app button.pantry-stepper-done {
+	width: 30px;
+	height: 30px;
+	min-height: 0;
+	padding: 0;
+	display: grid;
+	place-items: center;
+	border: none;
+	border-radius: 50%;
+	background: var(--background-primary);
+	color: var(--text-muted);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+	cursor: pointer;
+}
+
+.pantry-app button.pantry-stepper-done {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.pantry-app button.pantry-stepper-step svg,
+.pantry-app button.pantry-stepper-done svg {
+	width: 14px;
+	height: 14px;
+}
+
+/* ====================================================================
+ * Stock — name and verdict on one line, the control underneath
+ * ==================================================================== */
+
+.pantry-stock-row {
+	padding: 12px 2px 14px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.pantry-stock-row:last-child {
+	border-bottom: none;
+}
+
+.pantry-stock-row.is-flagged {
+	border-left: 2px solid var(--text-accent);
+	padding-left: 10px;
+	margin-left: -12px;
+}
+
+/* Held on screen for a few seconds after a tap took it out of this list, so a
+   count can still be corrected. Dimmed, because it is on its way out. */
+.pantry-stock-row.is-leaving {
+	opacity: 0.5;
+}
+
+.pantry-stock-line {
+	display: flex;
+	align-items: baseline;
+	gap: 12px;
+	margin-bottom: 10px;
+}
+
+.pantry-stock-name {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--font-ui-medium);
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.pantry-stock-unit {
+	margin-left: 7px;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-weight: 400;
+}
+
+.pantry-status {
+	flex: none;
+	font-size: var(--font-ui-smaller);
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.pantry-status.is-buy {
+	padding: 2px 9px;
+	border-radius: 999px;
+	color: var(--text-error);
+	background: color-mix(in srgb, var(--text-error) 13%, transparent);
+}
+
+.pantry-status.is-ok {
+	color: var(--text-muted);
+	font-weight: 600;
+}
+
+.pantry-status.is-quiet {
+	color: var(--text-faint);
+	font-weight: 500;
+}
+
+.pantry-stock-controls {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+/* --- The strip, as a segmented control -------------------------------- */
+
+.pantry-strip {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 3px;
+	padding: 3px;
+	border-radius: var(--pantry-radius);
+	background: var(--background-modifier-hover);
+}
+
+.pantry-app button.pantry-strip-item {
+	min-width: 38px;
+	height: 34px;
+	min-height: 0;
+	padding: 0 10px;
+	border: none;
+	border-radius: 9px;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: var(--font-ui-medium);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	box-shadow: none;
+	cursor: pointer;
+	transition: background 120ms ease, color 120ms ease;
+}
+
+.pantry-app button.pantry-strip-item.is-active {
+	background: var(--background-primary);
+	color: var(--text-normal);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
+}
+
+.pantry-app button.pantry-strip-item.is-zero.is-active {
+	background: var(--text-error);
+	color: #fff;
+}
+
+.pantry-app button.pantry-strip-item.is-plus.is-active {
+	background: var(--color-green, var(--interactive-accent));
+	color: #fff;
+}
+
+/* --- Stepper for the few products with a large minimum ---------------- */
+
+.pantry-stepper {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px;
+	border-radius: var(--pantry-radius);
+	background: var(--background-modifier-hover);
+}
+
+.pantry-app button.pantry-stepper-edge {
+	height: 34px;
+	min-height: 0;
+	padding: 0 11px;
+	border: none;
+	border-radius: 9px;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 700;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.pantry-app button.pantry-stepper-edge.is-active {
+	background: var(--background-primary);
+	color: var(--text-normal);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
+}
+
+.pantry-stepper-value {
+	min-width: 46px;
+	text-align: center;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+/* --- The check flag, deliberately apart from the numbers -------------- */
+
+.pantry-app button.pantry-flag {
+	margin-left: auto;
+	height: 34px;
+	min-height: 0;
+	padding: 0 12px;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.pantry-app button.pantry-flag .pantry-flag-icon {
+	display: inline-flex;
+}
+
+.pantry-app button.pantry-flag svg {
+	width: 14px;
+	height: 14px;
+}
+
+.pantry-app button.pantry-flag.is-active {
+	border-color: var(--text-accent);
+	color: var(--text-accent);
+	background: color-mix(in srgb, var(--text-accent) 10%, transparent);
+}
+
+/* --- Narrow panes and phones ------------------------------------------ */
+
+@media (max-width: 560px) {
+	.pantry-app {
+		--pantry-gutter: 14px;
+	}
+
+	.pantry-app button.pantry-flag {
+		padding: 0 10px;
+	}
+
+	.pantry-app button.pantry-flag .pantry-flag-label {
+		display: none;
+	}
+
+	.pantry-app button.pantry-strip-item {
+		min-width: 34px;
+		padding: 0 7px;
+	}
+}
+
+/* ====================================================================
+ * Shelves — sorting products onto a walking route
+ * ==================================================================== */
+
+.pantry-shelf-picker {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 14px 0 6px;
+}
+
+.pantry-app button.pantry-shelf-chip {
+	height: 32px;
+	min-height: 0;
+	padding: 0 13px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.pantry-app button.pantry-shelf-chip.is-active {
+	background: var(--interactive-accent);
+	border-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.pantry-route-list.is-reordering {
+	user-select: none;
+	cursor: grabbing;
+}
+
+.pantry-route-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 48px;
+	padding: 4px 2px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+	border-radius: 10px;
+}
+
+.pantry-route-row.is-dragging {
+	border-bottom-color: transparent;
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+	/* The row is translated inline while it follows the pointer, so no
+	   transform here: it would be overwritten anyway. */
+	position: relative;
+	z-index: 5;
+	cursor: grabbing;
+}
+
+.pantry-route-grip {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 30px;
+	height: 38px;
+	margin-left: -6px;
+	color: var(--text-faint);
+	cursor: grab;
+	/* A finger on the grip must drag the row, not scroll the pane. */
+	touch-action: none;
+}
+
+.pantry-route-grip:active {
+	cursor: grabbing;
+	color: var(--text-muted);
+}
+
+.pantry-route-grip svg {
+	width: 16px;
+	height: 16px;
+}
+
+.pantry-route-row:last-child {
+	border-bottom: none;
+}
+
+.pantry-route-index {
+	flex: none;
+	width: 24px;
+	height: 24px;
+	display: grid;
+	place-items: center;
+	border-radius: 50%;
+	background: var(--background-modifier-hover);
+	color: var(--text-faint);
+	font-size: 0.75em;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.pantry-route-name {
+	flex: 1;
+	min-width: 0;
+	font-weight: 500;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.pantry-route-count {
+	flex: none;
+	margin-right: 4px;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.pantry-app button.pantry-icon-button {
+	flex: none;
+	width: 32px;
+	height: 32px;
+	min-height: 0;
+	padding: 0;
+	display: grid;
+	place-items: center;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--text-muted);
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.pantry-app button.pantry-icon-button svg {
+	width: 16px;
+	height: 16px;
+}
+
+.pantry-app button.pantry-icon-button.is-disabled {
+	opacity: 0.25;
+	pointer-events: none;
+}
+
+.pantry-add-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	padding: 14px 0 4px;
+}
+
+.pantry-app .pantry-add-row input.pantry-field-search {
+	flex: 1;
+	min-width: 0;
+}
+
+.pantry-app button.pantry-button-primary {
+	height: 38px;
+	min-height: 0;
+	padding: 0 16px;
+	border: none;
+	border-radius: var(--pantry-radius);
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-weight: 600;
+	box-shadow: none;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.pantry-app button.pantry-button-ghost {
+	height: auto;
+	min-height: 0;
+	margin-top: 12px;
+	padding: 9px 14px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+/* ====================================================================
+ * Cleanup — one card, one question
+ * ==================================================================== */
+
+.pantry-app .pantry-queue-progress {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px 2px 4px;
+}
+
+.pantry-app .pantry-queue-count {
+	color: var(--text-faint);
+	font-size: 0.72em;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	font-variant-numeric: tabular-nums;
+}
+
+.pantry-app .pantry-card {
+	margin-top: 14px;
+	padding: 20px;
+	border-radius: 16px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.pantry-app .pantry-card-kicker {
+	color: var(--text-faint);
+	font-size: 0.72em;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+
+.pantry-app h2.pantry-card-title {
+	margin: 6px 0 0;
+	font-size: 1.55em;
+	font-weight: 650;
+	letter-spacing: -0.02em;
+	line-height: 1.15;
+}
+
+/* The recipe lines that made this question worth asking. */
+.pantry-app .pantry-card-lines {
+	margin-top: 14px;
+	padding: 10px 12px;
+	border-radius: 10px;
+	background: var(--background-secondary);
+}
+
+.pantry-app .pantry-card-line {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	padding: 3px 0;
+	font-size: var(--font-ui-small);
+}
+
+.pantry-app .pantry-card-line-text {
+	font-variant-numeric: tabular-nums;
+}
+
+.pantry-app .pantry-card-line-recipe {
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	text-align: right;
+}
+
+.pantry-app .pantry-card-line-more {
+	padding-top: 4px;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+/* --- The three answers ------------------------------------------------ */
+
+.pantry-app .pantry-choices {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 16px;
+}
+
+.pantry-app button.pantry-choice {
+	display: block;
+	width: 100%;
+	height: auto;
+	min-height: 56px;
+	padding: 12px 14px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 12px;
+	background: var(--background-primary);
+	box-shadow: none;
+	text-align: left;
+	cursor: pointer;
+}
+
+.pantry-app button.pantry-choice:hover {
+	background: var(--background-modifier-hover);
+	border-color: var(--background-modifier-border-hover, var(--background-modifier-border));
+}
+
+.pantry-app button.pantry-choice.is-open {
+	border-color: var(--interactive-accent);
+}
+
+.pantry-app .pantry-choice-title {
+	font-size: var(--font-ui-medium);
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.pantry-app .pantry-choice-hint {
+	margin-top: 2px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.35;
+	white-space: normal;
+}
+
+/* --- The package form ------------------------------------------------- */
+
+.pantry-app .pantry-form {
+	margin-top: 12px;
+	padding: 14px;
+	border-radius: 12px;
+	background: var(--background-secondary);
+}
+
+.pantry-app .pantry-form-label {
+	margin-bottom: 6px;
+	color: var(--text-faint);
+	font-size: 0.72em;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+
+.pantry-app .pantry-form-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 10px;
+}
+
+.pantry-app .pantry-form-row + .pantry-form-label {
+	margin-top: 6px;
+}
+
+.pantry-app .pantry-segment.is-wrap {
+	display: flex;
+	flex-wrap: wrap;
+	margin-bottom: 12px;
+}
+
+.pantry-app input.pantry-field-number,
+.pantry-app input.pantry-field-unit {
+	height: 38px;
+	padding: 0 12px;
+	border-radius: var(--pantry-radius);
+	border: 1px solid transparent;
+	background: var(--background-modifier-form-field, var(--background-primary));
+	font-size: var(--font-ui-medium);
+	font-variant-numeric: tabular-nums;
+	box-shadow: none;
+}
+
+.pantry-app input.pantry-field-number {
+	width: 100px;
+}
+
+.pantry-app input.pantry-field-unit {
+	width: 80px;
+}
+
+.pantry-app input.pantry-field-number:focus,
+.pantry-app input.pantry-field-unit:focus {
+	border-color: var(--interactive-accent);
+	box-shadow: none;
+}
+
+.pantry-app .pantry-form-hint {
+	margin-bottom: 12px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.35;
+}
+
+/* --- Picking an existing product -------------------------------------- */
+
+.pantry-app .pantry-picker {
+	margin-top: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.pantry-app button.pantry-picker-row {
+	height: 40px;
+	min-height: 0;
+	padding: 0 12px;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-normal);
+	font-size: var(--font-ui-medium);
+	text-align: left;
+	cursor: pointer;
+}
+
+.pantry-app button.pantry-picker-row:hover {
+	background: var(--background-modifier-hover);
+}
+
+/* --- Footer and the queue tail ---------------------------------------- */
+
+.pantry-app .pantry-card-footer {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 14px;
+}
+
+.pantry-app .pantry-card-footer button.pantry-button-ghost {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	width: auto;
+	margin: 0;
+}
+
+.pantry-app .pantry-button-icon {
+	display: inline-flex;
+}
+
+.pantry-app .pantry-button-icon svg {
+	width: 15px;
+	height: 15px;
+}
+
+.pantry-app .pantry-queue-next {
+	padding: 14px 4px 0;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	text-align: center;
+}
+
+/* --- Answered, still ignored ------------------------------------------ */
+
+.pantry-app .pantry-stubborn {
+	margin-top: 12px;
+	padding: 14px;
+	border-radius: 12px;
+	border: 1px solid var(--background-modifier-border);
+}
+
+.pantry-app .pantry-stubborn-head {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+}
+
+.pantry-app .pantry-stubborn-name {
+	font-weight: 600;
+}
+
+.pantry-app .pantry-stubborn-unit {
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+.pantry-app .pantry-stubborn button.pantry-button-ghost {
+	width: auto;
+	margin-top: 10px;
+}
+
+/* ====================================================================
+ * Home — one door, five rooms
+ * ==================================================================== */
+
+/* The way back, in every screen's header. */
+.pantry-app button.pantry-back,
+.pantry-view button.pantry-back {
+	display: inline-flex;
+	align-items: center;
+	align-self: flex-start;
+	gap: 4px;
+	height: 30px;
+	min-height: 0;
+	width: auto;
+	margin: 0;
+	padding: 0 10px 0 6px;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.pantry-app button.pantry-back:hover,
+.pantry-view button.pantry-back:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.pantry-back-icon {
+	display: inline-flex;
+}
+
+.pantry-back-icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+/* The planner has no header of its own. */
+.pantry-view .pantry-back-row {
+	padding: 8px 12px 0;
+}
+
+/* --- The tiles -------------------------------------------------------- */
+
+.pantry-app .pantry-tiles {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding-top: 14px;
+}
+
+.pantry-app button.pantry-tile {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	width: 100%;
+	height: auto;
+	min-height: 76px;
+	padding: 14px 16px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 14px;
+	background: var(--background-primary);
+	box-shadow: none;
+	text-align: left;
+	cursor: pointer;
+}
+
+.pantry-app button.pantry-tile:hover {
+	background: var(--background-modifier-hover);
+}
+
+.pantry-app .pantry-tile-icon {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 42px;
+	height: 42px;
+	border-radius: 12px;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+}
+
+.pantry-app .pantry-tile.is-waiting .pantry-tile-icon {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.pantry-app .pantry-tile-icon svg {
+	width: 20px;
+	height: 20px;
+}
+
+.pantry-app .pantry-tile-text {
+	flex: 1;
+	min-width: 0;
+}
+
+.pantry-app .pantry-tile-title {
+	font-size: var(--font-ui-medium);
+	font-weight: 650;
+	color: var(--text-normal);
+}
+
+.pantry-app .pantry-tile-hint {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.3;
+	white-space: normal;
+}
+
+.pantry-app .pantry-tile-state {
+	margin-top: 4px;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.pantry-app .pantry-tile.is-waiting .pantry-tile-state {
+	color: var(--text-accent);
+	font-weight: 600;
+}
+
+.pantry-app .pantry-tile-chevron {
+	flex: none;
+	display: inline-flex;
+	color: var(--text-faint);
+}
+
+.pantry-app .pantry-tile-chevron svg {
+	width: 18px;
+	height: 18px;
+}
+
+.pantry-app .pantry-home-footer {
+	display: flex;
+	justify-content: center;
+	padding-top: 18px;
+}
+
+.pantry-app .pantry-home-footer button.pantry-button-ghost {
+	width: auto;
+	margin: 0;
+}
+
+/* --- Quick product edit (tap a name in Groceries or Stock) ------------ */
+
+.pantry-sheet-modal {
+	width: min(460px, 94vw);
+	max-height: 86vh;
+}
+
+.pantry-sheet-modal .modal-content {
+	padding: 0;
+}
+
+.pantry-app.pantry-sheet {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+	padding: 4px 2px 2px;
+}
+
+.pantry-sheet-head {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.pantry-sheet-name {
+	font-size: var(--font-ui-large);
+	font-weight: 700;
+	line-height: 1.2;
+}
+
+.pantry-sheet-facts {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.pantry-sheet-body {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+	overflow-y: auto;
+}
+
+.pantry-sheet-block {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.pantry-sheet-label {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+}
+
+.pantry-sheet-options {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.pantry-app button.pantry-sheet-option {
+	height: 40px;
+	min-height: 0;
+	padding: 0 16px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	font-weight: 500;
+	box-shadow: none;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.pantry-app button.pantry-sheet-option.is-active {
+	border-color: transparent;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-weight: 600;
+}
+
+.pantry-app button.pantry-sheet-option.is-add {
+	border-style: dashed;
+	color: var(--text-muted);
+}
+
+.pantry-app input.pantry-sheet-input {
+	width: 100%;
+	height: 40px;
+	padding: 0 12px;
+	border-radius: var(--pantry-radius, 10px);
+	border: 1px solid var(--interactive-accent);
+	background: var(--background-modifier-form-field, var(--background-secondary));
+	font-size: var(--font-ui-medium);
+	box-shadow: none;
+}
+
+.pantry-app button.pantry-sheet-more {
+	align-self: flex-start;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	height: 32px;
+	min-height: 0;
+	padding: 0 4px;
+	border: none;
+	background: transparent;
+	color: var(--text-accent);
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.pantry-sheet-caret {
+	display: inline-flex;
+}
+
+.pantry-sheet-caret svg {
+	width: 16px;
+	height: 16px;
+}
+
+.pantry-sheet-fields {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding-top: 2px;
+}
+
+.pantry-app.pantry-sheet input.pantry-field-input {
+	width: 100%;
+	height: 38px;
+	padding: 0 12px;
+	border-radius: var(--pantry-radius, 10px);
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-modifier-form-field, var(--background-secondary));
+	font-size: var(--font-ui-medium);
+	box-shadow: none;
+}
+
+.pantry-app.pantry-sheet input.pantry-field-input:focus {
+	border-color: var(--interactive-accent);
+	box-shadow: none;
+}
+
+.pantry-sheet-foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	padding-top: 4px;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+/* --- Why this product is on the list -------------------------------- *
+ * The recipe lines behind the figure. Quiet by design: it is context you
+ * read, never a control you tap, so it sits back from the chips below it.
+ */
+
+.pantry-sheet-needs {
+	gap: 6px;
+}
+
+.pantry-need-card {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 8px 10px;
+	border-radius: 8px;
+	background: var(--background-secondary);
+}
+
+.pantry-need-recipe {
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.pantry-need-line {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	line-height: 1.35;
+}
+
+.pantry-need-uncounted {
+	flex: 0 0 auto;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-style: italic;
+	white-space: nowrap;
+}
+
+/* On a phone the sheet takes the whole screen: too many chip rows to fit in
+   86vh without the body turning into a peephole. The 12px it keeps on every
+   side is the same breathing room the 94vw card had — only the outer frame
+   goes away, not the margins. Head and foot stay put, the blocks scroll. */
+@media (max-width: 640px) {
+	.pantry-sheet-modal {
+		display: flex;
+		flex-direction: column;
+		width: 100%;
+		max-width: 100%;
+		height: 100%;
+		max-height: 100%;
+		margin: 0;
+		border-radius: 0;
+	}
+
+	.pantry-app.pantry-sheet {
+		flex: 1 1 auto;
+		min-height: 0;
+		padding: 4px 12px calc(4px + env(safe-area-inset-bottom));
+	}
+
+	.pantry-sheet-body {
+		flex: 1 1 auto;
+		min-height: 0;
+	}
+}
+
+/* A name that opens the quick edit reads as a target without shouting. */
+.pantry-app .pantry-buy-main.is-tappable,
+.pantry-app .pantry-stock-name.is-tappable {
+	cursor: pointer;
+	border-radius: 8px;
+}
+
+.pantry-app .pantry-buy-main.is-tappable:active,
+.pantry-app .pantry-stock-name.is-tappable:active {
+	background: var(--background-modifier-hover);
+}
+
+/* --- Day notes ----------------------------------------------------- *
+ * One quiet line per day for what the calendar says, between the day
+ * headers and the first meal.
+ */
+
+.pantry-note-corner {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	padding: 0 4px;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	letter-spacing: 0.02em;
+}
+
+.pantry-day-note {
+	display: flex;
+	align-items: stretch;
+	min-width: 0;
+}
+
+.pantry-planner textarea.pantry-day-note-input {
+	width: 100%;
+	min-height: 28px;
+	padding: 5px 8px;
+	border: 1px solid transparent;
+	border-radius: 8px;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	font-family: inherit;
+	font-size: var(--font-ui-smaller);
+	line-height: 1.35;
+	resize: none;
+	overflow: hidden;
+	box-shadow: none;
+	transition: border-color 120ms ease, background 120ms ease;
+}
+
+.pantry-planner textarea.pantry-day-note-input::placeholder {
+	color: var(--text-faint);
+}
+
+.pantry-planner textarea.pantry-day-note-input:hover {
+	border-color: var(--background-modifier-border);
+}
+
+.pantry-planner textarea.pantry-day-note-input:focus,
+.pantry-planner textarea.pantry-day-note-input:focus-visible {
+	border-color: var(--text-accent);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	outline: none;
+	box-shadow: none;
+}
+
+.pantry-day-note.has-note textarea.pantry-day-note-input {
+	color: var(--text-normal);
+}
+
+/* In the day list the field sits right under the heading. */
+.pantry-day > .pantry-day-note {
+	margin-top: -2px;
+}
+
+/* --- Products screen ------------------------------------------------ *
+ * The base list, and the run through the products that never got
+ * finished. A gap is shown where the facts would be, in the same slot,
+ * so scanning the list is one column of text and not two.
+ */
+
+.pantry-app .pantry-head-row {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.pantry-app .pantry-head-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.pantry-products .pantry-products-filters {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.pantry-app button.pantry-segment-item.is-alarm {
+	color: var(--text-accent);
+}
+
+.pantry-app button.pantry-segment-item.is-active.is-alarm {
+	color: var(--text-normal);
+}
+
+.pantry-app button.pantry-run-button {
+	height: 44px;
+	min-height: 0;
+	width: 100%;
+	margin-bottom: 4px;
+	border: none;
+	border-radius: 12px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.pantry-app button.pantry-product-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	height: auto;
+	min-height: 56px;
+	padding: 10px 4px;
+	border: none;
+	border-radius: 10px;
+	background: transparent;
+	box-shadow: none;
+	text-align: left;
+	cursor: pointer;
+}
+
+.pantry-app button.pantry-product-row:active {
+	background: var(--background-modifier-hover);
+}
+
+.pantry-product-main {
+	display: flex;
+	flex: 1 1 auto;
+	min-width: 0;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.pantry-product-name {
+	color: var(--text-normal);
+	font-size: var(--font-ui-medium);
+	font-weight: 500;
+	line-height: 1.25;
+}
+
+.pantry-product-facts {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+/* The gap sits where the facts would: same slot, different weight. */
+.pantry-product-gaps {
+	color: var(--text-accent);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+}
+
+.pantry-product-chevron {
+	display: flex;
+	align-items: center;
+	color: var(--text-faint);
+}
+
+/* --- Product sheet: the gap-filling run ----------------------------- */
+
+.pantry-sheet-progress {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.pantry-sheet-gaps {
+	color: var(--text-accent);
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+}
+
+/* An unanswered block earns a line down its side, so you can see how far
+   you still have to go without reading a word. */
+.pantry-sheet-block.is-empty {
+	padding-left: 10px;
+	border-left: 2px solid var(--text-accent);
+}
+
+.pantry-sheet-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.pantry-sheet-row input.pantry-sheet-input {
+	flex: 1 1 160px;
+	min-width: 0;
+}
+
+.pantry-app button.pantry-sheet-option.is-toggle.is-active {
+	border-color: var(--interactive-accent);
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.pantry-sheet-stepper {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.pantry-app button.pantry-sheet-step {
+	width: 44px;
+	height: 44px;
+	min-height: 0;
+	padding: 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 12px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: 20px;
+	line-height: 1;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.pantry-app button.pantry-sheet-step.is-disabled {
+	color: var(--text-faint);
+}
+
+.pantry-sheet-number {
+	min-width: 32px;
+	color: var(--text-normal);
+	font-size: var(--font-ui-large);
+	font-weight: 600;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+
+.pantry-sheet-suffix.is-quiet {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}

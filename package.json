@@ -1,0 +1,21 @@
+{
+  "name": "pantry",
+  "version": "0.1.0",
+  "description": "Plan meals, scale recipes and build grocery lists from your notes.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
+  },
+  "keywords": [],
+  "author": "Jeroen van der Wal",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "builtin-modules": "^4.0.0",
+    "esbuild": "^0.25.0",
+    "obsidian": "latest",
+    "tslib": "^2.8.0",
+    "typescript": "^5.7.0"
+  }
+}

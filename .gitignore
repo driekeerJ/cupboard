@@ -1,0 +1,7 @@
+node_modules/
+main.js
+*.js.map
+
+# Persoonlijke instellingen en kooksessies — geen repo-materiaal
+data.json
+_t.txt

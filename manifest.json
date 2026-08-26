@@ -1,0 +1,9 @@
+{
+  "id": "pantry",
+  "name": "Pantry",
+  "version": "0.1.0",
+  "minAppVersion": "1.6.0",
+  "description": "Plan your meals for the week, scale recipes to the number of eaters and turn them into a grocery list.",
+  "author": "Jeroen van der Wal",
+  "isDesktopOnly": false
+}
