@@ -1,5 +1,6 @@
 import { TFile, normalizePath } from "obsidian";
 import { markdownIn } from "./folder";
+import { ensureFolder } from "./notes";
 import type PantryPlugin from "./main";
 
 /**
@@ -22,6 +23,40 @@ export const DEFAULT_SHELVES = [
 	"Household",
 	"Personal care",
 ];
+
+/**
+ * Zet de looproute in de eerste routesectie van een winkelnotitie.
+ *
+ * Losse functie: dan is de tekstbewerking te testen zonder vault, en kan hij
+ * binnen `vault.process()` draaien op de inhoud zoals die op dat moment is.
+ */
+export function writeShelves(content: string, shelves: string[]): string {
+	const bullets = shelves.map((shelf) => `- ${shelf}`);
+	const kept: string[] = [];
+	let inSection = false;
+	let wrote = false;
+
+	for (const line of content.split(/\r?\n/)) {
+		const heading = HEADING.exec(line);
+		if (heading) {
+			inSection = SHELF_HEADING.test(heading[1]) && !wrote;
+			kept.push(line);
+			if (inSection) {
+				kept.push("", ...bullets);
+				wrote = true;
+			}
+			continue;
+		}
+		// Binnen de sectie verdwijnen de oude bullets; daarbuiten blijft alles
+		// staan, ook een tweede routekop die iemand zelf heeft geschreven.
+		if (inSection && (BULLET.test(line) || line.trim().length === 0)) continue;
+		kept.push(line);
+	}
+
+	if (!wrote) kept.push("", "## Shelves", "", ...bullets);
+
+	return `${kept.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n`;
+}
 
 export interface Shop {
 	name: string;
@@ -109,11 +144,20 @@ export class ShopIndex {
 		const inSection: string[] = [];
 		const everything: string[] = [];
 		let collecting = false;
+		let seenSection = false;
 
 		for (const line of lines) {
 			const heading = HEADING.exec(line);
 			if (heading) {
-				collecting = SHELF_HEADING.test(heading[1]);
+				// Alleen de éérste routekop telt. `SHELF_HEADING` matcht ruim —
+				// "shelves", "route", "schap", "gangpad" — dus een notitie met
+				// "## Shelves" én "## Mijn route" leverde beide lijsten achter
+				// elkaar op, en `setShelves` schreef ze allebei vol. Twee
+				// koppen betekende twee kopieën, en die verdubbelden bij elke
+				// opslag: 2 → 4 → 8 → 16.
+				const matches = SHELF_HEADING.test(heading[1]);
+				collecting = matches && !seenSection;
+				if (matches) seenSection = true;
 				continue;
 			}
 			const bullet = BULLET.exec(line);
@@ -124,19 +168,16 @@ export class ShopIndex {
 			if (collecting) inSection.push(name);
 		}
 
-		return inSection.length > 0 ? inSection : everything;
+		return seenSection ? inSection : everything;
 	}
 
 	async createShop(name: string): Promise<TFile | null> {
 		const folder = this.folder();
-		if (!this.plugin.app.vault.getFolderByPath(folder)) {
-			await this.plugin.app.vault.createFolder(folder).catch(() => undefined);
-		}
-
 		const safe = name.replace(/[\\/:*?"<>|#^[\]]/g, "").trim();
 		if (safe.length === 0) return null;
 
 		const path = normalizePath(`${folder}/${safe}.md`);
+		await ensureFolder(this.plugin.app.vault, path);
 		const existing = this.plugin.app.vault.getFileByPath(path);
 		if (existing) return existing;
 
@@ -162,43 +203,20 @@ export class ShopIndex {
 	}
 
 	/** Writes the route back, keeping everything else in the note intact. */
+	/**
+	 * Schrijft de looproute terug, alleen in de eerste routesectie.
+	 *
+	 * Alles buiten die sectie blijft staan: een openingstijdenlijstje, een
+	 * notitie over de kassa, wat dan ook. En `process()` in plaats van
+	 * `read()` + `modify()`, want dat laatste is lezen en later schrijven met
+	 * een gat ertussen waarin iemand anders de notitie kan aanraken.
+	 */
 	async setShelves(shop: Shop, shelves: string[]): Promise<void> {
 		const file = this.plugin.app.vault.getFileByPath(shop.path);
 		if (!file) return;
 
-		const content = await this.plugin.app.vault.read(file);
-		const lines = content.split(/\r?\n/);
-		const kept: string[] = [];
-		let inSection = false;
-		let wrote = false;
-
-		for (const line of lines) {
-			const heading = HEADING.exec(line);
-			if (heading) {
-				if (inSection && !wrote) {
-					kept.push(...shelves.map((shelf) => `- ${shelf}`), "");
-					wrote = true;
-				}
-				inSection = SHELF_HEADING.test(heading[1]);
-				kept.push(line);
-				if (inSection) {
-					kept.push("");
-					kept.push(...shelves.map((shelf) => `- ${shelf}`));
-					wrote = true;
-				}
-				continue;
-			}
-			if (inSection && (BULLET.test(line) || line.trim().length === 0)) continue;
-			kept.push(line);
-		}
-
-		if (!wrote) {
-			kept.push("", "## Shelves", "", ...shelves.map((shelf) => `- ${shelf}`));
-		}
-
-		await this.plugin.app.vault.modify(
-			file,
-			`${kept.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd()}\n`
+		await this.plugin.app.vault.process(file, (content: string) =>
+			writeShelves(content, shelves)
 		);
 		await this.build();
 	}

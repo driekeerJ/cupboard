@@ -71,6 +71,9 @@ test("week-basis: één gepland recept vult de boodschappenlijst", async () => {
 			"",
 			"# Groceries",
 			"",
+			"*Anything you write outside the block below stays where it is.*",
+			"",
+			"<!-- pantry:groceries -->",
 			"*Kept up to date by Pantry. Tick a box and that product counts as full again.*",
 			"",
 			"## Lidl",
@@ -87,7 +90,91 @@ test("week-basis: één gepland recept vult de boodschappenlijst", async () => {
 			"## Check first",
 			"",
 			"- [ ] [[Zout]] · ?",
+			"<!-- /pantry:groceries -->",
 			"",
 		].join("\n")
 	);
+});
+
+test("wat je zelf in de boodschappennotitie zet blijft staan", async () => {
+	// H5. De notitie werd volledig geregenereerd: een handgeschreven regel, een
+	// Dataview-blok of een briefje aan de slager was bij de eerstvolgende
+	// verversing weg — en die verversing draait bij elke vaultwijziging.
+	const h = await run("week-basis");
+
+	const eigen = `${h.groceries().trimEnd()}\n\n## Niet vergeten\n\n- [ ] batterijen\n- vraag bij de slager naar de tijm\n`;
+	h.vault.write(h.plugin.list.path(), eigen);
+
+	// Iets verandert, dus de lijst wordt opnieuw geschreven.
+	await h.plugin.list.markBought(h.plugin.products.byPath("Products/Ui.md")!);
+
+	const after = h.groceries();
+	assert.match(after, /## Niet vergeten/);
+	assert.match(after, /- \[ \] batterijen/);
+	assert.match(after, /vraag bij de slager naar de tijm/);
+	assert.match(after, /## In the basket/, "en de lijst zelf is wel bijgewerkt");
+});
+
+test("een notitie die niet van Pantry is blijft ongemoeid", async () => {
+	const h = await run("week-basis");
+
+	const vanJeroen = "# Mijn eigen lijstje\n\n- [ ] kaarsen\n";
+	h.vault.write(h.plugin.list.path(), vanJeroen);
+	await h.plugin.list.write();
+
+	assert.equal(h.groceries(), vanJeroen, "geen frontmatter, geen markers, niet aankomen");
+});
+
+test("een lege productindex wist de lijst niet", async () => {
+	// M40. Klopt de productmap even niet, dan is er niets te melden — en dat is
+	// iets anders dan "niets nodig". Het mandje mag niet verdwijnen terwijl je
+	// in de winkel staat.
+	const h = await run("week-basis");
+	const before = h.groceries();
+
+	h.plugin.settings.productFolder = "Bestaat niet";
+	h.plugin.products.build();
+	await h.plugin.list.write();
+
+	assert.equal(h.groceries(), before);
+});
+
+test("uitvinken zet de check-vlag terug", async () => {
+	// M9. markBought wist de vlag, undoBought gaf hem niet terug: een product
+	// uit "Check first" raakte hem kwijt zodra je het per ongeluk afvinkte.
+	const h = await run("week-basis");
+	const zout = h.plugin.products.byPath("Products/Zout.md")!;
+	await h.plugin.products.update(zout, { count: 2, check: true });
+
+	await h.plugin.list.markBought(zout);
+	assert.equal(zout.check, false, "afvinken haalt hem uit Check first");
+
+	await h.plugin.list.undoBought(zout);
+	assert.equal(zout.check, true, "en uitvinken zet hem terug");
+	assert.equal(zout.count, 2, "net als de telling van ervoor");
+});
+
+test("een reeks tikken in de notitie wordt in één keer weggeschreven", async () => {
+	// M8. Elke tik schreef de hele notitie opnieuw vanuit één momentopname, dus
+	// een vinkje dat je zette tussen het lezen en het laatste schrijven werd
+	// stil weer uitgevinkt.
+	const h = await run("week-basis");
+
+	const getikt = h
+		.groceries()
+		.split("\n")
+		.map((line) => (line.startsWith("- [ ] [[") ? line.replace("- [ ]", "- [x]") : line))
+		.join("\n");
+	h.vault.write(h.plugin.list.path(), getikt);
+
+	await h.plugin.list.syncFromNote();
+
+	for (const name of ["Ui", "Passata", "Rijst", "Zout"]) {
+		assert.equal(
+			h.plugin.list.bought.has(`Products/${name}.md`),
+			true,
+			`${name} staat in het mandje`
+		);
+	}
+	assert.match(h.groceries(), /## In the basket/);
 });

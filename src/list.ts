@@ -1,5 +1,13 @@
 import { TFile, normalizePath } from "obsidian";
 import { startOfWeek } from "./date";
+import {
+	clearWarning,
+	ensureFolder,
+	frontmatterValue,
+	hasRegion,
+	replaceRegion,
+	warnOnce,
+} from "./notes";
 import type PantryPlugin from "./main";
 import { toBuy, type Count, type Product } from "./products";
 
@@ -9,6 +17,9 @@ const BOUGHT_HEADING = "## In the basket";
 const CHECK_HEADING = "## Check first";
 
 const TICK = /^\s*-\s\[([ xX])\]\s*\[\[([^\]|#]+)/;
+
+/** De naam van het stuk notitie dat Pantry beheert; zie src/notes.ts. */
+const REGION = "groceries";
 
 /**
  * The grocery list as a note. It is a mirror, not a source: the product notes
@@ -24,7 +35,7 @@ export class GroceryList {
 	 * What the count was before an item was ticked. Lives only for as long as
 	 * the app runs: it exists to undo a mistake while you are still in the shop.
 	 */
-	readonly bought: Map<string, Count | null> = new Map();
+	readonly bought: Map<string, { count: Count | null; check: boolean }> = new Map();
 	/** Session-only tweaks from the + / − buttons, applied to both renderings. */
 	readonly nudge: Map<string, number> = new Map();
 
@@ -85,20 +96,48 @@ export class GroceryList {
 	}
 
 	async markBought(product: Product): Promise<void> {
-		this.bought.set(product.path, product.count);
+		// Ook de check-vlag bewaren: die wordt hieronder gewist, en zonder
+		// bewaren kreeg een product uit "Check first" hem nooit meer terug.
+		this.bought.set(product.path, { count: product.count, check: product.check });
 		this.nudge.delete(product.path);
 		await this.plugin.products.update(product, { count: "plus", check: false });
 		await this.write();
 	}
 
 	async undoBought(product: Product): Promise<void> {
-		const before = this.bought.get(product.path) ?? null;
+		const before = this.bought.get(product.path);
 		this.bought.delete(product.path);
-		await this.plugin.products.update(product, { count: before });
+		await this.plugin.products.update(product, {
+			count: before?.count ?? null,
+			check: before?.check ?? false,
+		});
 		await this.write();
 	}
 
-	/** Reads ticks a person made in the note itself, then repaints the note. */
+	/** Als markBought, maar zonder te schrijven — voor een reeks tikken achter elkaar. */
+	private async markBoughtQuietly(product: Product): Promise<void> {
+		this.bought.set(product.path, { count: product.count, check: product.check });
+		this.nudge.delete(product.path);
+		await this.plugin.products.update(product, { count: "plus", check: false });
+	}
+
+	private async undoBoughtQuietly(product: Product): Promise<void> {
+		const before = this.bought.get(product.path);
+		this.bought.delete(product.path);
+		await this.plugin.products.update(product, {
+			count: before?.count ?? null,
+			check: before?.check ?? false,
+		});
+	}
+
+	/**
+	 * Reads ticks a person made in the note itself, then repaints the note.
+	 *
+	 * Alle tikken worden eerst verwerkt en pas daarna wordt er één keer
+	 * geschreven. Schreef elke tik apart, dan werd de notitie vijf keer
+	 * herschreven vanuit één momentopname — en een vinkje dat je zette tussen
+	 * het lezen en het laatste schrijven werd stil weer uitgevinkt.
+	 */
 	async syncFromNote(): Promise<void> {
 		const file = this.file();
 		if (!file) return;
@@ -119,9 +158,9 @@ export class GroceryList {
 			if (!product) continue;
 
 			if (ticked && !inBought && !this.bought.has(product.path)) {
-				await this.markBought(product);
+				await this.markBoughtQuietly(product);
 			} else if (!ticked && inBought && this.bought.has(product.path)) {
-				await this.undoBought(product);
+				await this.undoBoughtQuietly(product);
 			}
 		}
 
@@ -137,25 +176,85 @@ export class GroceryList {
 		return this.plugin.products.match(linkText);
 	}
 
-	/** Rebuilds the note, but only touches the vault when it truly differs. */
+	/**
+	 * Schrijft de lijst in het stuk van de notitie dat Pantry beheert.
+	 *
+	 * Drie dingen die hier eerder misgingen:
+	 *
+	 * - **Eigendom.** De hele notitie werd overschreven, op een pad dat de
+	 *   gebruiker zelf instelt. Stond er al een eigen lijst in `Groceries.md`,
+	 *   dan was die bij de eerste verversing weg — zonder waarschuwing, zonder
+	 *   undo. Nu schrijft de plugin alleen tussen haar eigen markers, en raakt
+	 *   ze een notitie die niet van haar is niet aan.
+	 * - **Wat je er zelf bij zet.** Alles buiten die markers blijft staan: een
+	 *   handgeschreven regel, een Dataview-blok, een briefje aan de slager.
+	 * - **Een lege index.** Klopt de productmap even niet, dan is er niets te
+	 *   melden — en dat is iets anders dan "niets nodig". Er wordt dan niet
+	 *   geschreven, zodat je mandje niet verdwijnt terwijl je in de winkel staat.
+	 */
 	async write(): Promise<void> {
 		const { vault } = this.plugin.app;
 		const path = this.path();
-		const wanted = this.render();
+
+		// M40: een lege productindex is geen boodschappenlijst van niks.
+		if (this.plugin.products.all().length === 0) return;
 
 		const file = vault.getFileByPath(path);
 		if (!file) {
 			if (this.isEmpty()) return;
+			await ensureFolder(vault, path);
 			this.lastWrite = Date.now();
-			await vault.create(path, wanted);
+			await vault.create(path, this.template());
 			return;
 		}
 
 		const current = await vault.cachedRead(file);
+		if (!this.mayWriteTo(current, path)) return;
+		clearWarning(file);
+
+		const wanted = replaceRegion(current, REGION, this.render());
 		if (current.trim() === wanted.trim()) return;
 
 		this.lastWrite = Date.now();
-		await vault.modify(file, wanted);
+		// process() in plaats van modify(): dit is precies de notitie die je
+		// waarschijnlijk open hebt staan, en een blinde modify gooit weg wat er
+		// tussen lezen en schrijven bij kwam.
+		await vault.process(file, (latest: string) => replaceRegion(latest, REGION, this.render()));
+	}
+
+	/**
+	 * Is deze notitie van Pantry?
+	 *
+	 * Ja als hij de markers al draagt, of als hij `pantry: groceries` in zijn
+	 * frontmatter heeft — dat zette de plugin er zelf in — of als hij leeg is.
+	 * Anders is het iemands eigen notitie op een pad dat toevallig in de
+	 * instellingen staat, en daar blijft de plugin vanaf.
+	 */
+	private mayWriteTo(content: string, path: string): boolean {
+		if (content.trim().length === 0) return true;
+		if (hasRegion(content, REGION)) return true;
+		if (frontmatterValue(content, "pantry") === "groceries") return true;
+
+		warnOnce(
+			path,
+			`left ${path} alone: it is not a Pantry note. Point "Grocery note" at another file, or add "pantry: groceries" to its frontmatter`
+		);
+		return false;
+	}
+
+	/** De notitie zoals hij er voor het eerst uitziet. */
+	private template(): string {
+		return [
+			"---",
+			"pantry: groceries",
+			"---",
+			"",
+			"# Groceries",
+			"",
+			"*Anything you write outside the block below stays where it is.*",
+			"",
+			replaceRegion("", REGION, this.render()),
+		].join("\n");
 	}
 
 	private isEmpty(): boolean {
@@ -174,12 +273,6 @@ export class GroceryList {
 		const { buy, unsure } = this.buckets();
 		const lines: string[] = [];
 
-		lines.push("---");
-		lines.push("pantry: groceries");
-		lines.push("---");
-		lines.push("");
-		lines.push("# Groceries");
-		lines.push("");
 		lines.push(
 			"*Kept up to date by Pantry. Tick a box and that product counts as full again.*"
 		);

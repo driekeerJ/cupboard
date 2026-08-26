@@ -1,5 +1,6 @@
 import {
 	MarkdownView,
+	Notice,
 	TFile,
 	normalizePath,
 	parseYaml,
@@ -8,6 +9,7 @@ import {
 import type PantryPlugin from "./main";
 import { addDays, toISODate, weekId } from "./date";
 import { markdownIn } from "./folder";
+import { ensureFolder } from "./notes";
 import type {
 	MealStatus,
 	MealType,
@@ -96,7 +98,13 @@ export class PlanStore {
 		const file = this.noteFile(weekStart);
 		if (!file) return PlanStore.emptyPlan(weekStart);
 
-		const content = await this.plugin.app.vault.cachedRead(file);
+		// Staat de notitie open in source mode, dan schreef `save()` alleen in
+		// de editorbuffer en loopt de schijf achter. `cachedRead` geeft dan de
+		// oude versie, en de eerstvolgende `mutate()` schrijft die terug — de
+		// maaltijd die je net had gesleept is dan weg. Dezelfde route als bij
+		// schrijven dus, en pas daarna de schijf.
+		const content =
+			this.readFromEditor(file) ?? (await this.plugin.app.vault.cachedRead(file));
 		const match = BLOCK_PATTERN.exec(content);
 		if (!match) return PlanStore.emptyPlan(weekStart);
 
@@ -216,7 +224,7 @@ export class PlanStore {
 
 		const existing = vault.getFileByPath(path);
 		if (!existing) {
-			await this.ensureFolder(path);
+			await ensureFolder(vault, path);
 			await vault.create(path, PlanStore.template(weekStart, block));
 			this.lastWrite = Date.now();
 			return;
@@ -231,17 +239,45 @@ export class PlanStore {
 		}
 
 		const restoreScroll = this.capturePreviewScroll(existing);
+		let refused = false;
 		await vault.process(existing, (content: string) => {
 			if (BLOCK_PATTERN.test(content)) {
-				return content.replace(BLOCK_PATTERN, block);
+				// De functievorm, want `block` bevat vrije tekst: de dagnotitie
+				// typ je zelf. Als vervangingspatroon zou `$&` het complete
+				// oude blok midden in het nieuwe plakken en `$1` de oude YAML.
+				return content.replace(BLOCK_PATTERN, () => block);
+			}
+			// Een opening zonder sluiting: dan matcht het patroon niet en zou er
+			// een tweede blok onderaan komen. De opslag daarna matcht van de
+			// oude opening tot de nieuwe sluiting en eet alles ertussen op,
+			// inclusief wat de gebruiker daar zelf geschreven heeft.
+			if (content.includes(`\`\`\`${BLOCK_LANGUAGE}`)) {
+				refused = true;
+				return content;
 			}
 			return `${content.trimEnd()}\n\n${block}\n`;
 		});
 		this.lastWrite = Date.now();
 		restoreScroll();
+
+		if (refused) {
+			console.error(`Pantry: unclosed meal-plan block in ${path}`);
+			new Notice(
+				`Pantry did not save: the meal-plan block in ${existing.basename} has no closing fence. Fix it in the note and try again.`
+			);
+		}
 	}
 
 	/** Every open markdown view currently showing this file. */
+	/** De inhoud zoals de open editor hem kent, of null als hij niet openstaat. */
+	private readFromEditor(file: TFile): string | null {
+		for (const view of this.viewsFor(file)) {
+			if (view.getMode() !== "source") continue;
+			return view.editor.getValue();
+		}
+		return null;
+	}
+
 	private viewsFor(file: TFile): MarkdownView[] {
 		return this.plugin.app.workspace
 			.getLeavesOfType("markdown")
@@ -389,14 +425,6 @@ export class PlanStore {
 		].join("\n");
 	}
 
-	private async ensureFolder(filePath: string): Promise<void> {
-		const folder = filePath.split("/").slice(0, -1).join("/");
-		if (folder.length === 0) return;
-		if (this.plugin.app.vault.getFolderByPath(folder)) return;
-		await this.plugin.app.vault.createFolder(folder).catch(() => {
-			/* Another call may have created it in the meantime. */
-		});
-	}
 }
 
 /* ------------------------------------------------------------------ *

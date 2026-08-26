@@ -2,6 +2,7 @@ import { TFile, normalizePath } from "obsidian";
 import type PantryPlugin from "./main";
 import { markdownIn } from "./folder";
 import { parseIngredient } from "./ingredients";
+import { ensureFolder } from "./notes";
 
 /**
  * What a count can be. A number is exact. "plus" means "more than the target,
@@ -366,10 +367,9 @@ export class ProductIndex {
 
 	async create(name: string, patch: ProductPatch = {}): Promise<TFile | null> {
 		const folder = this.folder();
-		await this.ensureFolder(folder);
-
 		const safe = name.replace(/[\\/:*?"<>|#^[\]]/g, "").trim() || "New product";
 		const path = normalizePath(`${folder}/${safe}.md`);
+		await ensureFolder(this.plugin.app.vault, path);
 		const existing = this.plugin.app.vault.getFileByPath(path);
 		if (existing) return existing;
 
@@ -388,11 +388,6 @@ export class ProductIndex {
 		);
 		this.build();
 		return file;
-	}
-
-	private async ensureFolder(path: string): Promise<void> {
-		if (this.plugin.app.vault.getFolderByPath(path)) return;
-		await this.plugin.app.vault.createFolder(path).catch(() => undefined);
 	}
 
 	/**
