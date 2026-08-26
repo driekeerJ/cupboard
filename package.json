@@ -10,7 +10,7 @@
     "typecheck:strict": "tsc -noEmit -skipLibCheck -p tsconfig.strict.json",
     "test": "node --import ./tests/harness/register.mjs --test \"tests/**/*.test.ts\"",
     "build": "npm run test && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-    "build:deploy": "npm run build && node scripts/deployed.mjs"
+    "build:deploy": "npm run build && node scripts/deploy.mjs"
   },
   "keywords": [],
   "author": "Jeroen van der Wal",
