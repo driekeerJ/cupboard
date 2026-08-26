@@ -47,14 +47,6 @@ export class ProductsView extends ItemView {
 	}
 
 	async onOpen(): Promise<void> {
-		this.registerEvent(
-			this.app.metadataCache.on("changed", (file) => {
-				if (file.path.startsWith(`${this.plugin.products.folder()}/`)) {
-					this.plugin.products.build();
-					this.drawList();
-				}
-			})
-		);
 		this.draw();
 	}
 

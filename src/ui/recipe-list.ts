@@ -40,6 +40,16 @@ export class RecipeList {
 	private root: HTMLElement;
 	private options: RecipeListOptions;
 
+	/**
+	 * De receptenlijst zoals hij bij deze tekenronde was.
+	 *
+	 * `recipes.all()` leest de map opnieuw uit de metadata-cache; het filter-,
+	 * sorteer- en resultatenpaneel vroegen er ieder apart om — vijf keer per
+	 * refresh, en `refresh()` hangt aan elke vaultwijziging. Eén keer lezen per
+	 * tekenronde is ook consistenter: de drie panelen kunnen niet meer een
+	 * verschillende lijst zien.
+	 */
+	private all: Recipe[] = [];
 	private query = "";
 	private filter: RecipeFilter = {};
 	private filterOpen = false;
@@ -67,6 +77,7 @@ export class RecipeList {
 
 	/** Builds the static chrome once; the results are redrawn on every change. */
 	render(): void {
+		this.reread();
 		this.root.empty();
 		this.root.addClass("pantry-recipes");
 
@@ -131,7 +142,13 @@ export class RecipeList {
 	}
 
 	/** Re-reads the vault; called when notes or settings change. */
+	/** Herleest de recepten; één keer per tekenronde. */
+	private reread(): void {
+		this.all = this.plugin.recipes.all();
+	}
+
 	refresh(): void {
+		this.reread();
 		this.pruneFilter();
 		this.pruneSort();
 		this.drawFilterPanel();
@@ -142,13 +159,13 @@ export class RecipeList {
 	/** Falls back to the title when the field sorted on has left the vault. */
 	private pruneSort(): void {
 		if (this.sort.field === NAME_FIELD) return;
-		const fields = sortFields(this.plugin.recipes.all());
+		const fields = sortFields(this.all);
 		if (!fields.includes(this.sort.field)) this.sort = { ...DEFAULT_SORT };
 	}
 
 	/** Drops filter values that no recipe has any more, so chips can't go stale. */
 	private pruneFilter(): void {
-		const available = RecipeIndex.fieldValues(this.plugin.recipes.all());
+		const available = RecipeIndex.fieldValues(this.all);
 		for (const field of Object.keys(this.filter)) {
 			const values = available.get(field);
 			if (!values) {
@@ -189,7 +206,7 @@ export class RecipeList {
 		panel.toggleClass("is-open", this.filterOpen);
 		if (!this.filterOpen) return;
 
-		const fields = RecipeIndex.fieldValues(this.plugin.recipes.all());
+		const fields = RecipeIndex.fieldValues(this.all);
 		if (fields.size === 0) {
 			panel.createDiv({
 				cls: "pantry-settings-hint",
@@ -262,7 +279,7 @@ export class RecipeList {
 		group.createDiv({ cls: "pantry-filter-field", text: "Sort by" });
 		const options = group.createDiv({ cls: "pantry-filter-values" });
 
-		sortFields(this.plugin.recipes.all()).forEach((field) => {
+		sortFields(this.all).forEach((field) => {
 			const selected = this.sort.field === field;
 			const option = options.createEl("button", {
 				cls: "pantry-filter-value pantry-sort-value",
@@ -317,7 +334,7 @@ export class RecipeList {
 		if (!results) return;
 		results.empty();
 
-		const all = this.plugin.recipes.all();
+		const all = this.all;
 		const visible = sortRecipes(
 			all.filter((recipe) => RecipeIndex.matches(recipe, this.query, this.filter)),
 			this.sort

@@ -25,7 +25,13 @@ export class TFile extends TAbstractFile {
 	extension = "md";
 }
 
-export class TFolder extends TAbstractFile {}
+/**
+ * Echte klassen, geen platte objecten: `markdownIn()` in src/folder.ts leunt op
+ * `instanceof`, zoals Obsidians eigen richtlijn voorschrijft.
+ */
+export class TFolder extends TAbstractFile {
+	children: TAbstractFile[] = [];
+}
 
 /** Alleen aanwezig omdat plan.ts en settings.ts ze importeren; nooit gebruikt. */
 export class MarkdownView {}

@@ -34,16 +34,39 @@ import { PlannerGrid } from "./ui/planner";
 import { RecipeIndex } from "./recipes";
 import type { PantrySettings } from "./types";
 
-/** Every screen that belongs to the plugin, so they can share one tab. */
-const PANTRY_VIEW_TYPES = [
-	HOME_VIEW_TYPE,
-	PLANNER_VIEW_TYPE,
-	STOCK_VIEW_TYPE,
-	SHOPPING_VIEW_TYPE,
-	SHELVES_VIEW_TYPE,
-	CLEANUP_VIEW_TYPE,
-	PRODUCTS_VIEW_TYPE,
+/**
+ * Elk scherm van de plugin, op één plek.
+ *
+ * Deze tabel voedt vier dingen die eerder los van elkaar werden bijgehouden:
+ * welke tabbladen bij Pantry horen, welke `registerView` er is, welk commando
+ * het palet aanbiedt, en welke schermen na een wijziging opnieuw getekend
+ * worden. Die laatste twee waren allebei met de hand bijgehouden lijsten en
+ * allebei al uit de pas: `refreshStockViews` miste Cleanup, en zes schermen
+ * hadden geen commando.
+ *
+ * Een scherm toevoegen is nu één regel hier, plus zijn tegel in `home-view.ts`
+ * en de `.view-content`-selector boven in `styles.css`.
+ */
+const SCREENS: { type: string; command: string; name: string }[] = [
+	{ type: HOME_VIEW_TYPE, command: "open-home", name: "Open home" },
+	{ type: PLANNER_VIEW_TYPE, command: "open-planner", name: "Open meal planner" },
+	{ type: STOCK_VIEW_TYPE, command: "open-stock", name: "Open stock" },
+	{ type: SHOPPING_VIEW_TYPE, command: "open-groceries", name: "Open groceries" },
+	{ type: SHELVES_VIEW_TYPE, command: "open-shelves", name: "Open shop shelves" },
+	{ type: CLEANUP_VIEW_TYPE, command: "open-cleanup", name: "Open cleanup" },
+	{ type: PRODUCTS_VIEW_TYPE, command: "open-products", name: "Open products" },
 ];
+
+const PANTRY_VIEW_TYPES = SCREENS.map((screen) => screen.type);
+
+/** Een scherm dat zichzelf opnieuw kan tekenen. */
+interface Refreshable {
+	refresh(): void;
+}
+
+function isRefreshable(view: unknown): view is Refreshable {
+	return typeof (view as Refreshable | undefined)?.refresh === "function";
+}
 
 export default class PantryPlugin extends Plugin {
 	settings: PantrySettings = DEFAULT_SETTINGS;
@@ -64,10 +87,22 @@ export default class PantryPlugin extends Plugin {
 	/** Live planners inside notes, kept across code block rebuilds. */
 	private embedded: Map<string, PlannerGrid> = new Map();
 
-	/** Vault events can fire in bursts, so redraws are collapsed into one. */
+	/**
+	 * Het enige pad waarlangs een wijziging in de vault het scherm bereikt.
+	 *
+	 * Eerder deed elk scherm dit ook zelf, met een eigen `changed`-listener die
+	 * `products.build()` aanriep — vier keer bijna letterlijk hetzelfde blok.
+	 * Op één productwijziging liepen er vijf paden tegelijk, en juist het pad
+	 * dat er níét was deed de schade: een **verwijderde** notitie geeft geen
+	 * `changed`, dus die rij bleef staan met een dood `TFile` eronder, en de
+	 * tik erop schreef in het niets.
+	 *
+	 * Daarom staat `products.build()` hier: dit pad vangt ook verwijderen en
+	 * hernoemen. Vault events komen in vlagen, dus alles wordt tot één ronde
+	 * samengetrokken.
+	 */
 	private scheduleRefresh = debounce(() => {
-		// Skip the echo of our own write; the grid already shows that change.
-		if (this.plans.recentlyWrote()) return;
+		this.products.build();
 		this.refreshViews();
 		guarded("could not refresh your grocery list", () => this.list.refresh());
 	}, 250, true);
@@ -138,21 +173,12 @@ export default class PantryPlugin extends Plugin {
 		// en waren onbereikbaar voor Commander, QuickAdd en Templater. Het
 		// palet dat alles bereikt is in Obsidian geen stijlvoorkeur maar het
 		// contract waar elk ander automatiseringsoppervlak op leunt.
-		const screens: { id: string; name: string; open: () => Promise<void> }[] = [
-			{ id: "open-home", name: "Open home", open: () => this.activateHome() },
-			{ id: "open-planner", name: "Open meal planner", open: () => this.activatePlanner() },
-			{ id: "open-stock", name: "Open stock", open: () => this.activateStock() },
-			{ id: "open-groceries", name: "Open groceries", open: () => this.activateShopping() },
-			{ id: "open-products", name: "Open products", open: () => this.activateProducts() },
-			{ id: "open-shelves", name: "Open shop shelves", open: () => this.activateShelves() },
-			{ id: "open-cleanup", name: "Open cleanup", open: () => this.activateCleanup() },
-		];
-
-		for (const screen of screens) {
+		for (const screen of SCREENS) {
 			this.addCommand({
-				id: screen.id,
+				id: screen.command,
 				name: screen.name,
-				callback: () => guarded(`could not open ${screen.name}`, screen.open),
+				callback: () =>
+					guarded(`could not open ${screen.name}`, () => this.activate(screen.type)),
 			});
 		}
 
@@ -246,11 +272,13 @@ export default class PantryPlugin extends Plugin {
 		this.registerEvent(
 			this.app.metadataCache.on("changed", (file: TFile) => {
 				if (this.shops.isShopNote(file.path)) {
+					// Hertekenen ná de herbouw, niet ernaast: anders lezen de
+					// schermen de winkels zoals ze vóór de wijziging waren.
 					guarded("could not read your shops", async () => {
 						await this.shops.build();
 						await this.list.refresh();
+						this.refreshViews();
 					});
-					this.refreshViews();
 					return;
 				}
 				if (this.list.isListNote(file.path)) {
@@ -262,6 +290,12 @@ export default class PantryPlugin extends Plugin {
 					}
 					return;
 				}
+				// De echo van onze eigen planwijziging overslaan — het raster
+				// toont die al. Alleen voor de planmap zelf: stond deze check
+				// verderop in scheduleRefresh, dan slikte hij ook een
+				// productwijziging op die toevallig binnen hetzelfde venster
+				// viel, en dat pad is nu het enige dat er is.
+				if (this.plans.isPlanNote(file.path) && this.plans.recentlyWrote()) return;
 				this.scheduleRefresh();
 			})
 		);
@@ -425,77 +459,24 @@ export default class PantryPlugin extends Plugin {
 	 * changes stock, and rebuilding it would throw your scroll position away.
 	 */
 	refreshStockViews(): void {
-		this.app.workspace.getLeavesOfType(STOCK_VIEW_TYPE).forEach((leaf) => {
-			const view = leaf.view;
-			if (view instanceof StockView) view.refresh();
-		});
-
-		this.app.workspace.getLeavesOfType(SHOPPING_VIEW_TYPE).forEach((leaf) => {
-			const view = leaf.view;
-			if (view instanceof ShoppingView) view.refresh();
-		});
-
-		this.app.workspace.getLeavesOfType(PRODUCTS_VIEW_TYPE).forEach((leaf) => {
-			const view = leaf.view;
-			if (view instanceof ProductsView) view.refresh();
-		});
-
-		this.app.workspace.getLeavesOfType(HOME_VIEW_TYPE).forEach((leaf) => {
-			const view = leaf.view;
-			if (view instanceof HomeView) view.refresh();
-		});
+		this.refreshViews(PLANNER_VIEW_TYPE);
 	}
 
 	/** Called after settings change so open planners pick the change up at once. */
-	refreshViews(): void {
-		this.app.workspace
-			.getLeavesOfType(PLANNER_VIEW_TYPE)
-			.forEach((leaf) => {
-				const view = leaf.view;
-				if (view instanceof PlannerView) view.refresh();
-			});
-
-		this.app.workspace
-			.getLeavesOfType(PRODUCTS_VIEW_TYPE)
-			.forEach((leaf) => {
-				const view = leaf.view;
-				if (view instanceof ProductsView) view.refresh();
-			});
-
-		this.app.workspace
-			.getLeavesOfType(STOCK_VIEW_TYPE)
-			.forEach((leaf) => {
-				const view = leaf.view;
-				if (view instanceof StockView) view.refresh();
-			});
-
-		this.app.workspace
-			.getLeavesOfType(SHOPPING_VIEW_TYPE)
-			.forEach((leaf) => {
-				const view = leaf.view;
-				if (view instanceof ShoppingView) view.refresh();
-			});
-
-		this.app.workspace
-			.getLeavesOfType(SHELVES_VIEW_TYPE)
-			.forEach((leaf) => {
-				const view = leaf.view;
-				if (view instanceof ShelvesView) view.refresh();
-			});
-
-		this.app.workspace
-			.getLeavesOfType(CLEANUP_VIEW_TYPE)
-			.forEach((leaf) => {
-				const view = leaf.view;
-				if (view instanceof CleanupView) view.refresh();
-			});
-
-		this.app.workspace
-			.getLeavesOfType(HOME_VIEW_TYPE)
-			.forEach((leaf) => {
-				const view = leaf.view;
-				if (view instanceof HomeView) view.refresh();
-			});
+	/**
+	 * Redraws every open Pantry screen.
+	 *
+	 * Eén lus over de schermtabel, in plaats van zeven keer hetzelfde blok met
+	 * een `instanceof` per view. Dat handmatige lijstje liep al achter: Cook
+	 * stond er niet in, en `refreshStockViews` miste Cleanup.
+	 */
+	refreshViews(...except: string[]): void {
+		for (const type of PANTRY_VIEW_TYPES) {
+			if (except.includes(type)) continue;
+			for (const leaf of this.app.workspace.getLeavesOfType(type)) {
+				if (isRefreshable(leaf.view)) leaf.view.refresh();
+			}
+		}
 	}
 
 	async loadSettings(): Promise<void> {

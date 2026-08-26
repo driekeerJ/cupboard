@@ -42,21 +42,6 @@ export class ShelvesView extends ItemView {
 	}
 
 	async onOpen(): Promise<void> {
-		this.registerEvent(
-			this.app.metadataCache.on("changed", (file) => {
-				if (this.plugin.shops.isShopNote(file.path)) {
-					guarded("could not read your shops", async () => {
-						await this.plugin.shops.build();
-						this.draw();
-					});
-					return;
-				}
-				if (file.path.startsWith(`${this.plugin.products.folder()}/`)) {
-					this.plugin.products.build();
-					this.drawBody();
-				}
-			})
-		);
 		await this.plugin.shops.build();
 		this.draw();
 	}
@@ -64,6 +49,18 @@ export class ShelvesView extends ItemView {
 	refresh(): void {
 		this.draw();
 	}
+
+	/**
+	 * Wat er in een invoerveld staat, per veld.
+	 *
+	 * Een hertekening sloopt het veld waar je in typt, en die hertekening komt
+	 * van je eigen vorige schrijfactie: je typt "Brood", Enter, begint aan
+	 * "Melk", en tweehonderd milliseconden later is "Mel" weg en de focus ook.
+	 * De tekst en de cursor worden daarom bewaard en teruggezet, in plaats van
+	 * te proberen te voorspellen welke hertekening ongevaarlijk is.
+	 */
+	private drafts: Map<string, string> = new Map();
+	private focused: string | null = null;
 
 	private shopOrFirst(): Shop | null {
 		const shops = this.plugin.shops.all();
@@ -151,7 +148,7 @@ export class ShelvesView extends ItemView {
 			cls: "pantry-empty-hint",
 			text: "A shop is a note. It starts with the usual shelves in the usual order — rename, reorder or remove whatever does not match yours.",
 		});
-		this.drawAdd(body, "Shop name", "Add shop", async (value) => {
+		this.drawAdd(body, "shop", "Shop name", "Add shop", async (value) => {
 			const file = await this.plugin.shops.createShop(value);
 			if (!file) return;
 			this.shop = file.basename;
@@ -161,6 +158,7 @@ export class ShelvesView extends ItemView {
 
 	private drawAdd(
 		parent: HTMLElement,
+		key: string,
 		placeholder: string,
 		label: string,
 		apply: (value: string) => Promise<void>
@@ -174,16 +172,34 @@ export class ShelvesView extends ItemView {
 			cls: "pantry-button-primary",
 			text: label,
 		});
+
+		input.value = this.drafts.get(key) ?? "";
+		input.addEventListener("input", () => this.drafts.set(key, input.value));
+		input.addEventListener("focus", () => {
+			this.focused = key;
+		});
+
 		const commit = (): void => {
 			const value = input.value.trim();
 			if (value.length === 0) return;
 			input.value = "";
+			this.drafts.delete(key);
 			guarded("could not save that", () => apply(value));
 		};
 		button.onclick = commit;
 		input.addEventListener("keydown", (event: KeyboardEvent) => {
 			if (event.key === "Enter") commit();
 		});
+
+		if (this.focused === key) {
+			// Na de hertekening, want een veld dat nog niet in de DOM hangt kan
+			// de focus niet aannemen.
+			window.setTimeout(() => {
+				input.focus();
+				const end = input.value.length;
+				input.setSelectionRange(end, end);
+			}, 0);
+		}
 	}
 
 	/* --- Walking route ------------------------------------------------ */
@@ -260,8 +276,10 @@ export class ShelvesView extends ItemView {
 				guarded(`could not remove ${shelf}`, () => this.removeShelf(shop, shelf));
 		});
 
-		this.drawAdd(section, "Shelf name", "Add shelf", async (value) => {
-			await this.plugin.shops.setShelves(shop, [...shop.shelves, value]);
+		this.drawAdd(section, `shelf:${shop.name}`, "Shelf name", "Add shelf", async (value) => {
+			// Zie removeShelf: altijd vanaf de lijst zoals hij nu is.
+			const current = this.plugin.shops.find(shop.name) ?? shop;
+			await this.plugin.shops.setShelves(current, [...current.shelves, value]);
 			this.draw();
 		});
 
@@ -294,7 +312,7 @@ export class ShelvesView extends ItemView {
 				);
 			}
 		};
-		this.drawAdd(noteBody, "Shop name", "Add shop", async (value) => {
+		this.drawAdd(noteBody, "shop", "Shop name", "Add shop", async (value) => {
 			const file = await this.plugin.shops.createShop(value);
 			if (!file) return;
 			this.shop = file.basename;
@@ -303,12 +321,17 @@ export class ShelvesView extends ItemView {
 	}
 
 	private async removeShelf(shop: Shop, shelf: string): Promise<void> {
+		// Het Shop-object van tekentijd is verouderd zodra er iets geschreven
+		// is: setShelves roept build() aan en die maakt nieuwe objecten. Tik de
+		// X bij twee schappen snel achter elkaar, en de tweede schrijfactie
+		// vertrok vanaf de oude lijst en zette het eerste schap er weer in.
+		const current = this.plugin.shops.find(shop.name) ?? shop;
 		const still = this.plugin.products
 			.all()
 			.filter((product) => product.shelf.toLowerCase() === shelf.toLowerCase());
 		await this.plugin.shops.setShelves(
-			shop,
-			shop.shelves.filter((item) => item !== shelf)
+			current,
+			current.shelves.filter((item) => item !== shelf)
 		);
 		if (still.length > 0) {
 			new Notice(

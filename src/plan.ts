@@ -7,6 +7,7 @@ import {
 } from "obsidian";
 import type PantryPlugin from "./main";
 import { addDays, toISODate, weekId } from "./date";
+import { markdownIn } from "./folder";
 import type {
 	MealStatus,
 	MealType,
@@ -70,6 +71,12 @@ export class PlanStore {
 	/** True right after Pantry itself saved, i.e. the change is not external. */
 	recentlyWrote(): boolean {
 		return Date.now() - this.lastWrite < 600;
+	}
+
+	/** True voor elke notitie in de planmap. */
+	isPlanNote(path: string): boolean {
+		const folder = normalizePath(this.plugin.settings.planFolder || "Meal plans");
+		return normalizePath(path).startsWith(`${folder}/`);
 	}
 
 	notePath(weekStart: Date): string {
@@ -301,10 +308,7 @@ export class PlanStore {
 	/** Every plan note in the plan folder. */
 	private planFiles(): TFile[] {
 		const folder = normalizePath(this.plugin.settings.planFolder || "Meal plans");
-		const prefix = `${folder}/`;
-		return this.plugin.app.vault
-			.getMarkdownFiles()
-			.filter((file) => file.path.startsWith(prefix));
+		return markdownIn(this.plugin.app.vault, folder);
 	}
 
 	/**

@@ -11,15 +11,20 @@
  * bevinding H1, voorraad die uit het niets ontstaat) niet te testen.
  */
 import { dump, load } from "js-yaml";
-import type { TFile } from "obsidian";
+// Waardes, geen types: de neppe vault maakt er echte instanties van, zodat
+// `instanceof TFile` en `instanceof TFolder` in de broncode kloppen.
+import { TFile, TFolder } from "obsidian";
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n)?/;
 
 /** Wat de code van een TFile aanraakt: het pad en de bestandsnaam. */
 function asFile(path: string): TFile {
-	const name = path.slice(path.lastIndexOf("/") + 1);
-	const basename = name.replace(/\.md$/, "");
-	return { path, name, basename, extension: "md" } as unknown as TFile;
+	const file = new TFile();
+	file.path = path;
+	file.name = path.slice(path.lastIndexOf("/") + 1);
+	file.basename = file.name.replace(/\.md$/, "");
+	file.extension = "md";
+	return file;
 }
 
 function splitFrontMatter(markdown: string): {
@@ -92,8 +97,33 @@ export class FakeVault {
 		getFileByPath: (path: string): TFile | null =>
 			this.files.has(path) ? asFile(path) : null,
 
-		getFolderByPath: (path: string): { path: string } | null =>
-			this.folders.has(path) ? { path } : null,
+		/**
+		 * Een map met haar directe kinderen, zoals Obsidian hem geeft. Nodig
+		 * omdat de indexen een maplookup doen in plaats van de hele vault te
+		 * scannen — zie `markdownIn()` in src/folder.ts.
+		 */
+		getFolderByPath: (path: string): TFolder | null => {
+			if (!this.folders.has(path)) return null;
+
+			const folder = new TFolder();
+			folder.path = path;
+			folder.name = path.slice(path.lastIndexOf("/") + 1);
+
+			const prefix = `${path}/`;
+			for (const child of this.files.keys()) {
+				if (!child.startsWith(prefix)) continue;
+				const rest = child.slice(prefix.length);
+				if (!rest.includes("/")) folder.children.push(asFile(child));
+			}
+			for (const child of this.folders) {
+				if (!child.startsWith(prefix)) continue;
+				const rest = child.slice(prefix.length);
+				if (rest.includes("/")) continue;
+				const sub = this.vault.getFolderByPath(child);
+				if (sub) folder.children.push(sub);
+			}
+			return folder;
+		},
 
 		createFolder: (path: string): Promise<void> => {
 			this.folders.add(path);

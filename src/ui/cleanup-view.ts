@@ -68,8 +68,17 @@ export class CleanupView extends ItemView {
 		guarded("could not refresh the cleanup list", () => this.reload());
 	}
 
+	/**
+	 * Herbouwt de opruimlijst uit de productindex zoals hij nu is.
+	 *
+	 * Hier stond `products.build()`, en dat leest élke productnotitie opnieuw
+	 * uit de metadata-cache — precies wat het commentaar bij `ProductIndex.apply`
+	 * verbiedt. Direct na een antwoord is die cache nog niet bij, dus de patch
+	 * werd weggegooid en de kaart die je net beantwoordde stond er meteen weer.
+	 * Herbouwen van de index hoort bij het ene invalidatiepad in `main.ts`, dat
+	 * pas draait als de cache wél bij is.
+	 */
 	private async reload(): Promise<void> {
-		this.plugin.products.build();
 		await this.plugin.cleanup.rebuild();
 		this.drawBody();
 	}

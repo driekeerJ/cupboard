@@ -1,5 +1,6 @@
 import { TFile, normalizePath } from "obsidian";
 import type PantryPlugin from "./main";
+import { markdownIn } from "./folder";
 import { parseIngredient } from "./ingredients";
 
 /**
@@ -179,10 +180,7 @@ export class ProductIndex {
 	}
 
 	build(): void {
-		const prefix = `${this.folder()}/`;
-		this.products = this.plugin.app.vault
-			.getMarkdownFiles()
-			.filter((file) => file.path.startsWith(prefix))
+		this.products = markdownIn(this.plugin.app.vault, this.folder())
 			.map((file) => this.read(file))
 			.sort((a, b) => a.name.localeCompare(b.name));
 

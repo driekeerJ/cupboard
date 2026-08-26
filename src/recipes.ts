@@ -1,4 +1,5 @@
 import { TFile, normalizePath } from "obsidian";
+import { markdownIn } from "./folder";
 import type PantryPlugin from "./main";
 
 export interface Recipe {
@@ -24,12 +25,6 @@ export const NAME_FIELD = "name";
 /** The default order — the same one `RecipeIndex.all()` already returns. */
 export const DEFAULT_SORT: RecipeSort = { field: NAME_FIELD, direction: "asc" };
 
-function isInsideFolder(path: string, folder: string): boolean {
-	if (folder.length === 0) return false;
-	const prefix = `${folder}/`;
-	return path.startsWith(prefix);
-}
-
 /** Frontmatter values can be scalars or lists; both end up as display strings. */
 export function toValues(raw: unknown): string[] {
 	if (raw === null || raw === undefined) return [];
@@ -54,9 +49,7 @@ export class RecipeIndex {
 		const folder = normalizePath(this.plugin.settings.recipeFolder ?? "");
 		if (folder.length === 0 || folder === "/") return [];
 
-		return this.plugin.app.vault
-			.getMarkdownFiles()
-			.filter((file: TFile) => isInsideFolder(file.path, folder))
+		return markdownIn(this.plugin.app.vault, folder)
 			.map((file: TFile) => ({
 				path: file.path,
 				name: file.basename,
