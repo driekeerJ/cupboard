@@ -3514,6 +3514,38 @@
 	padding-top: 14px;
 }
 
+/* De tegel is een button, dus de notitieknop staat ernaast in plaats van erin. */
+.pantry-app .pantry-tile-row {
+	position: relative;
+	display: flex;
+	align-items: stretch;
+}
+
+.pantry-app button.pantry-tile-note {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-faint);
+	cursor: pointer;
+}
+
+.pantry-app button.pantry-tile-note:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.pantry-app button.pantry-tile-note svg {
+	width: 15px;
+	height: 15px;
+}
+
 .pantry-app button.pantry-tile {
 	display: flex;
 	align-items: center;

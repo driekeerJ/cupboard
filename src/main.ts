@@ -2,6 +2,7 @@ import {
 	MarkdownRenderChild,
 	Menu,
 	Notice,
+	Platform,
 	Plugin,
 	TAbstractFile,
 	TFile,
@@ -127,15 +128,33 @@ export default class PantryPlugin extends Plugin {
 			guarded("could not open Pantry", () => this.activateHome());
 		});
 
-		// The only screen the palette offers. Everything else is reached from
-		// the home screen, so there is one way in and one map of the plugin —
-		// a half-remembered command name can no longer drop you into a screen
-		// with no idea how you got there.
-		this.addCommand({
-			id: "open-pantry",
-			name: "Open Pantry",
-			callback: () => guarded("could not open Pantry", () => this.activateHome()),
-		});
+		// Elk scherm heeft een commando.
+		//
+		// Eerst bood het palet alleen de voordeur, zodat een half onthouden
+		// commandonaam je niet ergens kon droppen zonder dat je wist hoe je er
+		// kwam. Die zorg is intussen opgelost — elk scherm heeft een titel, een
+		// icoon en een terugknop — maar de prijs bleef staan: zes schermen
+		// konden geen sneltoets krijgen, stonden niet op de mobiele werkbalk,
+		// en waren onbereikbaar voor Commander, QuickAdd en Templater. Het
+		// palet dat alles bereikt is in Obsidian geen stijlvoorkeur maar het
+		// contract waar elk ander automatiseringsoppervlak op leunt.
+		const screens: { id: string; name: string; open: () => Promise<void> }[] = [
+			{ id: "open-home", name: "Open home", open: () => this.activateHome() },
+			{ id: "open-planner", name: "Open meal planner", open: () => this.activatePlanner() },
+			{ id: "open-stock", name: "Open stock", open: () => this.activateStock() },
+			{ id: "open-groceries", name: "Open groceries", open: () => this.activateShopping() },
+			{ id: "open-products", name: "Open products", open: () => this.activateProducts() },
+			{ id: "open-shelves", name: "Open shop shelves", open: () => this.activateShelves() },
+			{ id: "open-cleanup", name: "Open cleanup", open: () => this.activateCleanup() },
+		];
+
+		for (const screen of screens) {
+			this.addCommand({
+				id: screen.id,
+				name: screen.name,
+				callback: () => guarded(`could not open ${screen.name}`, screen.open),
+			});
+		}
 
 		this.addCommand({
 			id: "run-setup",
@@ -261,6 +280,16 @@ export default class PantryPlugin extends Plugin {
 	 * five screens replace each other, so the plugin behaves like one app
 	 * rather than a drawer full of tabs.
 	 */
+	/**
+	 * Brings a screen up, reusing the tab it is already in.
+	 *
+	 * Op de telefoon deelt de hele plugin één tabblad: daar is een tweede
+	 * Pantry-scherm naast het eerste geen ruimte maar verlies, dus wordt een
+	 * bestaand Pantry-tabblad omgezet. Buiten de telefoon kostte diezelfde
+	 * regel meer dan hij opleverde — klikken op het ribbon-icoon terwijl je op
+	 * Voorraad stond maakte van jouw Voorraad-tab een Home-tab, twee schermen
+	 * naast elkaar kon niet, en een vastgezet tabblad werd toch weggenavigeerd.
+	 */
 	private async activate(type: string): Promise<void> {
 		const open = this.app.workspace.getLeavesOfType(type);
 		if (open[0]) {
@@ -268,9 +297,12 @@ export default class PantryPlugin extends Plugin {
 			return;
 		}
 
-		const sibling = PANTRY_VIEW_TYPES.flatMap((other) =>
-			this.app.workspace.getLeavesOfType(other)
-		)[0];
+		const sibling = Platform.isPhone
+			? PANTRY_VIEW_TYPES.flatMap((other) =>
+					this.app.workspace.getLeavesOfType(other)
+				)[0]
+			: undefined;
+
 		const leaf = sibling ?? this.app.workspace.getLeaf("tab");
 		await leaf.setViewState({ type, active: true });
 		await this.app.workspace.revealLeaf(leaf);
