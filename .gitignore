@@ -5,3 +5,6 @@ main.js
 # Persoonlijke instellingen en kooksessies — geen repo-materiaal
 data.json
 _t.txt
+
+# Prullenbak voor cloudsessies die niet mogen verwijderen
+_to_delete/
