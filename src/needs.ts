@@ -4,7 +4,7 @@ import { parseRecipeBody } from "./cook";
 import { parseIngredient, type ParsedIngredient } from "./ingredients";
 import { linkTarget, servingsFor } from "./plan";
 import type { Product } from "./products";
-import type { WeekPlan } from "./types";
+import type { PlannedRecipe, WeekPlan } from "./types";
 
 /** Everything reduced to one base unit per family, so 400 g and 0.4 kg meet. */
 const MASS: Record<string, number> = {
@@ -17,8 +17,17 @@ const VOLUME: Record<string, number> = {
 	liter: 1000, liters: 1000, litre: 1000, litres: 1000,
 };
 
+/** "Tbsp." en "tbsp" zijn dezelfde maat; alleen de spelling verschilt. */
+function unitKey(unit: string): string {
+	return unit.trim().toLowerCase().replace(/\.$/, "");
+}
+
+function sameUnit(a: string, b: string): boolean {
+	return a.length > 0 && b.length > 0 && unitKey(a) === unitKey(b);
+}
+
 function family(unit: string): Record<string, number> | null {
-	const key = unit.toLowerCase().replace(/\.$/, "");
+	const key = unitKey(unit);
 	if (key in MASS) return MASS;
 	if (key in VOLUME) return VOLUME;
 	return null;
@@ -28,8 +37,8 @@ function family(unit: string): Record<string, number> | null {
 function convert(amount: number, from: string, to: string): number | null {
 	const table = family(from);
 	if (!table || table !== family(to)) return null;
-	const a = table[from.toLowerCase().replace(/\.$/, "")];
-	const b = table[to.toLowerCase().replace(/\.$/, "")];
+	const a = table[unitKey(from)];
+	const b = table[unitKey(to)];
 	if (!a || !b) return null;
 	return (amount * a) / b;
 }
@@ -52,18 +61,27 @@ export function inProductUnits(
 	if (parsed.amount === null || parsed.kind === "vague") return 0;
 	const amount = parsed.amount * factor;
 
-	// "2 uien": no measure at all, so the recipe counts in the same pieces.
-	if (!parsed.unit) return amount;
-
-	// "500 g rijst" while he counts packs: needs the package size.
 	if (product.size) {
-		const converted = convert(amount, parsed.unit, product.size.unit);
-		if (converted !== null) return converted / product.size.amount;
-		// The recipe already speaks the package unit, e.g. "2 tins".
-		if (parsed.unit.toLowerCase() === product.unit.toLowerCase()) return amount;
+		// "500 g rijst" while he counts packs: needs the package size.
+		if (parsed.unit) {
+			const converted = convert(amount, parsed.unit, product.size.unit);
+			if (converted !== null) return converted / product.size.amount;
+		} else if (!family(product.size.unit)) {
+			// De verpakking is in stuks opgegeven — `size: 12 stuks`, of kaal
+			// `12`. Een regel zonder maat telt in diezelfde stuks, dus zes
+			// eieren uit een doos van twaalf is een halve doos. Deze tak stond
+			// eerst ná "geen maat" en werd daardoor nooit bereikt: de lijst
+			// vroeg om zes dozen en de voorraad werd er zes lichter van.
+			return amount / product.size.amount;
+		}
 	}
 
-	if (parsed.unit.toLowerCase() === product.unit.toLowerCase()) return amount;
+	// The recipe already speaks the counting unit, e.g. "2 tins".
+	if (parsed.unit && sameUnit(parsed.unit, product.unit)) return amount;
+
+	// "2 uien": no measure and no package to divide by, so the recipe counts
+	// in the same pieces the user does.
+	if (!parsed.unit) return amount;
 
 	// Spoons of something counted in jars, and anything else we cannot express.
 	return 0;
@@ -85,6 +103,61 @@ export interface NeedSource {
 	 *  something counted in jars. Those lines are kept and marked, never hidden:
 	 *  an ingredient that counts for nothing is exactly the confusing one. */
 	amount: number;
+}
+
+/** One ingredient line that resolved to a product, with what it asks for. */
+export interface RecipeAmount {
+	product: Product;
+	/** The ingredient line, verbatim minus wikilink syntax. */
+	line: string;
+	/** In the unit the product is counted in; 0 when it cannot be expressed. */
+	amount: number;
+}
+
+/**
+ * Elke receptregel die een product raakt, omgerekend naar de eenheid waarin
+ * dat product geteld wordt.
+ *
+ * Dit is de enige plek waar die som staat. Hij voedt zowel de boodschappenlijst
+ * (`NeedIndex`) als de voorraadaftrek (`consumptionOf`); die twee hadden er
+ * ieder een eigen kopie van, en een reparatie aan één kant liet de lijst en de
+ * voorraad uit de pas lopen zonder dat iets dat meldde.
+ */
+export async function amountsForRecipe(
+	plugin: PantryPlugin,
+	file: TFile,
+	factor: number
+): Promise<RecipeAmount[]> {
+	const content = await plugin.app.vault.cachedRead(file);
+	const found: RecipeAmount[] = [];
+
+	for (const line of parseRecipeBody(content).ingredients) {
+		const parsed = parseIngredient(line);
+		const product = plugin.products.match(parsed.name || parsed.raw);
+		if (!product) continue;
+		found.push({
+			product,
+			line: plainText(line),
+			amount: inProductUnits(parsed, product, factor),
+		});
+	}
+
+	return found;
+}
+
+/**
+ * Hoe sterk dit recept geschaald moet worden: gekookt voor zoveel personen,
+ * gedeeld door waar het recept zelf voor geschreven is. Zegt het recept niets,
+ * dan is er niets te schalen.
+ */
+export function factorFor(
+	plugin: PantryPlugin,
+	file: TFile,
+	entry: PlannedRecipe
+): number {
+	const base = plugin.cook.baseServings(file);
+	if (!base || base <= 0) return 1;
+	return servingsFor(plugin, entry) / base;
 }
 
 /** Strips `[[Link]]` and `[[Link|shown]]` down to what a reader would say. */
@@ -140,8 +213,7 @@ export class NeedIndex {
 					// The plan stores the link as written, brackets and all.
 					const file = this.plugin.cook.file(linkTarget(entry.recipe));
 					if (!file) continue;
-					const factor = this.factor(file, servingsFor(this.plugin, entry));
-					await this.addRecipe(raw, file, factor);
+					await this.addRecipe(raw, file, factorFor(this.plugin, file, entry));
 				}
 			}
 		}
@@ -154,31 +226,20 @@ export class NeedIndex {
 		return rounded;
 	}
 
-	/** A recipe written for four, cooked for five, scales by 1.25. */
-	private factor(file: TFile, servings: number): number {
-		const base = this.plugin.cook.baseServings(file);
-		if (!base || base <= 0) return 1;
-		return servings / base;
-	}
-
 	private async addRecipe(
 		into: Map<string, number>,
 		file: TFile,
 		factor: number
 	): Promise<void> {
-		const content = await this.plugin.app.vault.cachedRead(file);
-		const lines = parseRecipeBody(content).ingredients;
-
-		for (const line of lines) {
-			const parsed = parseIngredient(line);
-			const product = this.plugin.products.match(parsed.name || parsed.raw);
-			if (!product) continue;
-			const amount = inProductUnits(parsed, product, factor);
-
+		for (const { product, line, amount } of await amountsForRecipe(
+			this.plugin,
+			file,
+			factor
+		)) {
 			// Recorded before the zero check: a line that contributes nothing
 			// still tells the shopper what the recipe actually asks for.
 			const seen = this.origins.get(product.path) ?? [];
-			seen.push({ recipe: file.basename, line: plainText(line), amount });
+			seen.push({ recipe: file.basename, line, amount });
 			this.origins.set(product.path, seen);
 
 			if (amount <= 0) continue;

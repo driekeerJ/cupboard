@@ -1,5 +1,6 @@
 import { TFile } from "obsidian";
 import type PantryPlugin from "./main";
+import { parseNumber } from "./products";
 import type { CookSession, TimerState } from "./types";
 
 const INGREDIENT_HEADINGS = [
@@ -8,6 +9,12 @@ const INGREDIENT_HEADINGS = [
 const METHOD_HEADINGS = [
 	"method", "instructions", "directions", "preparation", "steps",
 	"bereiding", "bereidingswijze", "werkwijze", "stappen",
+];
+
+/** Synoniemen voor het portieveld, geprobeerd na de ingestelde veldnaam. */
+const SERVINGS_KEYS = [
+	"servings", "porties", "personen", "aantal personen",
+	"serves", "portions", "yield",
 ];
 
 const LIST_ITEM = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/;
@@ -31,14 +38,27 @@ export function parseRecipeBody(markdown: string): RecipeBody {
 	const ingredients: string[] = [];
 	const steps: string[] = [];
 	let collecting: string[] | null = null;
+	/** Het kopniveau waarop de huidige sectie begon. */
+	let startLevel = 0;
 
 	for (const line of lines) {
 		const heading = HEADING.exec(line);
 		if (heading) {
+			const level = heading[1].length;
 			const title = heading[2].trim().toLowerCase().replace(/[:*_]+/g, "");
-			if (INGREDIENT_HEADINGS.includes(title)) collecting = ingredients;
-			else if (METHOD_HEADINGS.includes(title)) collecting = steps;
-			else collecting = null;
+			if (INGREDIENT_HEADINGS.includes(title)) {
+				collecting = ingredients;
+				startLevel = level;
+			} else if (METHOD_HEADINGS.includes(title)) {
+				collecting = steps;
+				startLevel = level;
+			} else if (collecting && level <= startLevel) {
+				// Pas een kop van hetzelfde of een hoger niveau sluit de sectie.
+				// "### Voor de saus" onder "## Ingrediënten" is een
+				// onderverdeling; die afkappen liet halve recepten stil
+				// verdwijnen uit de boodschappenlijst én uit de voorraadaftrek.
+				collecting = null;
+			}
 			continue;
 		}
 
@@ -166,12 +186,28 @@ export class CookStore {
 		return this.plugin.app.metadataCache.getFirstLinkpathDest(nameOrPath, "");
 	}
 
-	/** Servings the recipe itself is written for, if it says so. */
+	/**
+	 * Servings the recipe itself is written for, if it says so.
+	 *
+	 * Sleutels lopen uiteen: `porties`, `Servings`, `personen`. Een gemiste
+	 * sleutel valt stil terug op factor 1 en schaalt daarmee de hele
+	 * boodschappenlijst verkeerd — een fout zonder foutmelding. Daarom eerst de
+	 * ingestelde veldnaam, dan de bekende synoniemen, alles hoofdletterloos.
+	 */
 	baseServings(file: TFile): number | null {
 		const frontmatter =
 			this.plugin.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
-		const value = Number(frontmatter[this.plugin.settings.servingsField]);
-		return Number.isFinite(value) && value > 0 ? value : null;
+
+		const byLowerKey = new Map<string, unknown>();
+		for (const [key, value] of Object.entries(frontmatter)) {
+			byLowerKey.set(key.trim().toLowerCase(), value);
+		}
+
+		for (const key of [this.plugin.settings.servingsField, ...SERVINGS_KEYS]) {
+			const value = parseNumber(byLowerKey.get(key.trim().toLowerCase()));
+			if (value !== null && value > 0) return value;
+		}
+		return null;
 	}
 
 	/** Default when nothing planned says otherwise: one portion per person. */

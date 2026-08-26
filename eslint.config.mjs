@@ -17,7 +17,7 @@ import obsidianmd from "eslint-plugin-obsidianmd";
 
 export default tseslint.config(
 	{
-		ignores: ["main.js", "node_modules/**", "scripts/**", "*.config.mjs"],
+		ignores: ["main.js", "node_modules/**", "scripts/**", "_to_delete/**", "*.config.mjs"],
 	},
 
 	// Controleert manifest.json en package.json op Obsidians eisen.

@@ -61,6 +61,17 @@ export interface ProductPatch {
 	check?: boolean;
 	/** Leftover fraction of a unit; see Product.used. */
 	used?: number;
+	/**
+	 * True when the app worked this count out itself — a meal that was ticked
+	 * off, not a shelf that was looked at.
+	 *
+	 * Zonder dit onderscheid stempelt elke afgevinkte maaltijd `counted` op
+	 * vandaag en schuift de oude stand naar `previous`. Je telt vier blikken op
+	 * 1 augustus, eet er op 26 augustus één op, en de notitie beweert dat je op
+	 * 26 augustus geteld hebt. Dat is precies het tegenovergestelde van wat dat
+	 * veld moet betekenen.
+	 */
+	derived?: boolean;
 }
 
 export const UNASSIGNED = "Unsorted";
@@ -69,9 +80,19 @@ function text(value: unknown): string {
 	return typeof value === "string" ? value.trim() : "";
 }
 
-function num(value: unknown): number | null {
-	if (value === null || value === undefined || value === "") return null;
-	const parsed = Number(`${value}`.replace(",", "."));
+/**
+ * A number out of frontmatter, or null when it does not say one.
+ *
+ * Frontmatter is met de hand getypt, dus er kan van alles staan — een getal,
+ * "2,5", een lijst, niets. Alles wat geen getal is levert null op en geen 0:
+ * "nooit ingevuld" en "nul" zijn verschillende antwoorden.
+ */
+export function parseNumber(value: unknown): number | null {
+	if (typeof value === "number") return Number.isFinite(value) ? value : null;
+	if (typeof value !== "string") return null;
+	const trimmed = value.trim();
+	if (trimmed.length === 0) return null;
+	const parsed = Number(trimmed.replace(",", "."));
 	return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -84,10 +105,12 @@ function list(value: unknown): string[] {
 
 /** Frontmatter holds "+" for the plus state; everything else is a number. */
 export function parseCount(raw: unknown): Count | null {
-	if (raw === null || raw === undefined || raw === "") return null;
-	const value = `${raw}`.trim();
+	if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
+	if (typeof raw !== "string") return null;
+	const value = raw.trim();
+	if (value.length === 0) return null;
 	if (value === "+" || value.endsWith("+")) return "plus";
-	return num(value);
+	return parseNumber(value);
 }
 
 function serialiseCount(count: Count): string | number {
@@ -180,7 +203,7 @@ export class ProductIndex {
 			file,
 			path: file.path,
 			name: file.basename,
-			minimum: num(frontmatter.minimum) ?? num(frontmatter.target) ?? 0,
+			minimum: parseNumber(frontmatter.minimum) ?? parseNumber(frontmatter.target) ?? 0,
 			unit: text(frontmatter.unit),
 			size: parseSize(frontmatter.size),
 			amountMatters: text(frontmatter.amount).toLowerCase() !== "any",
@@ -189,7 +212,7 @@ export class ProductIndex {
 			shelf: text(frontmatter.shelf) || text(frontmatter.aisle),
 			aliases: list(frontmatter.aliases),
 			count: parseCount(frontmatter.count),
-			used: Math.max(0, num(frontmatter.used) ?? 0),
+			used: Math.max(0, parseNumber(frontmatter.used) ?? 0),
 			counted: text(frontmatter.counted) || null,
 			check: frontmatter.check === true,
 			previous: parseCount(frontmatter.previous),
@@ -272,7 +295,7 @@ export class ProductIndex {
 					// The stand being replaced becomes the previous one, so he can
 					// see what it was last time and skip re-counting what he knows.
 					const current = parseCount(frontmatter.count);
-					if (current !== null && current !== patch.count) {
+					if (!patch.derived && current !== null && current !== patch.count) {
 						frontmatter.previous = serialiseCount(current);
 						frontmatter.previousCounted = frontmatter.counted ?? null;
 					}
@@ -281,7 +304,8 @@ export class ProductIndex {
 						delete frontmatter.counted;
 					} else {
 						frontmatter.count = serialiseCount(patch.count);
-						frontmatter.counted = todayISO();
+						// Alleen een echte telling verzet de datum.
+						if (!patch.derived) frontmatter.counted = todayISO();
 					}
 				}
 			}
@@ -311,12 +335,14 @@ export class ProductIndex {
 		if (patch.check !== undefined) product.check = patch.check;
 
 		if (patch.count !== undefined) {
-			if (product.count !== null && product.count !== patch.count) {
+			if (!patch.derived && product.count !== null && product.count !== patch.count) {
 				product.previous = product.count;
 				product.previousCounted = product.counted;
 			}
 			product.count = patch.count;
-			product.counted = patch.count === null ? null : todayISO();
+			if (!patch.derived) {
+				product.counted = patch.count === null ? null : todayISO();
+			}
 		}
 
 		if (patch.used !== undefined) product.used = round(patch.used);
@@ -389,9 +415,18 @@ export class ProductIndex {
 	}
 }
 
-/** Three decimals is far past what any recipe can justify. */
+/**
+ * Alleen de ruis van drijvende komma's wegpoetsen, verder niets weggooien.
+ *
+ * Dit stond op drie decimalen "omdat geen recept preciezer is". Maar `used` is
+ * geen receptmaat, het is een saldo: drie keer een derde zak rijst gaf 0,999 en
+ * de telling bleef staan — de zak was op en de voorraad wist het niet. De
+ * marge waarmee `move()` beslist of er een hele verpakking af mag (`EPSILON`,
+ * 1e-9) moet ruimer zijn dan wat hier wordt afgerond, anders eet elke boeking
+ * een beetje van het saldo.
+ */
 function round(value: number): number {
-	return Math.round(value * 1000) / 1000;
+	return Math.round(value * 1e12) / 1e12;
 }
 
 export function todayISO(): string {

@@ -1,12 +1,16 @@
 import type PantryPlugin from "./main";
-import { parseRecipeBody } from "./cook";
-import { parseIngredient } from "./ingredients";
-import { inProductUnits } from "./needs";
-import { linkTarget, servingsFor } from "./plan";
+import { amountsForRecipe, factorFor } from "./needs";
+import { linkTarget } from "./plan";
 import type { Product, ProductPatch } from "./products";
 import type { PlannedRecipe } from "./types";
 
-/** Floating point: 0.1 + 0.2 must not count as more than 0.3. */
+/**
+ * Floating point: 0.1 + 0.2 must not count as more than 0.3.
+ *
+ * Deze marge moet ruimer zijn dan de precisie waarmee `used` bewaard wordt,
+ * anders blijft er per boeking een restje hangen en gaat er nooit een hele
+ * verpakking af — zie de opmerking bij `round()` in products.ts.
+ */
 const EPSILON = 1e-9;
 
 export interface StockChange {
@@ -34,15 +38,13 @@ export async function consumptionOf(
 	const file = plugin.cook.file(linkTarget(entry.recipe));
 	if (!file) return amounts;
 
-	const base = plugin.cook.baseServings(file);
-	const factor = !base || base <= 0 ? 1 : servingsFor(plugin, entry) / base;
-
-	const content = await plugin.app.vault.cachedRead(file);
-	for (const line of parseRecipeBody(content).ingredients) {
-		const parsed = parseIngredient(line);
-		const product = plugin.products.match(parsed.name || parsed.raw);
-		if (!product) continue;
-		const amount = inProductUnits(parsed, product, factor);
+	// Dezelfde som als de boodschappenlijst gebruikt, en met opzet letterlijk
+	// dezelfde functie: wat je opeet moet zijn wat je gekocht hebt.
+	for (const { product, amount } of await amountsForRecipe(
+		plugin,
+		file,
+		factorFor(plugin, file, entry)
+	)) {
 		if (amount <= 0) continue;
 		amounts.set(product.path, (amounts.get(product.path) ?? 0) + amount);
 	}
@@ -80,8 +82,8 @@ async function apply(
 		// Salt and oil are kept, not measured; there is nothing to book.
 		if (!product.amountMatters) continue;
 
-		const patch = move(product, amount * direction);
-		if (!patch) {
+		const moved = move(product, amount * direction);
+		if (!moved) {
 			// The count is unknown, so no honest number can be produced. Ask
 			// rather than invent: the check flag is exactly that question.
 			if (!product.check) await plugin.products.update(product, { check: true });
@@ -89,11 +91,27 @@ async function apply(
 			continue;
 		}
 
-		await plugin.products.update(product, patch);
-		if (direction === 1) change.used[path] = amount;
+		await plugin.products.update(product, moved.patch);
+		// Wat er wérkelijk af ging, niet wat het recept vroeg. Er stond er één
+		// en de maaltijd vroeg er twee: dan ging er één af, en hoort undo er
+		// ook één terug te zetten.
+		if (direction === 1 && moved.applied > 0) {
+			change.used[path] = moved.applied;
+		}
 	}
 
 	return change;
+}
+
+export interface Move {
+	patch: ProductPatch;
+	/**
+	 * Wat er werkelijk van de plank ging — minder dan gevraagd zodra de telling
+	 * op nul klemt. Undo boekt dít terug; boekte hij de gevraagde hoeveelheid
+	 * terug, dan stonden er na aan- en weer uitvinken meer verpakkingen in de
+	 * kast dan ervoor.
+	 */
+	applied: number;
 }
 
 /**
@@ -104,7 +122,7 @@ async function apply(
  * Exported for `tests/unit/move.test.ts`: clamping, negative carry and the
  * epsilon boundary are branches no scenario can steer into on purpose.
  */
-export function move(product: Product, delta: number): ProductPatch | null {
+export function move(product: Product, delta: number): Move | null {
 	if (typeof product.count !== "number") return null;
 
 	let carried = product.used + delta;
@@ -122,11 +140,20 @@ export function move(product: Product, delta: number): ProductPatch | null {
 	}
 
 	const next = Math.max(0, product.count - whole);
-	const patch: ProductPatch = { used: Math.max(0, carried) };
+	// Wat er niet stond, kon ook niet op.
+	const short = Math.max(0, whole - product.count);
+
+	const patch: ProductPatch = {
+		used: Math.max(0, carried),
+		// Dit is een afgeleide stand, geen telling: `counted` moet blijven
+		// betekenen wanneer de gebruiker zelf voor het laatst gekeken heeft.
+		derived: true,
+	};
 	// Only claim a new count when it really changed, so the "counted on" date
 	// keeps meaning "this is when you last looked".
 	if (next !== product.count) patch.count = next;
 	// Subtracting more than was there means the books were already wrong.
-	if (product.count - whole < 0) patch.check = true;
-	return patch;
+	if (short > 0) patch.check = true;
+
+	return { patch, applied: delta - short };
 }

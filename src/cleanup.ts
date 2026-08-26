@@ -2,7 +2,7 @@ import type PantryPlugin from "./main";
 import { parseRecipeBody } from "./cook";
 import { parseIngredient } from "./ingredients";
 import { inProductUnits } from "./needs";
-import { normalise, type Product } from "./products";
+import { missingFields, normalise, type Product } from "./products";
 
 /**
  * What stands between the recipes and a correct grocery list.
@@ -52,9 +52,17 @@ export interface UnknownIngredient {
 	lines: RecipeLine[];
 }
 
-/** Has this product been told how it is bought? */
+/**
+ * Has this product been told how it is bought?
+ *
+ * Leunt met opzet op `missingFields`, want dat is de enige plek waar staat wat
+ * een product moet zeggen. Met een eigen OR ernaast — eenheid **of** grootte —
+ * gold een product met `unit: pak` en zonder verpakkingsgrootte tegelijk als
+ * incompleet én als beantwoord, en belandden zijn onconverteerbare regels in
+ * de "blijft hangen"-lijst in plaats van in de lijst waar je iets mee kunt.
+ */
 export function isAnswered(product: Product): boolean {
-	return !product.amountMatters || product.unit.length > 0 || product.size !== null;
+	return !product.amountMatters || missingFields(product).length === 0;
 }
 
 /** The measure most of the unresolved lines use, as a starting point. */

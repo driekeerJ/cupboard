@@ -54,29 +54,41 @@ test("tekst buiten een kop wordt genegeerd", () => {
 	assert.deepEqual(parseRecipeBody("- losse regel\n\n## Ingrediënten\n- a\n").ingredients, ["a"]);
 });
 
-test(
-	"een subkop breekt de ingrediëntenlijst niet af",
-	{ todo: "M6 — cook.ts:41 zet collecting op null bij elke onbekende kop" },
-	() => {
-		const body = [
-			"## Ingrediënten",
-			"",
-			"### Voor de saus",
-			"- 500 ml passata",
-			"",
-			"### Voor erbij",
-			"- 2 uien",
-			"",
-			"## Bereiding",
-			"- Kook.",
-		].join("\n");
+test("een subkop breekt de ingrediëntenlijst niet af", () => {
+	const body = [
+		"## Ingrediënten",
+		"",
+		"### Voor de saus",
+		"- 500 ml passata",
+		"",
+		"### Voor erbij",
+		"- 2 uien",
+		"",
+		"## Bereiding",
+		"- Kook.",
+	].join("\n");
 
-		const parsed = parseRecipeBody(body);
-		assert.deepEqual(
-			parsed.ingredients,
-			["500 ml passata", "2 uien"],
-			"alles onder de kop hoort erbij tot een kop van hetzelfde niveau"
-		);
-		assert.deepEqual(parsed.steps, ["Kook."]);
-	}
-);
+	const parsed = parseRecipeBody(body);
+	assert.deepEqual(
+		parsed.ingredients,
+		["500 ml passata", "2 uien"],
+		"alles onder de kop hoort erbij tot een kop van hetzelfde niveau"
+	);
+	assert.deepEqual(parsed.steps, ["Kook."]);
+});
+
+test("een bereidingskop bínnen de sectie schakelt gewoon om", () => {
+	// Anders zou "### Bereiding" onder "## Ingrediënten" als onderverdeling
+	// gelden en zouden de stappen als ingrediënten worden opgepikt.
+	const body = [
+		"## Ingrediënten",
+		"- 2 uien",
+		"",
+		"### Bereiding",
+		"- Snipper.",
+	].join("\n");
+
+	const parsed = parseRecipeBody(body);
+	assert.deepEqual(parsed.ingredients, ["2 uien"]);
+	assert.deepEqual(parsed.steps, ["Snipper."]);
+});
