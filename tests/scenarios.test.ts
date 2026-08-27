@@ -178,3 +178,54 @@ test("een reeks tikken in de notitie wordt in één keer weggeschreven", async (
 	}
 	assert.match(h.groceries(), /## In the basket/);
 });
+
+test("een lijst van vóór de markers wordt vervangen, niet verdubbeld", async () => {
+	// Gevonden door Jeroen bij het testen: de bestaande Groceries.md had nog
+	// geen markers, dus het nieuwe blok kwam eronder te staan en had hij de
+	// lijst twee keer.
+	const h = await run("week-basis");
+
+	// De oude vorm: frontmatter, kop, handtekeningregel, en dan de secties —
+	// zonder markers eromheen.
+	const oud = [
+		"---",
+		"pantry: groceries",
+		"---",
+		"",
+		"# Groceries",
+		"",
+		"*Kept up to date by Pantry. Tick a box and that product counts as full again.*",
+		"",
+		"## Lidl",
+		"",
+		"- [ ] [[Ui]] · 3 stuk",
+		"",
+	].join("\n");
+	h.vault.write(h.plugin.list.path(), oud);
+
+	await h.plugin.list.write();
+
+	const after = h.groceries();
+	assert.equal(after.split("## Lidl").length - 1, 1, "één keer Lidl, niet twee");
+	assert.equal(
+		after.split("<!-- pantry:groceries -->").length - 1,
+		1,
+		"en één blok"
+	);
+	assert.match(after, /- \[ \] \[\[Ui\]\] · 3 stuk/);
+});
+
+test("een eigen notitie met alleen de frontmatter houdt zijn tekst", async () => {
+	// Wie zelf `pantry: groceries` toevoegt om toestemming te geven, hoort zijn
+	// notitie te houden met het blok eronder — niet vervangen te worden.
+	const h = await run("week-basis");
+
+	const eigen = "---\npantry: groceries\n---\n\n# Mijn lijst\n\n- [ ] kaarsen\n";
+	h.vault.write(h.plugin.list.path(), eigen);
+	await h.plugin.list.write();
+
+	const after = h.groceries();
+	assert.match(after, /# Mijn lijst/);
+	assert.match(after, /- \[ \] kaarsen/);
+	assert.match(after, /<!-- pantry:groceries -->/);
+});

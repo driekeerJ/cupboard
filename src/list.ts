@@ -22,6 +22,16 @@ const TICK = /^\s*-\s\[([ xX])\]\s*\[\[([^\]|#]+)/;
 const REGION = "groceries";
 
 /**
+ * De vaste regel die bovenaan de lijst staat.
+ *
+ * Doet dubbel dienst als herkenningspunt: notities van vóór de markers hebben
+ * hem óók, en aan die regel is te zien dat de hele inhoud onder de frontmatter
+ * ooit door de plugin geschreven is.
+ */
+const SIGNATURE =
+	"*Kept up to date by Pantry. Tick a box and that product counts as full again.*";
+
+/**
  * The grocery list as a note. It is a mirror, not a source: the product notes
  * stay the truth and this file is rewritten whenever they change. Ticking a box
  * here does exactly what ticking in the view does, so the phone works with or
@@ -212,14 +222,35 @@ export class GroceryList {
 		if (!this.mayWriteTo(current, path)) return;
 		clearWarning(file);
 
-		const wanted = replaceRegion(current, REGION, this.render());
+		const wanted = this.rebuild(current);
 		if (current.trim() === wanted.trim()) return;
 
 		this.lastWrite = Date.now();
 		// process() in plaats van modify(): dit is precies de notitie die je
 		// waarschijnlijk open hebt staan, en een blinde modify gooit weg wat er
 		// tussen lezen en schrijven bij kwam.
-		await vault.process(file, (latest: string) => replaceRegion(latest, REGION, this.render()));
+		await vault.process(file, (latest: string) => this.rebuild(latest));
+	}
+
+	/**
+	 * De notitie zoals hij eruit hoort te zien.
+	 *
+	 * Notities van vóór de markers krijgen hun hele inhoud vervangen in plaats
+	 * van een blok erbij. In die versie was álles onder de frontmatter van de
+	 * plugin — het werd bij elke verversing opnieuw geschreven — dus er kan
+	 * niets in staan wat bewaard had moeten blijven. Zonder deze stap komt het
+	 * blok eronder te staan en heb je de lijst twee keer.
+	 *
+	 * De handtekeningregel is wat die oude vorm herkenbaar maakt. Wie zelf
+	 * `pantry: groceries` in zijn frontmatter zet om de plugin toestemming te
+	 * geven, heeft die regel niet, en houdt dus gewoon zijn eigen notitie met
+	 * het blok eronder.
+	 */
+	private rebuild(content: string): string {
+		if (!hasRegion(content, REGION) && content.includes(SIGNATURE)) {
+			return this.template();
+		}
+		return replaceRegion(content, REGION, this.render());
 	}
 
 	/**
@@ -273,9 +304,7 @@ export class GroceryList {
 		const { buy, unsure } = this.buckets();
 		const lines: string[] = [];
 
-		lines.push(
-			"*Kept up to date by Pantry. Tick a box and that product counts as full again.*"
-		);
+		lines.push(SIGNATURE);
 		lines.push("");
 
 		if (buy.length === 0 && unsure.length === 0 && this.bought.size === 0) {
