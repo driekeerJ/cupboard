@@ -7,10 +7,12 @@
  * vraagt is een handvol velden: `app`, `settings`, en de indexen die elkaar
  * aanroepen.
  */
+import { CleanupIndex } from "../../src/cleanup";
 import { CookStore } from "../../src/cook";
 import { GroceryList } from "../../src/list";
 import type PantryPlugin from "../../src/main";
 import { NeedIndex } from "../../src/needs";
+import { RecipeIndex } from "../../src/recipes";
 import { PlanStore } from "../../src/plan";
 import { ProductIndex } from "../../src/products";
 import { DEFAULT_SETTINGS } from "../../src/settings";
@@ -47,6 +49,8 @@ export function makeHarness(
 	plugin.plans = new PlanStore(plugin);
 	plugin.cook = new CookStore(plugin);
 	plugin.shops = new ShopIndex(plugin);
+	plugin.recipes = new RecipeIndex(plugin);
+	plugin.cleanup = new CleanupIndex(plugin);
 
 	// De echte implementatie staat in main.ts, dat de hele UI meesleept.
 	// Dit is dezelfde regel: onbekende schappen achteraan, "Other" helemaal.
