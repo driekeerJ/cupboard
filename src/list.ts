@@ -5,6 +5,7 @@ import {
 	ensureFolder,
 	frontmatterValue,
 	hasRegion,
+	regionMarkers,
 	replaceRegion,
 	warnOnce,
 } from "./notes";
@@ -247,9 +248,18 @@ export class GroceryList {
 	 * het blok eronder.
 	 */
 	private rebuild(content: string): string {
-		if (!hasRegion(content, REGION) && content.includes(SIGNATURE)) {
-			return this.template();
-		}
+		// Kijk naar wat er búíten het blok staat — of naar de hele notitie als
+		// er nog geen blok is. Staat de handtekeningregel daar, dan is dat oude
+		// output van de plugin zelf.
+		//
+		// De eerste versie van deze migratie keek alleen of er een blok wás, en
+		// dat was precies verkeerd om: zodra er één keer een blok onderaan was
+		// geplakt, gold de notitie als in orde en bleef de oude lijst er
+		// eeuwig boven staan.
+		const at = content.indexOf(regionMarkers(REGION).start);
+		const outside = at === -1 ? content : content.slice(0, at);
+		if (outside.includes(SIGNATURE)) return this.template();
+
 		return replaceRegion(content, REGION, this.render());
 	}
 

@@ -229,3 +229,59 @@ test("een eigen notitie met alleen de frontmatter houdt zijn tekst", async () =>
 	assert.match(after, /- \[ \] kaarsen/);
 	assert.match(after, /<!-- pantry:groceries -->/);
 });
+
+test("een al verdubbelde lijst wordt weer één lijst", async () => {
+	// Precies wat er bij Jeroen op schijf stond: de eerste migratiepoging had
+	// het blok onderaan geplakt, en keek daarna alleen nog of er een blok wás.
+	// Daardoor gold de notitie als in orde en bleef de oude lijst erboven.
+	const h = await run("week-basis");
+
+	const kop = [
+		"---",
+		"pantry: groceries",
+		"---",
+		"",
+		"# Groceries",
+		"",
+		"*Kept up to date by Pantry. Tick a box and that product counts as full again.*",
+		"",
+		"## Lidl",
+		"",
+		"- [ ] [[Ui]] · 3 stuk",
+		"",
+	].join("\n");
+	const blok = [
+		"<!-- pantry:groceries -->",
+		"*Kept up to date by Pantry. Tick a box and that product counts as full again.*",
+		"",
+		"## Lidl",
+		"",
+		"- [ ] [[Ui]] · 3 stuk",
+		"<!-- /pantry:groceries -->",
+		"",
+	].join("\n");
+	h.vault.write(h.plugin.list.path(), `${kop}\n${blok}`);
+
+	await h.plugin.list.write();
+
+	const after = h.groceries();
+	const handtekening = after.split(
+		"*Kept up to date by Pantry. Tick a box and that product counts as full again.*"
+	).length - 1;
+	assert.equal(handtekening, 1, "de lijst staat er nog één keer");
+	assert.equal(after.split("<!-- pantry:groceries -->").length - 1, 1);
+	assert.match(after, /- \[ \] \[\[Ui\]\] · 3 stuk/);
+});
+
+test("opruimen gebeurt maar één keer", async () => {
+	// Na de migratie staat de handtekening alleen nog binnen het blok, dus een
+	// tweede write mag de notitie niet opnieuw platslaan.
+	const h = await run("week-basis");
+
+	const eigen = `${h.groceries().trimEnd()}\n\n## Niet vergeten\n\n- [ ] batterijen\n`;
+	h.vault.write(h.plugin.list.path(), eigen);
+
+	await h.plugin.list.markBought(h.plugin.products.byPath("Products/Ui.md")!);
+
+	assert.match(h.groceries(), /- \[ \] batterijen/);
+});
