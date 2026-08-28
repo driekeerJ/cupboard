@@ -58,6 +58,20 @@ const PREPARATION_WORDS = [
 	"drained", "rinsed", "cubed", "halved", "quartered",
 ];
 
+/**
+ * `[[Rijst]]` en `[[Rijst|de rijst]]` worden wat een lezer zou zeggen.
+ *
+ * Alleen voor weergave. Het matchen gebeurt op de ruwe regel, want een
+ * expliciete link is de schrijver die precies is en die mag je niet
+ * wegpoetsen voordat je hem gebruikt hebt.
+ */
+export function withoutLinks(line: string): string {
+	return line.replace(/\[\[([^\]]+)\]\]/g, (_all, inner: string) => {
+		const parts = inner.split("|");
+		return (parts[1] ?? parts[0]).trim();
+	});
+}
+
 export type UnitKind = "mass" | "spoon" | "piece" | "vague";
 
 export interface ParsedIngredient {
@@ -301,8 +315,10 @@ export interface ScaledIngredient {
 export function scaleIngredient(line: string, factor: number): ScaledIngredient {
 	const parsed = parseIngredient(line);
 
+	// De wikilink-syntax gaat er hier af en nergens eerder: in de keuken lees je
+	// "500 g rijst", niet "500 g [[Rijst]]".
 	if (factor === 1 || parsed.amount === null || parsed.kind === "vague") {
-		return { text: parsed.raw, original: null };
+		return { text: withoutLinks(parsed.raw), original: null };
 	}
 
 	const scaled = scaleAmount(parsed.amount, parsed.kind, factor, parsed.unit);
@@ -310,10 +326,10 @@ export function scaleIngredient(line: string, factor: number): ScaledIngredient 
 	const unit = parsed.unit ? `${parsed.unit} ` : "";
 	// De bereidingsnoot is van de naam gescheiden om het product te kunnen
 	// vinden; bij het herschrijven hoort hij er weer aan.
-	const text = `${amount} ${unit}${parsed.name}`.trim() + (parsed.note ?? "");
+	const text = `${amount} ${unit}${withoutLinks(parsed.name)}`.trim() + (parsed.note ?? "");
 
 	// Rewriting "1/2" as "½" is not a change worth reporting; only a different
 	// quantity is.
 	const same = Math.abs(scaled - parsed.amount) < 1e-9;
-	return { text, original: same ? null : parsed.raw };
+	return { text, original: same ? null : withoutLinks(parsed.raw) };
 }

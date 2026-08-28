@@ -128,3 +128,25 @@ test("een kleine hoeveelheid wordt nooit nul", () => {
 	assert.equal(scaleIngredient("1 g saffraan", 0.2).text, "0.2 g saffraan");
 	assert.notEqual(scaleIngredient("0.1 kg boter", 0.2).text, "0 kg boter");
 });
+
+test("in de keuken staan geen wikilinks", () => {
+	// Gevonden door Jeroen: kookmodus toonde "1 1/2 kg [[ZZ Test Meel]]".
+	// Zijn recepten hebben allemaal wikilinks in de ingrediënten, dus dit stond
+	// bij elke regel van elk recept.
+	assert.equal(scaleIngredient("1 1/2 kg [[Meel]]", 1).text, "1 1/2 kg Meel");
+	assert.equal(scaleIngredient("500 g [[Rijst]]", 0.5).text, "250 g Rijst");
+	assert.equal(
+		scaleIngredient("2 [[Ui|uien]] (gesnipperd)", 2).text,
+		"4 uien (gesnipperd)",
+		"de getoonde naam wint van het linkdoel"
+	);
+	assert.equal(
+		scaleIngredient("500 g [[Rijst]]", 0.5).original,
+		"500 g Rijst",
+		"ook de regel die laat zien wat er stond"
+	);
+});
+
+test("een regel zonder link blijft zoals hij is", () => {
+	assert.equal(scaleIngredient("peper en zout", 2).text, "peper en zout");
+});

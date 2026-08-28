@@ -1,7 +1,11 @@
 import { TFile } from "obsidian";
 import type PantryPlugin from "./main";
 import { parseRecipeBody } from "./cook";
-import { parseIngredient, type ParsedIngredient } from "./ingredients";
+import {
+	parseIngredient,
+	withoutLinks,
+	type ParsedIngredient,
+} from "./ingredients";
 import { linkTarget, servingsFor } from "./plan";
 import type { Product } from "./products";
 import type { PlannedRecipe, WeekPlan } from "./types";
@@ -137,7 +141,7 @@ export async function amountsForRecipe(
 		if (!product) continue;
 		found.push({
 			product,
-			line: plainText(line),
+			line: withoutLinks(line),
 			amount: inProductUnits(parsed, product, factor),
 		});
 	}
@@ -158,14 +162,6 @@ export function factorFor(
 	const base = plugin.cook.baseServings(file);
 	if (!base || base <= 0) return 1;
 	return servingsFor(plugin, entry) / base;
-}
-
-/** Strips `[[Link]]` and `[[Link|shown]]` down to what a reader would say. */
-function plainText(line: string): string {
-	return line.replace(/\[\[([^\]]+)\]\]/g, (_all, inner: string) => {
-		const parts = inner.split("|");
-		return (parts[1] ?? parts[0]).trim();
-	});
 }
 
 /**
