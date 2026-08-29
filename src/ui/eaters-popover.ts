@@ -186,7 +186,7 @@ export class EatersPopover {
 		if (!body) return;
 		body.empty();
 
-		const household = this.plugin.settings.household;
+		const household = this.plugin.people.all();
 		if (household.length === 0) {
 			body.createDiv({
 				cls: "pantry-settings-hint",

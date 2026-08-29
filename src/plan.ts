@@ -124,7 +124,8 @@ export class PlanStore {
 	 * to its readable name; unknown values are left untouched.
 	 */
 	normalise(plan: WeekPlan): WeekPlan {
-		const { meals, household } = this.plugin.settings;
+		const { meals } = this.plugin.settings;
+		const household = this.plugin.people.all();
 		for (const day of plan.days) {
 			for (const slot of day.meals) {
 				const meal = meals.find((item) => isMeal(slot.meal, item));

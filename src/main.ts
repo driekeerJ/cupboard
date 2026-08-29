@@ -18,6 +18,7 @@ import { CookStore, parseRecipeBody } from "./cook";
 import { ProductIndex } from "./products";
 import { NeedIndex } from "./needs";
 import { GroceryList } from "./list";
+import { HouseholdIndex } from "./people";
 import { ShopIndex } from "./shops";
 import { SHELVES_VIEW_TYPE, ShelvesView } from "./ui/shelves-view";
 import { PRODUCTS_VIEW_TYPE, ProductsView } from "./ui/products-view";
@@ -81,6 +82,8 @@ export default class PantryPlugin extends Plugin {
 	list: GroceryList = new GroceryList(this);
 	/** One note per shop, holding its shelves in walking order. */
 	shops: ShopIndex = new ShopIndex(this);
+	/** Wie er meeëet: notities zodra je een map instelt, anders `data.json`. */
+	people: HouseholdIndex = new HouseholdIndex(this);
 	/** Where recipes and products still fail to meet. */
 	cleanup: CleanupIndex = new CleanupIndex(this);
 	/** Filter and scroll position per screen, so a detour does not lose your place. */
@@ -107,6 +110,7 @@ export default class PantryPlugin extends Plugin {
 		this.plannerDirty = false;
 
 		this.products.build();
+		this.people.build();
 		// De planner alleen als er iets veranderd is wat hij toont. `render()`
 		// laadt de hele week opnieuw en gooit je scrollpositie weg, en dit pad
 		// loopt bij élke metadata-wijziging, create, delete of rename — precies
@@ -123,6 +127,7 @@ export default class PantryPlugin extends Plugin {
 
 		this.app.workspace.onLayoutReady(() => {
 			this.products.build();
+			this.people.build();
 			guarded("could not read your shops", async () => {
 				await this.shops.build();
 				// De lopende boodschappenronde vóór de lijst: anders schrijft
@@ -391,6 +396,31 @@ export default class PantryPlugin extends Plugin {
 							);
 						}
 					});
+				}
+				// Een huisgenoot staat op naam in de weekplannen, en die naam is
+				// de bestandsnaam. Zonder dit viel iemand na een hernoeming uit
+				// alle geplande maaltijden — stilletjes, want een onbekende
+				// eter telt gewoon niet mee.
+				if (file instanceof TFile && this.people.isMemberNote(file.path)) {
+					const was = oldPath.slice(oldPath.lastIndexOf("/") + 1).replace(/\.md$/, "");
+					guarded("could not update your meal plans", async () => {
+						this.people.build();
+						const notes = await this.plans.renameEverywhere(
+							"eater",
+							was,
+							file.basename
+						);
+						if (notes > 0) {
+							new Notice(
+								`Pantry renamed "${was}" in ${notes} meal plan${notes === 1 ? "" : "s"}.`
+							);
+						}
+					});
+				}
+				if (file instanceof TFile && oldPath in this.settings.cookTimers) {
+					guarded("could not move your cooking timers", () =>
+						this.cook.renameSession(oldPath, file.path)
+					);
 				}
 				if (file instanceof TFile && this.isRecipe(file)) {
 					const was = oldPath.slice(oldPath.lastIndexOf("/") + 1).replace(/\.md$/, "");

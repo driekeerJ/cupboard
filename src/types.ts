@@ -31,6 +31,16 @@ export interface PantrySettings {
 	/** 0 = Sunday, 1 = Monday, ... 6 = Saturday. */
 	weekStartDay: number;
 	meals: MealType[];
+	/**
+	 * Map met één notitie per huisgenoot, met `portionFactor` in de
+	 * frontmatter. Leeg betekent: het gezin staat alleen in `data.json`.
+	 */
+	householdFolder: string;
+	/**
+	 * Het gezin zoals het in `data.json` staat. Alleen leidend zolang
+	 * `householdFolder` leeg is of nog geen notities bevat — zie
+	 * `HouseholdIndex`.
+	 */
 	household: HouseholdMember[];
 	/** Frontmatter fields shown on a recipe card. */
 	displayFields: string[];

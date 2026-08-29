@@ -33,6 +33,9 @@ const SERVINGS_KEYS = [
 	"serves", "portions", "yield",
 ];
 
+/** Een timer die meer dan een dag geleden afliep is geen kookactie meer. */
+const TIMER_KEEP_MS = 24 * 60 * 60 * 1000;
+
 const LIST_ITEM = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/;
 const HEADING = /^(#{1,6})\s+(.*)$/;
 const FRONTMATTER = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/;
@@ -318,6 +321,54 @@ export class CookStore {
 	}
 
 	/**
+	 * Verhuist de timers mee als de sessienotitie hernoemd wordt.
+	 *
+	 * De sleutel is een vaultpad. Zonder dit bleef er een wees achter en zag
+	 * de hernoemde sessie zijn eigen lopende timer niet meer staan.
+	 */
+	async renameSession(oldPath: string, newPath: string): Promise<void> {
+		const timers = this.plugin.settings.cookTimers[oldPath];
+		if (!timers) return;
+		delete this.plugin.settings.cookTimers[oldPath];
+		this.plugin.settings.cookTimers[newPath] = timers;
+		await this.plugin.saveSettings();
+	}
+
+	/**
+	 * Gooit timers weg die nergens meer bij horen.
+	 *
+	 * `cookTimers` staat in `data.json` en werd wel gevuld, nooit geleegd:
+	 * een sessie die je zelf weggooide of hernoemde liet zijn timers staan en
+	 * het bestand groeide ongemerkt door. Weg is hier: de notitie bestaat niet
+	 * meer, of de timer is al meer dan een dag afgelopen — dan is het geen
+	 * lopende kookactie meer maar een restje.
+	 */
+	pruneTimers(): boolean {
+		const all = this.plugin.settings.cookTimers;
+		const stale = Date.now() - TIMER_KEEP_MS;
+		let changed = false;
+
+		for (const path of Object.keys(all)) {
+			if (!this.plugin.app.vault.getFileByPath(path)) {
+				delete all[path];
+				changed = true;
+				continue;
+			}
+			const timers = all[path] ?? {};
+			for (const [key, timer] of Object.entries(timers)) {
+				if (timer.startedAt + timer.seconds * 1000 > stale) continue;
+				delete timers[key];
+				changed = true;
+			}
+			if (Object.keys(timers).length === 0) {
+				delete all[path];
+				changed = true;
+			}
+		}
+		return changed;
+	}
+
+	/**
 	 * Ruimt kooksessies op die ouder zijn dan de ingestelde termijn.
 	 *
 	 * Alleen notities met `pantry: cook` in de frontmatter, en via Obsidians
@@ -326,7 +377,10 @@ export class CookStore {
 	 */
 	async sweep(): Promise<void> {
 		const days = this.plugin.settings.cookKeepDays;
-		if (!days || days <= 0) return;
+		if (!days || days <= 0) {
+			if (this.pruneTimers()) await this.plugin.saveSettings();
+			return;
+		}
 
 		const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
 		const folder = this.vault.getFolderByPath(this.plugin.settings.cookFolder);
@@ -340,6 +394,7 @@ export class CookStore {
 			this.clearTimers(child.path);
 			await this.plugin.app.fileManager.trashFile(child);
 		}
+		this.pruneTimers();
 		await this.plugin.saveSettings();
 	}
 
@@ -376,7 +431,7 @@ export class CookStore {
 
 	/** Default when nothing planned says otherwise: one portion per person. */
 	householdServings(): number {
-		const total = this.plugin.settings.household.reduce(
+		const total = this.plugin.people.all().reduce(
 			(sum, member) => sum + (member.portionFactor || 0),
 			0
 		);

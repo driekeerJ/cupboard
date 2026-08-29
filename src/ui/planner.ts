@@ -834,7 +834,7 @@ export class PlannerGrid {
 			await this.mutate((plan) => {
 				addRecipe(plan, date, meal, {
 					recipe: toLink(payload.name),
-					eaters: this.plugin.settings.household.map(
+					eaters: this.plugin.people.all().map(
 						(member) => member.name.trim() || member.id
 					),
 					guests: 0,

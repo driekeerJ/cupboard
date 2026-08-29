@@ -137,6 +137,8 @@ export class SetupWizard extends Modal {
 	}
 
 	private async finish(apply: boolean): Promise<void> {
+		this.done = true;
+
 		if (apply) {
 			this.draft.meals = this.draft.meals.filter(
 				(meal) => meal.name.trim().length > 0
@@ -144,10 +146,22 @@ export class SetupWizard extends Modal {
 			this.draft.household = this.draft.household.filter(
 				(member) => member.name.trim().length > 0
 			);
-			this.plugin.settings = { ...this.draft, setupComplete: true };
-		} else {
-			this.plugin.settings.setupComplete = true;
+			// Alleen de velden die deze wizard bewerkt. Het hele object
+			// terugzetten gooide weg wat er intussen geschreven was — draai
+			// "Run setup" met een kooksessie open en je lopende timers waren
+			// verdwenen.
+			Object.assign(this.plugin.settings, {
+				recipeFolder: this.draft.recipeFolder,
+				planFolder: this.draft.planFolder,
+				productFolder: this.draft.productFolder,
+				shopFolder: this.draft.shopFolder,
+				listNote: this.draft.listNote,
+				weekStartDay: this.draft.weekStartDay,
+				meals: this.draft.meals,
+				household: this.draft.household,
+			});
 		}
+		this.plugin.settings.setupComplete = true;
 
 		await this.plugin.saveSettings();
 		this.plugin.refreshViews();
@@ -370,7 +384,17 @@ export class SetupWizard extends Modal {
 		button.onclick = onClick;
 	}
 
+	/** True zodra "Skip" of "Done" is gebruikt; zie onClose. */
+	private done = false;
+
 	onClose(): void {
 		this.contentEl.empty();
+		if (this.done) return;
+
+		// Escape of een tik naast het venster liet `setupComplete` op false
+		// staan, dus de wizard sprong bij de volgende start weer open — terwijl
+		// bewust "Skip" kiezen hem juist afsloot. Per ongeluk wegtikken was zo
+		// zwaarder gestraft dan overslaan.
+		guarded("could not close the setup", () => this.finish(false));
 	}
 }

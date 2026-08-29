@@ -9,6 +9,7 @@ import type PantryPlugin from "./main";
 import { WEEKDAY_NAMES } from "./date";
 import { guarded } from "./guard";
 import { DEFAULT_STATE_PATH } from "./list";
+import { formatServings } from "./plan";
 import type {
 	HouseholdMember,
 	MealType,
@@ -29,6 +30,7 @@ export const DEFAULT_SETTINGS: PantrySettings = {
 		{ id: "lunch", name: "Lunch" },
 		{ id: "dinner", name: "Dinner" },
 	],
+	householdFolder: "",
 	household: [{ id: "me", name: "Me", portionFactor: 1 }],
 	displayFields: [],
 	servingsField: "servings",
@@ -100,6 +102,7 @@ export function normaliseSettings(raw: unknown): PantrySettings {
 		shopFolder: text("shopFolder"),
 		servingsField: text("servingsField"),
 		cookFolder: text("cookFolder"),
+		householdFolder: text("householdFolder"),
 		weekStartDay:
 			Number.isInteger(weekStartDay) && weekStartDay >= 0 && weekStartDay <= 6
 				? weekStartDay
@@ -530,6 +533,7 @@ export class PantrySettingTab extends PluginSettingTab {
 				button
 					.setButtonText("Add person")
 					.setCta()
+					.setDisabled(this.plugin.people.usingNotes())
 					.onClick(async () => {
 						const household = this.plugin.settings.household;
 						household.push({
@@ -542,6 +546,24 @@ export class PantrySettingTab extends PluginSettingTab {
 					})
 			);
 
+		new Setting(containerEl)
+			.setName("Household folder")
+			.setDesc(
+				"One note per person, with portionFactor in the frontmatter. Leave empty to keep the list below \u2014 which lives in the plugin\u2019s own data file and disappears with it."
+			)
+			.addText((text) => {
+				text
+					.setPlaceholder("Household")
+					.setValue(this.plugin.settings.householdFolder);
+				onCommit(text, async (value) => {
+					this.plugin.settings.householdFolder = value.trim();
+					await this.save();
+					this.plugin.people.build();
+					this.plugin.refreshViews();
+					this.drawHousehold(false);
+				});
+			});
+
 		this.householdListEl = containerEl.createDiv({ cls: "pantry-settings-list" });
 		this.drawHousehold(false);
 	}
@@ -552,7 +574,47 @@ export class PantrySettingTab extends PluginSettingTab {
 		if (!list) return;
 		list.empty();
 
+		// Zodra er notities zijn bepalen die het gezin, en is deze lijst niet
+		// meer dan een oude kopie. Hem dan tonen alsof je hem kunt bewerken is
+		// erger dan hem niet tonen: je verandert iets en er gebeurt niets.
+		if (this.plugin.people.usingNotes()) {
+			const names = this.plugin.people
+				.all()
+				.map((member) =>
+					member.portionFactor === 1
+						? member.name
+						: `${member.name} (\u00d7${formatServings(member.portionFactor)})`
+				);
+			list.createDiv({
+				cls: "pantry-settings-hint",
+				text: `Read from your notes in ${this.plugin.people.folder()}: ${names.join(", ")}. Edit a note to change a name or portion factor.`,
+			});
+			return;
+		}
+
 		const household = this.plugin.settings.household;
+		if (this.plugin.settings.householdFolder.trim().length > 0) {
+			new Setting(list)
+				.setName("Move household to notes")
+				.setDesc(
+					"Writes one note per person into the folder above. Nothing is overwritten, and the list below stays as it is."
+				)
+				.addButton((button) =>
+					button.setButtonText("Move").onClick(() => {
+						guarded("could not write your household notes", async () => {
+							const written = await this.plugin.people.moveToNotes();
+							new Notice(
+								written === 0
+									? "Pantry found nothing to move."
+									: `Pantry wrote ${written} note${written === 1 ? "" : "s"}.`
+							);
+							this.plugin.refreshViews();
+							this.drawHousehold(false);
+						});
+					})
+				);
+		}
+
 		if (household.length === 0) {
 			list.createDiv({
 				cls: "pantry-settings-hint",

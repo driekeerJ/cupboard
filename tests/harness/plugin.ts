@@ -12,6 +12,7 @@ import { CookStore } from "../../src/cook";
 import { GroceryList } from "../../src/list";
 import type PantryPlugin from "../../src/main";
 import { NeedIndex } from "../../src/needs";
+import { HouseholdIndex } from "../../src/people";
 import { RecipeIndex } from "../../src/recipes";
 import { PlanStore } from "../../src/plan";
 import { ProductIndex } from "../../src/products";
@@ -49,6 +50,7 @@ export function makeHarness(
 	plugin.plans = new PlanStore(plugin);
 	plugin.cook = new CookStore(plugin);
 	plugin.shops = new ShopIndex(plugin);
+	plugin.people = new HouseholdIndex(plugin);
 	plugin.recipes = new RecipeIndex(plugin);
 	plugin.cleanup = new CleanupIndex(plugin);
 
@@ -69,6 +71,7 @@ export function makeHarness(
 		plugin,
 		async rebuild(weekStart: Date): Promise<void> {
 			plugin.products.build();
+			plugin.people.build();
 			await plugin.shops.build();
 			await plugin.needs.rebuild(weekStart);
 		},
