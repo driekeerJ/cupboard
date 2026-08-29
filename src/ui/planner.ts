@@ -40,7 +40,7 @@ import { enableTouchDrag } from "./touch-drag";
 const MEAL_HUES = [152, 8, 38, 205, 268, 330, 186, 96];
 
 /** Shown beside the day-note row and as its placeholder in the day list. */
-const DAY_NOTE_LABEL = "Bijzonderheden";
+const DAY_NOTE_LABEL = "Notes";
 
 /** Resolves a meal label coming from a drag payload back to a configured meal. */
 function findMeal(meals: MealType[], label: string): MealType | null {
@@ -848,7 +848,8 @@ export class PlannerGrid {
 		const slot = this.gridEl?.querySelector<HTMLElement>(
 			`.pantry-slot[data-date="${date}"][data-meal="${CSS.escape(mealLabelText)}"]`
 		);
-		const card = slot?.lastElementChild;
+		const cards = slot?.querySelectorAll(".pantry-planned-card");
+		const card = cards?.[cards.length - 1];
 		if (card instanceof HTMLElement) {
 			card.addClass("is-new");
 			window.setTimeout(() => card.removeClass("is-new"), 400);

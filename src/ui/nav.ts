@@ -4,8 +4,8 @@ import { guarded } from "../guard";
 export const HOME_VIEW_TYPE = "pantry-home";
 
 /**
- * Pantry is five screens, and moving between them should feel like one app
- * rather than five tabs. Every screen therefore replaces the one before it in
+ * Pantry is seven screens, and moving between them should feel like one app
+ * rather than seven tabs. Every screen therefore replaces the one before it in
  * the same leaf, and carries the same way back.
  *
  * The constant lives here rather than in the home view so that a screen can

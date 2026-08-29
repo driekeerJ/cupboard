@@ -2,6 +2,7 @@ import { Modal, Notice, setIcon } from "obsidian";
 import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import type { NeedSource } from "../needs";
+import { parseNumber } from "../number";
 import {
 	UNASSIGNED,
 	missingFields,
@@ -586,8 +587,8 @@ export class ProductSheet extends Modal {
 
 		if (!shown.has("minimum")) {
 			field("Minimum", `${this.product.minimum}`, (raw) => {
-				const value = Number(raw.replace(",", "."));
-				return Number.isFinite(value) && value >= 0 ? { minimum: value } : null;
+				const value = parseNumber(raw);
+				return value !== null && value >= 0 ? { minimum: value } : null;
 			});
 		}
 		if (!shown.has("unit")) {

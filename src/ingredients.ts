@@ -1,3 +1,5 @@
+import { parseNumber } from "./number";
+import { MASS_UNITS, SPOON_UNITS, VAGUE_UNITS } from "./units";
 /**
  * Ingredient lines are free text, so scaling means reading a number and a unit
  * off the front of the line and putting a sensible one back. "Sensible" is the
@@ -19,27 +21,6 @@ const GLYPH_CLASS = `[${Object.keys(FRACTION_GLYPHS).join("")}]`;
 
 /** Zowel de gewone schuine streep als de fractieslash U+2044. */
 const SLASH = "[/\u2044]";
-
-/** Weight and volume: scale exactly, then round to a number you can measure. */
-const MASS_UNITS = [
-	"g", "gr", "gram", "grams", "kg", "kilo", "kilos", "mg",
-	"ml", "cl", "dl", "l", "lt", "liter", "liters", "litre", "litres",
-	"oz", "lb", "lbs",
-];
-
-/** Spoons and cups: quarters, because that is what measuring spoons come in. */
-const SPOON_UNITS = [
-	"tsp", "tsps", "teaspoon", "teaspoons",
-	"tbsp", "tbsps", "tablespoon", "tablespoons",
-	"tl", "el", "cup", "cups", "mug", "mugs", "kopje", "kopjes",
-];
-
-/** Measures that mean "roughly this much" and do not survive being scaled. */
-const VAGUE_UNITS = [
-	"handful", "handfuls", "handvol", "pinch", "pinches", "snufje",
-	"dash", "dashes", "splash", "splashes", "scheutje", "glug", "drizzle",
-	"bunch", "bunches", "bosje", "sprig", "sprigs", "takje", "knob", "knobs",
-];
 
 /**
  * Woorden die een staart achter de komma tot bereidingsnoot maken.
@@ -89,7 +70,7 @@ const FRACTION = new RegExp(`^(\\d+)\\s*${SLASH}\\s*(\\d+)`);
 const RANGE = /^(\d+(?:[.,]\d+)?)\s*[-–—]\s*(\d+(?:[.,]\d+)?)(?=\s|$)/;
 const PLAIN = /^(\d+(?:[.,]\d+)?)/;
 
-const decimal = (value: string) => Number(value.replace(",", "."));
+const decimal = (value: string) => parseNumber(value) ?? Number.NaN;
 
 function readAmount(text: string): { value: number; length: number } | null {
 	const trimmed = text.trimStart();

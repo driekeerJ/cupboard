@@ -285,7 +285,7 @@ export default class PantryPlugin extends Plugin {
 			const parsed = PlanStore.parse(source, new Date());
 			const anchor =
 				fromISODate(parsed.weekStart) ??
-				startOfWeek(new Date(), this.settings.weekStartDay);
+				this.currentWeek();
 
 			const child = new MarkdownRenderChild(el);
 			ctx.addChild(child);
@@ -464,7 +464,7 @@ export default class PantryPlugin extends Plugin {
 
 	/**
 	 * Opens a Pantry screen, reusing the tab a Pantry screen is already in. The
-	 * five screens replace each other, so the plugin behaves like one app
+	 * screens replace each other, so the plugin behaves like one app
 	 * rather than a drawer full of tabs.
 	 */
 	/**
@@ -580,6 +580,16 @@ export default class PantryPlugin extends Plugin {
 			state: { path },
 		});
 		await this.app.workspace.revealLeaf(leaf);
+	}
+
+	/**
+	 * De week waar "nu" in valt, met de ingestelde eerste weekdag.
+	 *
+	 * Stond op zes plaatsen letterlijk uitgeschreven. Eén ervan vergeten mee te
+	 * veranderen als de weekdag verschuift is een fout die je pas maandag ziet.
+	 */
+	currentWeek(): Date {
+		return startOfWeek(new Date(), this.settings.weekStartDay);
 	}
 
 	isRecipe(file: TFile): boolean {

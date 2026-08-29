@@ -16,7 +16,7 @@ import {
 import { toISODate } from "./date";
 import { scaleIngredient } from "./ingredients";
 import { ensureFolder, frontmatterValue } from "./notes";
-import { parseNumber } from "./products";
+import { parseNumber } from "./number";
 import type { TimerState } from "./types";
 
 const INGREDIENT_HEADINGS = [
@@ -121,7 +121,7 @@ export function findDurations(text: string): DurationMatch[] {
 
 	let match = DURATION.exec(text);
 	while (match) {
-		const amount = match[1] ? Number(match[1].replace(",", ".")) : 1;
+		const amount = parseNumber(match[1]) ?? 1;
 		const seconds = Math.round(amount * unitSeconds(match[3] ?? ""));
 		if (seconds > 0) {
 			found.push({

@@ -38,12 +38,12 @@ export function toISODate(date: Date): string {
 export function fromISODate(value: string): Date | null {
 	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
 	if (!match) return null;
-	const date = new Date(
-		Number(match[1]),
-		Number(match[2]) - 1,
-		Number(match[3])
-	);
-	return Number.isNaN(date.getTime()) ? null : date;
+	const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+	if (Number.isNaN(date.getTime())) return null;
+	// `new Date(2026, 1, 30)` rolt stilletjes door naar 2 maart. Een
+	// handgetypte `weekStart: 2026-02-30` ankerde de planner daarmee op een
+	// andere week dan er stond. Terugrekenen is de enige controle die telt.
+	return toISODate(date) === value.trim() ? date : null;
 }
 
 export function isSameDay(a: Date, b: Date): boolean {

@@ -1,5 +1,6 @@
 import { setIcon } from "obsidian";
 import type PantryPlugin from "../main";
+import { parseNumber } from "../number";
 import { formatServings, isEater, linkTarget, servingsFor } from "../plan";
 import type { PlannedRecipe } from "../types";
 
@@ -79,7 +80,11 @@ export class EatersPopover {
 			}
 		};
 		// Deferred so the click that opened the panel does not close it again.
+		// Wel eerst kijken of hij intussen al dicht is: sluit er iets binnen die
+		// ene tick, dan hingen de luisteraars daarna aan een verdwenen paneel en
+		// bleven ze aan `document` hangen tot Obsidian herstartte.
 		window.setTimeout(() => {
+			if (EatersPopover.open !== this) return;
 			document.addEventListener("pointerdown", this.outsideClick);
 			document.addEventListener("keydown", this.onKeyDown);
 		}, 0);
@@ -258,10 +263,9 @@ export class EatersPopover {
 		input.value = formatServings(this.entry.guests || 0);
 
 		const parse = (raw: string): number | null => {
-			const text = raw.trim().replace(",", ".");
-			if (text.length === 0) return 0;
-			const value = Number(text);
-			return Number.isFinite(value) && value >= 0 ? value : null;
+			if (raw.trim().length === 0) return 0;
+			const value = parseNumber(raw);
+			return value !== null && value >= 0 ? value : null;
 		};
 
 		const apply = (persist: boolean): void => {
@@ -383,14 +387,15 @@ export class EatersPopover {
 		}
 	}
 
+	/**
+	 * Op hoeveel porties het recept zelf geschreven is.
+	 *
+	 * Was hier een derde uitwerking, en de enige die alleen naar het ingestelde
+	 * veld keek: een recept met `porties: 4` in plaats van `servings: 4` viel
+	 * hier stil terug op niets, terwijl de kookmodus hem wél las.
+	 */
 	private recipeServings(): number | null {
-		const name = linkTarget(this.entry.recipe);
-		const file = this.plugin.app.metadataCache.getFirstLinkpathDest(name, "");
-		if (!file) return null;
-		const frontmatter =
-			this.plugin.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
-		const raw: unknown = frontmatter[this.plugin.settings.servingsField];
-		const value = Number(raw);
-		return Number.isFinite(value) && value > 0 ? value : null;
+		const file = this.plugin.cook.file(linkTarget(this.entry.recipe));
+		return file ? this.plugin.cook.baseServings(file) : null;
 	}
 }

@@ -2,6 +2,7 @@ import { Modal, Notice, setIcon, TFolder } from "obsidian";
 import type PantryPlugin from "../main";
 import { WEEKDAY_NAMES } from "../date";
 import { guarded } from "../guard";
+import { parseNumber } from "../number";
 import { makeId } from "../settings";
 import type { HouseholdMember, MealType, PantrySettings } from "../types";
 
@@ -214,7 +215,7 @@ export class SetupWizard extends Modal {
 
 		body.createDiv({
 			cls: "pantry-wizard-note",
-			text: "Both folders are created for you if they do not exist yet.",
+			text: "Pantry creates a folder the first time it writes something there. A recipe folder you name here is one you make yourself.",
 		});
 	}
 
@@ -336,9 +337,9 @@ export class SetupWizard extends Modal {
 			});
 			factor.value = `${member.portionFactor}`;
 			factor.addEventListener("input", () => {
-				const parsed = Number(factor.value.trim().replace(",", "."));
-				factor.toggleClass("is-invalid", !Number.isFinite(parsed) || parsed < 0);
-				if (Number.isFinite(parsed) && parsed >= 0) member.portionFactor = parsed;
+				const parsed = parseNumber(factor.value);
+				factor.toggleClass("is-invalid", parsed === null || parsed < 0);
+				if (parsed !== null && parsed >= 0) member.portionFactor = parsed;
 			});
 
 			this.iconButton(row, "trash-2", "Remove", false, () => {

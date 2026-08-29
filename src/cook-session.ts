@@ -14,6 +14,7 @@
  */
 
 import { LINK_TARGET } from "./links";
+import { parseNumber } from "./number";
 
 /** De frontmatter-sleutel die een notitie als kooksessie van Pantry merkt. */
 export const COOK_MARK = "pantry";
@@ -239,8 +240,8 @@ function readFrontmatterNumber(content: string, key: string): number | null {
 	if (!match) return null;
 	const line = new RegExp(`^${key}\\s*:\\s*(.*)$`, "m").exec(match[1] ?? "");
 	if (!line) return null;
-	const value = Number((line[1] ?? "").trim().replace(",", "."));
-	return Number.isFinite(value) && value > 0 ? value : null;
+	const value = parseNumber(line[1]);
+	return value !== null && value > 0 ? value : null;
 }
 
 function readRecipeLink(content: string): string | null {

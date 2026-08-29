@@ -1,7 +1,7 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import type PantryPlugin from "../main";
 import { missingFields } from "../products";
-import { formatRange, isoWeek, startOfWeek, toISODate } from "../date";
+import { formatRange, isoWeek, toISODate } from "../date";
 import { guarded } from "../guard";
 import { HOME_VIEW_TYPE, openHere } from "./nav";
 import { PLANNER_VIEW_TYPE } from "../view/planner-view";
@@ -91,7 +91,7 @@ export class HomeView extends ItemView {
 		this.plugin.products.build();
 		await this.plugin.shops.build();
 
-		const week = startOfWeek(new Date(), this.plugin.settings.weekStartDay);
+		const week = this.plugin.currentWeek();
 		await this.plugin.needs.rebuild(week);
 		await this.plugin.cleanup.rebuild();
 
@@ -148,7 +148,7 @@ export class HomeView extends ItemView {
 				},
 				note: () =>
 					this.plugin.plans.notePath(
-						startOfWeek(new Date(), this.plugin.settings.weekStartDay)
+						this.plugin.currentWeek()
 					),
 			},
 			{
@@ -257,7 +257,7 @@ export class HomeView extends ItemView {
 		if (!body) return;
 		body.empty();
 
-		const week = startOfWeek(new Date(), this.plugin.settings.weekStartDay);
+		const week = this.plugin.currentWeek();
 		this.subEl?.setText(`Week ${isoWeek(week).week} · ${formatRange(week)}`);
 
 		const grid = body.createDiv({ cls: "pantry-tiles" });

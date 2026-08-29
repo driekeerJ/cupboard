@@ -8,34 +8,8 @@ import {
 } from "./ingredients";
 import { linkTarget, servingsFor } from "./plan";
 import type { Product } from "./products";
+import { family, sameUnit, unitKey } from "./units";
 import type { PlannedRecipe, WeekPlan } from "./types";
-
-/** Everything reduced to one base unit per family, so 400 g and 0.4 kg meet. */
-const MASS: Record<string, number> = {
-	mg: 0.001, g: 1, gr: 1, gram: 1, grams: 1, kg: 1000, kilo: 1000, kilos: 1000,
-	oz: 28.3495, lb: 453.592, lbs: 453.592,
-};
-
-const VOLUME: Record<string, number> = {
-	ml: 1, cl: 10, dl: 100, l: 1000, lt: 1000,
-	liter: 1000, liters: 1000, litre: 1000, litres: 1000,
-};
-
-/** "Tbsp." en "tbsp" zijn dezelfde maat; alleen de spelling verschilt. */
-function unitKey(unit: string): string {
-	return unit.trim().toLowerCase().replace(/\.$/, "");
-}
-
-function sameUnit(a: string, b: string): boolean {
-	return a.length > 0 && b.length > 0 && unitKey(a) === unitKey(b);
-}
-
-function family(unit: string): Record<string, number> | null {
-	const key = unitKey(unit);
-	if (key in MASS) return MASS;
-	if (key in VOLUME) return VOLUME;
-	return null;
-}
 
 /** Converts `amount from` into `to`, or null when the units are unrelated. */
 function convert(amount: number, from: string, to: string): number | null {
@@ -185,10 +159,6 @@ export class NeedIndex {
 	/** Every planned recipe line that asked for this product, in plan order. */
 	sources(product: Product): NeedSource[] {
 		return this.origins.get(product.path) ?? [];
-	}
-
-	total(): number {
-		return this.amounts.size;
 	}
 
 	async rebuild(weekStart: Date): Promise<void> {

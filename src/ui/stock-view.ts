@@ -1,5 +1,4 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
-import { startOfWeek } from "../date";
 import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import { UNASSIGNED, type Count, type Product, type ProductPatch } from "../products";
@@ -115,7 +114,7 @@ export class StockView extends ItemView {
 
 	private async reload(): Promise<void> {
 		await this.plugin.needs.rebuild(
-			startOfWeek(new Date(), this.plugin.settings.weekStartDay)
+			this.plugin.currentWeek()
 		);
 		this.drawList();
 	}

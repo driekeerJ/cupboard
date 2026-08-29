@@ -1,6 +1,7 @@
 import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import { guarded } from "../guard";
 import type PantryPlugin from "../main";
+import { parseNumber } from "../number";
 import {
 	commonUnit,
 	type ProductIssue,
@@ -304,10 +305,10 @@ export class CleanupView extends ItemView {
 			text: "Save",
 		});
 		const commit = (): void => {
-			const value = Number(amount.value.trim().replace(",", "."));
+			const value = parseNumber(amount.value);
 			const measure = unit.value.trim();
 			const filled = amount.value.trim().length > 0 || measure.length > 0;
-			const valid = Number.isFinite(value) && value > 0 && measure.length > 0;
+			const valid = value !== null && value > 0 && measure.length > 0;
 
 			// Half ingevuld is geen antwoord: wegschrijven zou het product als
 			// beantwoord markeren terwijl het nog steeds niet te converteren is.

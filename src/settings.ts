@@ -9,6 +9,7 @@ import type PantryPlugin from "./main";
 import { WEEKDAY_NAMES } from "./date";
 import { guarded } from "./guard";
 import { DEFAULT_STATE_PATH } from "./list";
+import { parseNumber } from "./number";
 import { formatServings } from "./plan";
 import type {
 	HouseholdMember,
@@ -645,10 +646,10 @@ export class PantrySettingTab extends PluginSettingTab {
 				text.inputEl.setAttr("aria-label", "Portion factor");
 				text.setPlaceholder("1").setValue(`${member.portionFactor}`);
 				onCommit(text, async (value) => {
-					const parsed = Number(value.replace(",", "."));
+					const parsed = parseNumber(value);
 					// Leegmaken zette de factor op 0 en dan telde die persoon
 					// voor niemand mee; één portie is het eerlijke antwoord.
-					member.portionFactor = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+					member.portionFactor = parsed !== null && parsed > 0 ? parsed : 1;
 					text.setValue(`${member.portionFactor}`);
 					await this.save();
 					this.plugin.refreshViews();

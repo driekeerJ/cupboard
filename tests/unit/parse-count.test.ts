@@ -14,9 +14,13 @@ test("een getal blijft een getal", () => {
 	assert.equal(parseCount(0), 0, "nul is een antwoord, geen leegte");
 });
 
-test("een plus is genoeg, hoeveel dan ook", () => {
+test("een kale plus is genoeg, een plus met getal is een telling", () => {
 	assert.equal(parseCount("+"), "plus");
-	assert.equal(parseCount("3+"), "plus", "meer dan drie is nog steeds genoeg");
+	// "3+" zei eerst alleen "genoeg", en `toBuy` geeft daarvoor altijd 0. Met
+	// `minimum: 6` kocht je dan niets bij terwijl er drie stonden. Het getal is
+	// het meest voorzichtige antwoord: hooguit koop je een keer te veel.
+	assert.equal(parseCount("3+"), 3);
+	assert.equal(parseCount("veel+"), "plus", "zonder getal blijft het genoeg");
 });
 
 test("niets ingevuld is niet hetzelfde als nul", () => {

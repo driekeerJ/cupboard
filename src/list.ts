@@ -1,5 +1,4 @@
 import { TFile, debounce, normalizePath } from "obsidian";
-import { startOfWeek } from "./date";
 import {
 	clearWarning,
 	ensureFolder,
@@ -501,7 +500,7 @@ export class GroceryList {
 
 	async refresh(): Promise<void> {
 		await this.plugin.needs.rebuild(
-			startOfWeek(new Date(), this.plugin.settings.weekStartDay)
+			this.plugin.currentWeek()
 		);
 		await this.write();
 	}

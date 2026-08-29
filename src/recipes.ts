@@ -3,6 +3,7 @@ import { markdownIn } from "./folder";
 import { matchesQuery } from "./search";
 import { asText } from "./text";
 import type PantryPlugin from "./main";
+import { parseNumber } from "./number";
 
 export interface Recipe {
 	/** Vault path of the note. */
@@ -48,8 +49,9 @@ export class RecipeIndex {
 	}
 
 	all(): Recipe[] {
-		const folder = normalizePath(this.plugin.settings.recipeFolder ?? "");
-		if (folder.length === 0 || folder === "/") return [];
+		// Overal elders is een leeg mapveld "Recipes"; hier betekende het "geen
+		// recepten", en dan was het halve plugin het met zichzelf oneens.
+		const folder = normalizePath(this.plugin.settings.recipeFolder || "Recipes");
 
 		const found = new Map<string, TFile>();
 		for (const file of markdownIn(this.plugin.app.vault, folder)) {
@@ -203,7 +205,7 @@ export function sortRecipes(recipes: Recipe[], sort: RecipeSort): Recipe[] {
 		if (right === null) return -1;
 
 		const compared = numeric
-			? Number(left.replace(",", ".")) - Number(right.replace(",", "."))
+			? (parseNumber(left) ?? 0) - (parseNumber(right) ?? 0)
 			: left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
 		if (compared === 0) return a.name.localeCompare(b.name);
 		return compared * direction;

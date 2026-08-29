@@ -1,5 +1,7 @@
 import { TFile, normalizePath } from "obsidian";
 import type PantryPlugin from "./main";
+import { toISODate } from "./date";
+import { parseNumber } from "./number";
 import { markdownIn } from "./folder";
 import { parseIngredient } from "./ingredients";
 import { LINK_TARGET, linkTarget, toLink } from "./links";
@@ -109,21 +111,7 @@ function text(value: unknown): string {
 	return typeof value === "string" ? value.trim() : "";
 }
 
-/**
- * A number out of frontmatter, or null when it does not say one.
- *
- * Frontmatter is met de hand getypt, dus er kan van alles staan — een getal,
- * "2,5", een lijst, niets. Alles wat geen getal is levert null op en geen 0:
- * "nooit ingevuld" en "nul" zijn verschillende antwoorden.
- */
-export function parseNumber(value: unknown): number | null {
-	if (typeof value === "number") return Number.isFinite(value) ? value : null;
-	if (typeof value !== "string") return null;
-	const trimmed = value.trim();
-	if (trimmed.length === 0) return null;
-	const parsed = Number(trimmed.replace(",", "."));
-	return Number.isFinite(parsed) ? parsed : null;
-}
+export { parseNumber };
 
 function list(value: unknown): string[] {
 	if (Array.isArray(value)) return value.map((item) => `${item}`.trim()).filter(Boolean);
@@ -138,8 +126,13 @@ export function parseCount(raw: unknown): Count | null {
 	if (typeof raw !== "string") return null;
 	const value = raw.trim();
 	if (value.length === 0) return null;
-	if (value === "+" || value.endsWith("+")) return "plus";
-	return parseNumber(value);
+	// "+" alleen betekent: genoeg, niet geteld. "3+" is iets anders \u2014 daar
+	// staat een telling in. Die werd weggegooid, en `toBuy` geeft voor "plus"
+	// altijd 0: met `minimum: 6` en `count: 3+` kocht je niets bij.
+	if (value === "+") return "plus";
+	const counted = parseNumber(value.replace(/\+$/, ""));
+	if (counted !== null) return counted;
+	return value.endsWith("+") ? "plus" : null;
 }
 
 function serialiseCount(count: Count): string | number {
@@ -497,10 +490,7 @@ function round(value: number): number {
 }
 
 export function todayISO(): string {
-	const now = new Date();
-	const month = `${now.getMonth() + 1}`.padStart(2, "0");
-	const day = `${now.getDate()}`.padStart(2, "0");
-	return `${now.getFullYear()}-${month}-${day}`;
+	return toISODate(new Date());
 }
 
 
@@ -529,7 +519,4 @@ export function missingFields(product: Product): MandatoryField[] {
 	return gaps;
 }
 
-/** True when nothing is left to ask about this product. */
-export function isComplete(product: Product): boolean {
-	return missingFields(product).length === 0;
-}
+
