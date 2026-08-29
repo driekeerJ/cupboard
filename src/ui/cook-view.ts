@@ -10,7 +10,8 @@ import {
 	timerKey,
 	type RecipeBody,
 } from "../cook";
-import { scaleIngredient } from "../ingredients";
+import { scaleIngredient, withoutLinks } from "../ingredients";
+import { groupIngredientsByStep } from "../cook-groups";
 import { formatServings } from "../plan";
 import type { CookSession } from "../types";
 
@@ -251,35 +252,63 @@ export class CookView extends ItemView {
 			return;
 		}
 
-		const factor = this.factor();
-		this.body.ingredients.forEach((line, index) => {
-			const scaled = scaleIngredient(line, factor);
-			const ticked = this.session.ingredients[index] === true;
+		// Gegroepeerd op de stap waarin het ingrediënt voor het eerst gebruikt
+		// wordt: dat is de volgorde waarin je snijdt. Levert het raden niets
+		// op, dan blijft het één lijst — een enkele groep "Rest" is geen
+		// indeling maar een leugen.
+		const groups = groupIngredientsByStep(this.body.ingredients, this.body.steps);
+		if (!groups) {
+			this.body.ingredients.forEach((_line, index) =>
+				this.drawIngredient(section, index)
+			);
+			return;
+		}
 
-			const row = section.createEl("button", { cls: "pantry-check-row" });
-			row.toggleClass("is-done", ticked);
-			row.setAttr("aria-pressed", `${ticked}`);
+		for (const group of groups) {
+			const wrap = section.createDiv({ cls: "pantry-cook-group" });
+			wrap.createDiv({
+				cls: "pantry-cook-group-heading",
+				text: group.step === null ? "Rest" : `Step ${group.step + 1}`,
+			});
+			for (const index of group.indexes) this.drawIngredient(wrap, index);
+		}
+	}
 
-			const box = row.createSpan({ cls: "pantry-check-box" });
-			// A character, for the same reason as the stepper: it always renders.
-			if (ticked) box.setText("✓");
+	/**
+	 * Eén ingrediëntregel. De index is die van de oorspronkelijke lijst en niet
+	 * die van de groep: de vinkjes in de sessie hangen eraan, en die moeten na
+	 * een hergroepering nog op dezelfde regel staan.
+	 */
+	private drawIngredient(host: HTMLElement, index: number): void {
+		const line = this.body.ingredients[index];
+		if (line === undefined) return;
 
-			const text = row.createDiv({ cls: "pantry-check-body" });
-			text.createDiv({ cls: "pantry-check-text", text: scaled.text });
+		const scaled = scaleIngredient(line, this.factor());
+		const ticked = this.session.ingredients[index] === true;
 
-			row.onclick = () => {
-				// Alleen deze rij bijwerken. `draw()` leegt `contentEl`, en dat
-				// ís de scroller: je stond bij stap zeven van een lang recept,
-				// vinkte er een af, en stond weer bovenaan — met natte handen,
-				// op de telefoon.
-				const now = this.session.ingredients[index] !== true;
-				this.session.ingredients[index] = now;
-				row.toggleClass("is-done", now);
-				row.setAttr("aria-pressed", `${now}`);
-				box.setText(now ? "✓" : "");
-				guarded("could not save your ticks", () => this.persist());
-			};
-		});
+		const row = host.createEl("button", { cls: "pantry-check-row" });
+		row.toggleClass("is-done", ticked);
+		row.setAttr("aria-pressed", `${ticked}`);
+
+		const box = row.createSpan({ cls: "pantry-check-box" });
+		// A character, for the same reason as the stepper: it always renders.
+		if (ticked) box.setText("✓");
+
+		const text = row.createDiv({ cls: "pantry-check-body" });
+		text.createDiv({ cls: "pantry-check-text", text: scaled.text });
+
+		row.onclick = () => {
+			// Alleen deze rij bijwerken. `draw()` leegt `contentEl`, en dat
+			// ís de scroller: je stond bij stap zeven van een lang recept,
+			// vinkte er een af, en stond weer bovenaan — met natte handen,
+			// op de telefoon.
+			const now = this.session.ingredients[index] !== true;
+			this.session.ingredients[index] = now;
+			row.toggleClass("is-done", now);
+			row.setAttr("aria-pressed", `${now}`);
+			box.setText(now ? "✓" : "");
+			guarded("could not save your ticks", () => this.persist());
+		};
 	}
 
 	private drawSteps(root: HTMLElement): void {
@@ -328,7 +357,10 @@ export class CookView extends ItemView {
 	}
 
 	/** Writes the step out, turning every duration into its own timer button. */
-	private drawStepText(host: HTMLElement, line: string, step: number): void {
+	private drawStepText(host: HTMLElement, rawLine: string, step: number): void {
+		// De wikilink-syntax gaat er af vóór het zoeken naar tijdsduren, zodat
+		// de posities die findDurations teruggeeft bij deze tekst horen.
+		const line = withoutLinks(rawLine);
 		const durations = findDurations(line);
 		let cursor = 0;
 

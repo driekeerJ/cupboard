@@ -1515,6 +1515,26 @@
 	text-transform: uppercase;
 }
 
+/* Ingrediënten gegroepeerd op de stap waarin ze voor het eerst nodig zijn. */
+.pantry-cook-group {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-bottom: 14px;
+}
+
+.pantry-cook-group:last-child {
+	margin-bottom: 0;
+}
+
+.pantry-cook-group-heading {
+	margin-bottom: 2px;
+	padding-left: 2px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+}
+
 /* --- Tickable rows -------------------------------------------------- */
 
 .pantry-check-row,
