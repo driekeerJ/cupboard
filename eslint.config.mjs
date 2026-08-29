@@ -24,6 +24,18 @@ export default tseslint.config(
 	...obsidianmd.configs.recommended,
 
 	{
+		// De regel wil geen js-yaml in een plugin, en dat klopt: Obsidian heeft
+		// `parseYaml`/`stringifyYaml` en die worden ook gebruikt. Maar het
+		// testharnas draait buiten Obsidian en heeft dáár een echte YAML-parser
+		// nodig — anders test je je frontmatter tegen een namaakparser. Hij staat
+		// in devDependencies en komt nooit in de bundel terecht.
+		files: ["package.json"],
+		rules: {
+			"depend/ban-dependencies": "off",
+		},
+	},
+
+	{
 		// Type-aware regels alleen op de broncode; anders probeert ESLint ook
 		// package.json door de TypeScript-parser te halen en klapt hij eruit.
 		files: ["src/**/*.ts", "tests/**/*.ts"],
