@@ -9,6 +9,7 @@ import {
 } from "../cleanup";
 import type { Product } from "../products";
 import { matchesQuery } from "../search";
+import { emptyState, segment } from "./kit";
 import { drawBackLink } from "./nav";
 
 export const CLEANUP_VIEW_TYPE = "pantry-cleanup";
@@ -99,22 +100,19 @@ export class CleanupView extends ItemView {
 		titles.createEl("h1", { cls: "pantry-head-title", text: "Cleanup" });
 		this.countEl = titles.createDiv({ cls: "pantry-head-sub" });
 
-		const modes = inner.createDiv({ cls: "pantry-segment" });
-		([
-			["todo", "To sort out"],
-			["zero", "Still not counting"],
-		] as Array<[Mode, string]>).forEach(([value, label]) => {
-			const chip = modes.createEl("button", {
-				cls: "pantry-segment-item",
-				text: label,
-			});
-			chip.toggleClass("is-active", this.mode === value);
-			chip.onclick = () => {
+		segment<Mode>(
+			inner,
+			[
+				{ value: "todo", label: "To sort out" },
+				{ value: "zero", label: "Still not counting" },
+			],
+			this.mode,
+			(value) => {
 				this.mode = value;
 				this.draw();
 				this.drawBody();
-			};
-		});
+			}
+		);
 
 		this.bodyEl = root.createDiv({ cls: "pantry-body" });
 		this.drawBody();
@@ -473,15 +471,11 @@ export class CleanupView extends ItemView {
 	private drawStubborn(body: HTMLElement): void {
 		const issues = this.plugin.cleanup.stubborn();
 		if (issues.length === 0) {
-			const wrap = body.createDiv({ cls: "pantry-empty" });
-			wrap.createDiv({
-				cls: "pantry-empty-title",
-				text: "Every line counts",
-			});
-			wrap.createDiv({
-				cls: "pantry-empty-hint",
-				text: "Nothing you have set up is being ignored.",
-			});
+			emptyState(
+				body,
+				"Every line counts",
+				"Nothing you have set up is being ignored."
+			);
 			return;
 		}
 
@@ -531,12 +525,11 @@ export class CleanupView extends ItemView {
 	}
 
 	private drawDone(body: HTMLElement): void {
-		const wrap = body.createDiv({ cls: "pantry-empty" });
-		wrap.createDiv({ cls: "pantry-empty-title", text: "Nothing left to sort out" });
-		wrap.createDiv({
-			cls: "pantry-empty-hint",
-			text: "Every ingredient your recipes ask for points at a product that knows how it is bought.",
-		});
+		const wrap = emptyState(
+			body,
+			"Nothing left to sort out",
+			"Every ingredient your recipes ask for points at a product that knows how it is bought."
+		);
 
 		const stubborn = this.plugin.cleanup.stubborn();
 		if (stubborn.length > 0) {

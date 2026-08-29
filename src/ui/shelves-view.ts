@@ -3,6 +3,7 @@ import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import type { Product } from "../products";
 import type { Shop } from "../shops";
+import { emptyState, segment } from "./kit";
 import { enableRowDrag } from "./reorder";
 import { drawBackLink } from "./nav";
 
@@ -81,38 +82,32 @@ export class ShelvesView extends ItemView {
 		titles.createEl("h1", { cls: "pantry-head-title", text: "Shelves" });
 		this.countEl = titles.createDiv({ cls: "pantry-head-sub" });
 
-		const modes = inner.createDiv({ cls: "pantry-segment" });
-		([
-			["sort", "Sort products"],
-			["route", "Walking route"],
-		] as Array<[Mode, string]>).forEach(([value, label]) => {
-			const chip = modes.createEl("button", {
-				cls: "pantry-segment-item",
-				text: label,
-			});
-			chip.toggleClass("is-active", this.mode === value);
-			chip.onclick = () => {
+		segment<Mode>(
+			inner,
+			[
+				{ value: "sort", label: "Sort products" },
+				{ value: "route", label: "Walking route" },
+			],
+			this.mode,
+			(value) => {
 				this.mode = value;
 				this.draw();
-			};
-		});
+			}
+		);
 
 		const shops = this.plugin.shops.all();
 		if (shops.length > 0) {
-			const chips = inner.createDiv({ cls: "pantry-segment" });
 			const active = this.shopOrFirst();
-			shops.forEach((shop) => {
-				const chip = chips.createEl("button", {
-					cls: "pantry-segment-item",
-					text: shop.name,
-				});
-				chip.toggleClass("is-active", shop.name === active?.name);
-				chip.onclick = () => {
-					this.shop = shop.name;
+			segment(
+				inner,
+				shops.map((shop) => ({ value: shop.name, label: shop.name })),
+				active?.name ?? "",
+				(name) => {
+					this.shop = name;
 					this.shelf = "";
 					this.draw();
-				};
-			});
+				}
+			);
 		}
 
 		this.bodyEl = root.createDiv({ cls: "pantry-body" });
@@ -142,12 +137,11 @@ export class ShelvesView extends ItemView {
 	/* ---------------------------------------------------------------- */
 
 	private drawFirstShop(body: HTMLElement): void {
-		const wrap = body.createDiv({ cls: "pantry-empty" });
-		wrap.createDiv({ cls: "pantry-empty-title", text: "No shops yet" });
-		wrap.createDiv({
-			cls: "pantry-empty-hint",
-			text: "A shop is a note. It starts with the usual shelves in the usual order — rename, reorder or remove whatever does not match yours.",
-		});
+		emptyState(
+			body,
+			"No shops yet",
+			"A shop is a note. It starts with the usual shelves in the usual order — rename, reorder or remove whatever does not match yours."
+		);
 		this.drawAdd(body, "shop", "Shop name", "Add shop", async (value) => {
 			const file = await this.plugin.shops.createShop(value);
 			if (!file) return;
@@ -352,12 +346,11 @@ export class ShelvesView extends ItemView {
 
 	private drawSort(body: HTMLElement, shop: Shop): void {
 		if (shop.shelves.length === 0) {
-			const wrap = body.createDiv({ cls: "pantry-empty" });
-			wrap.createDiv({ cls: "pantry-empty-title", text: "No shelves yet" });
-			wrap.createDiv({
-				cls: "pantry-empty-hint",
-				text: "Add them under Walking route first, in the order you pass them.",
-			});
+			emptyState(
+				body,
+				"No shelves yet",
+				"Add them under Walking route first, in the order you pass them."
+			);
 			return;
 		}
 

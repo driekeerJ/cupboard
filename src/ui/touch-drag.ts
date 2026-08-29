@@ -1,4 +1,4 @@
-import type { DragPayload } from "./planner";
+import type { DragPayload } from "./drag";
 
 /** How long a finger must rest on a card before the drag takes over. */
 const LONG_PRESS_MS = 380;

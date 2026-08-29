@@ -15,6 +15,7 @@
  */
 
 import { parseIngredient } from "./ingredients";
+import { linkTargets } from "./links";
 
 /** Woorden die niets over het product zeggen en dus nooit alleen mogen matchen. */
 const NOISE_WORDS = new Set([
@@ -57,19 +58,6 @@ function normalise(text: string): string {
 		.replace(/[^a-z0-9\s]+/g, " ")
 		.replace(/\s+/g, " ")
 		.trim();
-}
-
-/** De wikilinkdoelen in een regel: de schrijver die precies was. */
-function linkTargets(line: string): string[] {
-	const found: string[] = [];
-	const pattern = /\[\[([^\]]+)\]\]/g;
-	let match = pattern.exec(line);
-	while (match) {
-		const inner = match[1].split("|")[0];
-		if (inner) found.push(inner.trim());
-		match = pattern.exec(line);
-	}
-	return found;
 }
 
 /**

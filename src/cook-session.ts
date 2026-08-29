@@ -13,6 +13,8 @@
  * herrekenen nu eenmaal het hele punt.
  */
 
+import { LINK_TARGET } from "./links";
+
 /** De frontmatter-sleutel die een notitie als kooksessie van Pantry merkt. */
 export const COOK_MARK = "pantry";
 export const COOK_MARK_VALUE = "cook";
@@ -246,6 +248,6 @@ function readRecipeLink(content: string): string | null {
 	if (!match) return null;
 	const line = /^recipe\s*:\s*(.*)$/m.exec(match[1] ?? "");
 	if (!line) return null;
-	const link = /\[\[([^\]|]+)/.exec(line[1] ?? "");
+	const link = LINK_TARGET.exec(line[1] ?? "");
 	return link ? (link[1] ?? "").trim() : (line[1] ?? "").trim().replace(/^["']|["']$/g, "") || null;
 }

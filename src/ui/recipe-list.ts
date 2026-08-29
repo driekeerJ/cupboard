@@ -1,6 +1,6 @@
 import { setIcon } from "obsidian";
 import { guarded } from "../guard";
-import { DRAG_MIME } from "./planner";
+import { DRAG_MIME } from "./drag";
 import { enableTouchDrag } from "./touch-drag";
 import type PantryPlugin from "../main";
 import {

@@ -2,7 +2,8 @@ import { TFile, normalizePath } from "obsidian";
 import type PantryPlugin from "./main";
 import { markdownIn } from "./folder";
 import { parseIngredient } from "./ingredients";
-import { ensureFolder, linkTarget, toLink } from "./notes";
+import { LINK_TARGET, linkTarget, toLink } from "./links";
+import { ensureFolder } from "./notes";
 
 /**
  * What a count can be. A number is exact. "plus" means "more than the target,
@@ -258,7 +259,7 @@ export class ProductIndex {
 
 	/** The product a piece of free text refers to, or null if we cannot tell. */
 	match(rawName: string): Product | null {
-		const link = /\[\[([^\]|#]+)/.exec(rawName);
+		const link = LINK_TARGET.exec(rawName);
 		if (link) {
 			// An explicit link is the author being precise; never second-guess it.
 			const target = this.plugin.app.metadataCache.getFirstLinkpathDest(

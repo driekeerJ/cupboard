@@ -58,19 +58,9 @@ const PREPARATION_WORDS = [
 	"drained", "rinsed", "cubed", "halved", "quartered",
 ];
 
-/**
- * `[[Rijst]]` en `[[Rijst|de rijst]]` worden wat een lezer zou zeggen.
- *
- * Alleen voor weergave. Het matchen gebeurt op de ruwe regel, want een
- * expliciete link is de schrijver die precies is en die mag je niet
- * wegpoetsen voordat je hem gebruikt hebt.
- */
-export function withoutLinks(line: string): string {
-	return line.replace(/\[\[([^\]]+)\]\]/g, (_all, inner: string) => {
-		const parts = inner.split("|");
-		return (parts[1] ?? parts[0]).trim();
-	});
-}
+import { withoutLinks } from "./links";
+
+export { withoutLinks };
 
 export type UnitKind = "mass" | "spoon" | "piece" | "vague";
 

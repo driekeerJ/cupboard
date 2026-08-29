@@ -32,35 +32,19 @@ import {
 	type StockChange,
 } from "../consume";
 import { AddRecipeModal } from "./add-recipe-modal";
+import { DRAG_MIME, readPayload, type DragPayload } from "./drag";
 import { EatersPopover } from "./eaters-popover";
 import { enableTouchDrag } from "./touch-drag";
 
 /** Hand-picked hues so meal rows stay legible and pleasant in both themes. */
 const MEAL_HUES = [152, 8, 38, 205, 268, 330, 186, 96];
 
-export const DRAG_MIME = "text/plain";
-
 /** Shown beside the day-note row and as its placeholder in the day list. */
 const DAY_NOTE_LABEL = "Bijzonderheden";
-
-export type DragPayload =
-	| { kind: "recipe"; name: string }
-	| { kind: "planned"; date: string; meal: string; index: number };
 
 /** Resolves a meal label coming from a drag payload back to a configured meal. */
 function findMeal(meals: MealType[], label: string): MealType | null {
 	return meals.find((meal) => isMeal(label, meal)) ?? null;
-}
-
-export function readPayload(event: DragEvent): DragPayload | null {
-	const raw = event.dataTransfer?.getData(DRAG_MIME);
-	if (!raw) return null;
-	try {
-		const parsed = JSON.parse(raw) as DragPayload;
-		return parsed && typeof parsed === "object" && "kind" in parsed ? parsed : null;
-	} catch {
-		return null;
-	}
 }
 
 /**

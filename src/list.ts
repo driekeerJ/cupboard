@@ -13,8 +13,61 @@ import type PantryPlugin from "./main";
 import { guarded } from "./guard";
 import { parseCount, toBuy, type Count, type Product } from "./products";
 
-const NO_SHOP = "Anywhere";
-const NO_CATEGORY = "Other";
+export const NO_SHOP = "Anywhere";
+export const NO_CATEGORY = "Other";
+
+/** Eén winkel met haar schappen, in de volgorde waarin je erlangs loopt. */
+export interface ShopGroup {
+	shop: string;
+	items: Product[];
+	shelves: { shelf: string; items: Product[] }[];
+}
+
+/**
+ * De boodschappenlijst gegroepeerd per winkel en per schap.
+ *
+ * De notitie en het boodschappenscherm bouwden dit allebei zelf op \u2014 dezelfde
+ * winkelgroepering, dezelfde schapbuckets, dezelfde sortering, twee keer
+ * uitgeschreven. Wat er in de notitie stond en wat je op je telefoon zag kon
+ * daardoor uit elkaar lopen zonder dat iemand er iets aan veranderd had.
+ */
+export function groupForShopping(
+	plugin: PantryPlugin,
+	items: Product[]
+): ShopGroup[] {
+	const byShop = new Map<string, Product[]>();
+	for (const product of items) {
+		const key = product.shop || NO_SHOP;
+		const bucket = byShop.get(key) ?? [];
+		bucket.push(product);
+		byShop.set(key, bucket);
+	}
+
+	return [...byShop.keys()]
+		// Zonder winkel achteraan: dat is de restcategorie, geen naam.
+		.sort((a, b) => (a === NO_SHOP ? 1 : b === NO_SHOP ? -1 : a.localeCompare(b)))
+		.map((shop) => {
+			const own = byShop.get(shop) ?? [];
+			const byShelf = new Map<string, Product[]>();
+			for (const product of own) {
+				const key = product.shelf || NO_CATEGORY;
+				const bucket = byShelf.get(key) ?? [];
+				bucket.push(product);
+				byShelf.set(key, bucket);
+			}
+
+			const shelves = [...byShelf.keys()]
+				.sort((a, b) => plugin.compareShelves(shop, a, b))
+				.map((shelf) => ({
+					shelf,
+					items: (byShelf.get(shelf) ?? []).sort((a, b) =>
+						a.name.localeCompare(b.name)
+					),
+				}));
+
+			return { shop, items: own, shelves };
+		});
+}
 const BOUGHT_HEADING = "## In the basket";
 const CHECK_HEADING = "## Check first";
 
@@ -466,32 +519,18 @@ export class GroceryList {
 			return lines.join("\n");
 		}
 
-		this.shops(buy).forEach((shop) => {
-			const items = buy.filter((product) => (product.shop || NO_SHOP) === shop);
-			if (items.length === 0) return;
-			lines.push(`## ${shop}`);
+		groupForShopping(this.plugin, buy).forEach((group) => {
+			lines.push(`## ${group.shop}`);
 			lines.push("");
 
-			const shelves = new Map<string, Product[]>();
-			items.forEach((product) => {
-				const key = product.shelf || NO_CATEGORY;
-				const bucket = shelves.get(key) ?? [];
-				bucket.push(product);
-				shelves.set(key, bucket);
-			});
-
-			[...shelves.keys()]
-				.sort((a, b) => this.plugin.compareShelves(shop, a, b))
-				.forEach((shelf) => {
-					if (shelves.size > 1) {
-						lines.push(`### ${shelf}`);
-						lines.push("");
-					}
-					(shelves.get(shelf) ?? [])
-						.sort((a, b) => a.name.localeCompare(b.name))
-						.forEach((product) => lines.push(this.line(product, false)));
+			group.shelves.forEach(({ shelf, items }) => {
+				if (group.shelves.length > 1) {
+					lines.push(`### ${shelf}`);
 					lines.push("");
-				});
+				}
+				items.forEach((product) => lines.push(this.line(product, false)));
+				lines.push("");
+			});
 		});
 
 		if (unsure.length > 0) {
@@ -527,13 +566,5 @@ export class GroceryList {
 				? "?"
 				: `${amount}${product.unit ? ` ${product.unit}` : ""}`;
 		return `- [${box}] [[${product.name}]] · ${text}`;
-	}
-
-	private shops(items: Product[]): string[] {
-		const found = new Set<string>();
-		items.forEach((product) => found.add(product.shop || NO_SHOP));
-		return [...found].sort((a, b) =>
-			a === NO_SHOP ? 1 : b === NO_SHOP ? -1 : a.localeCompare(b)
-		);
 	}
 }

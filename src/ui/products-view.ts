@@ -3,6 +3,7 @@ import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import { UNASSIGNED, missingFields, type Product } from "../products";
 import { matchesQuery } from "../search";
+import { emptyState, keepScroll, segment as drawSegment } from "./kit";
 import { drawBackLink } from "./nav";
 import { ProductSheet } from "./product-sheet";
 
@@ -134,29 +135,28 @@ export class ProductsView extends ItemView {
 		if (!segment) return;
 		segment.empty();
 
-		const options: Array<[Filter, string]> = [
-			["all", `All ${total}`],
-			["missing", incomplete > 0 ? `Missing info ${incomplete}` : "Missing info"],
-		];
-		options.forEach(([value, label]) => {
-			const chip = segment.createEl("button", {
-				cls: "pantry-segment-item",
-				text: label,
-			});
-			chip.toggleClass("is-active", this.filter === value);
-			chip.toggleClass("is-alarm", value === "missing" && incomplete > 0);
-			chip.onclick = () => {
+		drawSegment<Filter>(
+			segment,
+			[
+				{ value: "all", label: `All ${total}` },
+				{
+					value: "missing",
+					label: incomplete > 0 ? `Missing info ${incomplete}` : "Missing info",
+					alarm: incomplete > 0,
+				},
+			],
+			this.filter,
+			(value) => {
 				this.filter = value;
 				this.drawList();
-			};
-		});
+			}
+		);
 	}
 
 	private drawList(): void {
 		const body = this.bodyEl;
 		if (!body) return;
-		const scroller = body.closest(".view-content") as HTMLElement | null;
-		const scroll = scroller?.scrollTop ?? 0;
+		const restore = keepScroll(body);
 		body.empty();
 
 		const all = this.plugin.products.all();
@@ -188,7 +188,7 @@ export class ProductsView extends ItemView {
 					? "Every product here says its unit, size, shop, shelf and place in the house."
 					: "Try a different search."
 			);
-			if (scroller) scroller.scrollTop = scroll;
+			restore();
 			return;
 		}
 
@@ -219,13 +219,11 @@ export class ProductsView extends ItemView {
 				this.drawGroup(body, storage, items, shown);
 			});
 
-		if (scroller) scroller.scrollTop = scroll;
+		restore();
 	}
 
 	private empty(parent: HTMLElement, title: string, hint: string): void {
-		const wrap = parent.createDiv({ cls: "pantry-empty" });
-		wrap.createDiv({ cls: "pantry-empty-title", text: title });
-		wrap.createDiv({ cls: "pantry-empty-hint", text: hint });
+		emptyState(parent, title, hint);
 	}
 
 	private drawGroup(

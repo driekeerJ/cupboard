@@ -2,13 +2,14 @@ import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import type { Product } from "../products";
+import { groupForShopping, type ShopGroup } from "../list";
+import { emptyState, keepScroll } from "./kit";
 import { drawBackLink } from "./nav";
 import { ProductSheet } from "./product-sheet";
 
 export const SHOPPING_VIEW_TYPE = "pantry-shopping";
 
-const NO_SHOP = "Anywhere";
-const NO_CATEGORY = "Other";
+
 
 /**
  * The list you hold in the shop. There is no such thing as a shopping trip
@@ -102,12 +103,9 @@ export class ShoppingView extends ItemView {
 		return { buy: [...buy, ...this.plugin.list.boughtProducts()], unsure };
 	}
 
+	/** De winkels waar deze lijst langs loopt, in dezelfde volgorde als de lijst. */
 	private shops(items: Product[]): string[] {
-		const found = new Set<string>();
-		items.forEach((product) => found.add(product.shop || NO_SHOP));
-		return [...found].sort((a, b) =>
-			a === NO_SHOP ? 1 : b === NO_SHOP ? -1 : a.localeCompare(b)
-		);
+		return groupForShopping(this.plugin, items).map((group) => group.shop);
 	}
 
 	private draw(): void {
@@ -176,8 +174,7 @@ export class ShoppingView extends ItemView {
 		const body = this.bodyEl;
 		if (!body) return;
 
-		const scroller = body.parentElement;
-		const scroll = scroller?.scrollTop ?? 0;
+		const restore = keepScroll(body);
 		body.empty();
 
 		const { buy, unsure } = this.buckets();
@@ -196,21 +193,19 @@ export class ShoppingView extends ItemView {
 		}
 
 		if (buy.length === 0 && unsure.length === 0) {
-			const wrap = body.createDiv({ cls: "pantry-empty" });
-			wrap.createDiv({ cls: "pantry-empty-title", text: "Nothing needed" });
-			wrap.createDiv({
-				cls: "pantry-empty-hint",
-				text: "Count a few products in Stock and they turn up here.",
-			});
+			emptyState(
+				body,
+				"Nothing needed",
+				"Count a few products in Stock and they turn up here."
+			);
 			return;
 		}
 
-		this.shops(buy)
-			.filter((shop) => this.shop === "" || shop === this.shop)
-			.forEach((shop) => {
-				const items = buy.filter((product) => (product.shop || NO_SHOP) === shop);
-				if (items.length === 0) return;
-				this.drawShop(body, this.shops(buy).length > 1 ? shop : "", items);
+		const groups = groupForShopping(this.plugin, buy);
+		groups
+			.filter((group) => this.shop === "" || group.shop === this.shop)
+			.forEach((group) => {
+				this.drawShop(body, groups.length > 1 ? group.shop : "", group);
 			});
 
 		if (unsure.length > 0 && this.shop === "") {
@@ -227,44 +222,36 @@ export class ShoppingView extends ItemView {
 				.forEach((product) => this.drawRow(list, product, true));
 		}
 
-		if (scroller) scroller.scrollTop = scroll;
+		restore();
 	}
 
-	private drawShop(parent: HTMLElement, shop: string, items: Product[]): void {
-		const shopName = shop || items[0]?.shop || "";
+	private drawShop(parent: HTMLElement, shop: string, group: ShopGroup): void {
 		const section = parent.createDiv({ cls: "pantry-section" });
 
 		if (shop) {
 			const heading = section.createDiv({ cls: "pantry-section-head is-static" });
 			heading.createSpan({ cls: "pantry-section-name", text: shop });
-			heading.createSpan({ cls: "pantry-section-count", text: `${items.length}` });
+			heading.createSpan({
+				cls: "pantry-section-count",
+				text: `${group.items.length}`,
+			});
 		}
 
 		const list = section.createDiv({ cls: "pantry-section-body" });
 
-		// Grouped by shelf, so the list follows the walk instead of the alphabet.
-		const shelves = new Map<string, Product[]>();
-		items.forEach((product) => {
-			const key = product.shelf || NO_CATEGORY;
-			const bucket = shelves.get(key) ?? [];
-			bucket.push(product);
-			shelves.set(key, bucket);
+		// Groepering en volgorde komen uit `groupForShopping`, dezelfde functie
+		// die de boodschappennotitie schrijft \u2014 anders lopen het scherm en de
+		// notitie uit elkaar zonder dat iemand iets veranderd heeft. Wat hier
+		// bovenop komt is van dit scherm alleen: wat in het mandje ligt zakt
+		// naar onderen.
+		group.shelves.forEach(({ shelf, items }) => {
+			if (group.shelves.length > 1) {
+				list.createDiv({ cls: "pantry-shelf", text: shelf });
+			}
+			[...items]
+				.sort((a, b) => (this.isDone(a) ? 1 : 0) - (this.isDone(b) ? 1 : 0))
+				.forEach((product) => this.drawRow(list, product, false));
 		});
-
-		[...shelves.keys()]
-			.sort((a, b) => this.plugin.compareShelves(shopName, a, b))
-			.forEach((shelf) => {
-				if (shelves.size > 1) {
-					list.createDiv({ cls: "pantry-shelf", text: shelf });
-				}
-				(shelves.get(shelf) ?? [])
-					.sort((a, b) => {
-						const left = this.isDone(a) ? 1 : 0;
-						const right = this.isDone(b) ? 1 : 0;
-						return left - right || a.name.localeCompare(b.name);
-					})
-					.forEach((product) => this.drawRow(list, product, false));
-			});
 	}
 
 	private drawRow(parent: HTMLElement, product: Product, unsure: boolean): void {
