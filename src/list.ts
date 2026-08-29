@@ -1,4 +1,4 @@
-import { TFile, normalizePath } from "obsidian";
+import { TFile, debounce, normalizePath } from "obsidian";
 import { startOfWeek } from "./date";
 import {
 	clearWarning,
@@ -10,7 +10,8 @@ import {
 	warnOnce,
 } from "./notes";
 import type PantryPlugin from "./main";
-import { toBuy, type Count, type Product } from "./products";
+import { guarded } from "./guard";
+import { parseCount, toBuy, type Count, type Product } from "./products";
 
 const NO_SHOP = "Anywhere";
 const NO_CATEGORY = "Other";
@@ -21,6 +22,12 @@ const TICK = /^\s*-\s\[([ xX])\]\s*\[\[([^\]|#]+)/;
 
 /** De naam van het stuk notitie dat Pantry beheert; zie src/notes.ts. */
 const REGION = "groceries";
+
+/** Waar de lopende boodschappenronde staat als er niets is ingesteld. */
+export const DEFAULT_STATE_PATH = "Pantry/shopping.json";
+
+/** Staat in het bestand, zodat een oudere vorm ooit te herkennen is. */
+const STATE_VERSION = 1;
 
 /**
  * De vaste regel die bovenaan de lijst staat.
@@ -40,14 +47,24 @@ const SIGNATURE =
  */
 export class GroceryList {
 	private plugin: PantryPlugin;
-	/** Our own last write, so its echo is not read back as a user edit. */
-	private lastWrite = 0;
+	/** De inhoud van onze laatste schrijfactie, om de echo ervan te herkennen. */
+	private lastWritten: string | null = null;
 	/**
-	 * What the count was before an item was ticked. Lives only for as long as
-	 * the app runs: it exists to undo a mistake while you are still in the shop.
+	 * Wat de telling was vóór je een product afvinkte, zodat je een misser kunt
+	 * terugdraaien terwijl je nog in de winkel staat.
+	 *
+	 * Dit leefde alleen in het geheugen. Herstartte je Obsidian halverwege de
+	 * boodschappen — of pakte je je telefoon in plaats van je laptop — dan was
+	 * je kwijt wat er al in het mandje lag, de telling van vóór elke tik, en al
+	 * je ± aanpassingen. Het voorraadeffect van een tik was wel duurzaam; de
+	 * context van de ronde niet.
+	 *
+	 * Nu staat het in een JSON in de vault, zodat Obsidian Sync het meeneemt.
+	 * Gesleuteld op het productpad en niet op de naam: een hernoemd product is
+	 * hetzelfde product.
 	 */
 	readonly bought: Map<string, { count: Count | null; check: boolean }> = new Map();
-	/** Session-only tweaks from the + / − buttons, applied to both renderings. */
+	/** Tweaks from the + / − buttons, applied to both renderings. */
 	readonly nudge: Map<string, number> = new Map();
 
 	constructor(plugin: PantryPlugin) {
@@ -58,6 +75,117 @@ export class GroceryList {
 		return normalizePath(this.plugin.settings.listNote || "Groceries.md");
 	}
 
+	/** Waar de lopende boodschappenronde bewaard wordt. */
+	statePath(): string {
+		return normalizePath(
+			this.plugin.settings.shoppingState || DEFAULT_STATE_PATH
+		);
+	}
+
+	isStateFile(path: string): boolean {
+		return normalizePath(path) === this.statePath();
+	}
+
+	/**
+	 * Leest de lopende ronde terug.
+	 *
+	 * Alles wat geen geldig getal of pad is verdwijnt: dit bestand staat in de
+	 * vault en kan door sync half aankomen of met de hand aangeraakt worden.
+	 */
+	async loadState(): Promise<void> {
+		const file = this.plugin.app.vault.getFileByPath(this.statePath());
+		if (!file) return;
+
+		let raw: unknown;
+		try {
+			raw = JSON.parse(await this.plugin.app.vault.cachedRead(file));
+		} catch {
+			// Kapotte JSON is geen reden om de ronde te wissen; laat staan wat
+			// er is en schrijf hem bij de volgende tik opnieuw.
+			return;
+		}
+
+		const state = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+		this.bought.clear();
+		this.nudge.clear();
+
+		const bought = state.bought;
+		if (bought && typeof bought === "object") {
+			for (const [path, value] of Object.entries(bought as Record<string, unknown>)) {
+				const entry = value && typeof value === "object"
+					? (value as Record<string, unknown>)
+					: {};
+				const count = parseCount(entry.count);
+				this.bought.set(path, {
+					count: entry.count === null ? null : count,
+					check: entry.check === true,
+				});
+			}
+		}
+
+		const nudge = state.nudge;
+		if (nudge && typeof nudge === "object") {
+			for (const [path, value] of Object.entries(nudge as Record<string, unknown>)) {
+				const step = Number(value);
+				if (Number.isFinite(step) && step !== 0) this.nudge.set(path, step);
+			}
+		}
+	}
+
+	/** Verandert de ± aanpassing van één product, en bewaart de ronde. */
+	setNudge(path: string, step: number): void {
+		if (step === 0) this.nudge.delete(path);
+		else this.nudge.set(path, step);
+		this.saveState();
+	}
+
+	/**
+	 * Schrijft de ronde weg, gedebounced.
+	 *
+	 * In de winkel tik je tien producten achter elkaar af; één schrijfactie per
+	 * tik is tien sync-events op mobiele data.
+	 */
+	private saveState = debounce(() => {
+		guarded("could not save your shopping round", () => this.writeState());
+	}, 1500, true);
+
+	/** Schrijft de ronde nu weg, zonder te wachten op de debounce. */
+	async flushState(): Promise<void> {
+		this.saveState.cancel();
+		await this.writeState();
+	}
+
+	private async writeState(): Promise<void> {
+		const { vault } = this.plugin.app;
+		const path = this.statePath();
+		const file = vault.getFileByPath(path);
+
+		const empty = this.bought.size === 0 && this.nudge.size === 0;
+		// Geen ronde bezig en nog geen bestand: dan ook geen map aanmaken.
+		if (empty && !file) return;
+
+		const state = {
+			version: STATE_VERSION,
+			bought: Object.fromEntries(this.bought),
+			nudge: Object.fromEntries(this.nudge),
+		};
+		const content = `${JSON.stringify(state, null, "\t")}\n`;
+
+		if (!file) {
+			await ensureFolder(vault, path);
+			this.lastState = content;
+			await vault.create(path, content);
+			return;
+		}
+		if ((await vault.cachedRead(file)) === content) return;
+		this.lastState = await vault.process(file, () => content);
+	}
+
+	/** Herkent de echo van onze eigen schrijfactie; zie wroteExactly. */
+	wroteStateExactly(content: string): boolean {
+		return this.lastState !== null && content === this.lastState;
+	}
+
 	file(): TFile | null {
 		return this.plugin.app.vault.getFileByPath(this.path());
 	}
@@ -66,8 +194,15 @@ export class GroceryList {
 		return normalizePath(path) === this.path();
 	}
 
-	recentlyWrote(): boolean {
-		return Date.now() - this.lastWrite < 800;
+	/**
+	 * Is dit precies wat wij net geschreven hebben?
+	 *
+	 * Op inhoud en niet op tijd: een venster van 800 ms gooide een vinkje weg
+	 * dat de gebruiker er net binnen zette, en dekte tegelijk een trage flush
+	 * niet. Zie dezelfde afweging in `PlanStore.wroteExactly`.
+	 */
+	wroteExactly(content: string): boolean {
+		return this.lastWritten !== null && content === this.lastWritten;
 	}
 
 	amount(product: Product): number | null {
@@ -106,11 +241,14 @@ export class GroceryList {
 			.filter((product): product is Product => product !== null);
 	}
 
+	private lastState: string | null = null;
+
 	async markBought(product: Product): Promise<void> {
 		// Ook de check-vlag bewaren: die wordt hieronder gewist, en zonder
 		// bewaren kreeg een product uit "Check first" hem nooit meer terug.
 		this.bought.set(product.path, { count: product.count, check: product.check });
 		this.nudge.delete(product.path);
+		this.saveState();
 		await this.plugin.products.update(product, { count: "plus", check: false });
 		await this.write();
 	}
@@ -118,6 +256,7 @@ export class GroceryList {
 	async undoBought(product: Product): Promise<void> {
 		const before = this.bought.get(product.path);
 		this.bought.delete(product.path);
+		this.saveState();
 		await this.plugin.products.update(product, {
 			count: before?.count ?? null,
 			check: before?.check ?? false,
@@ -129,12 +268,14 @@ export class GroceryList {
 	private async markBoughtQuietly(product: Product): Promise<void> {
 		this.bought.set(product.path, { count: product.count, check: product.check });
 		this.nudge.delete(product.path);
+		this.saveState();
 		await this.plugin.products.update(product, { count: "plus", check: false });
 	}
 
 	private async undoBoughtQuietly(product: Product): Promise<void> {
 		const before = this.bought.get(product.path);
 		this.bought.delete(product.path);
+		this.saveState();
 		await this.plugin.products.update(product, {
 			count: before?.count ?? null,
 			check: before?.check ?? false,
@@ -214,8 +355,9 @@ export class GroceryList {
 		if (!file) {
 			if (this.isEmpty()) return;
 			await ensureFolder(vault, path);
-			this.lastWrite = Date.now();
-			await vault.create(path, this.template());
+			const fresh = this.template();
+			this.lastWritten = fresh;
+			await vault.create(path, fresh);
 			return;
 		}
 
@@ -226,11 +368,12 @@ export class GroceryList {
 		const wanted = this.rebuild(current);
 		if (current.trim() === wanted.trim()) return;
 
-		this.lastWrite = Date.now();
 		// process() in plaats van modify(): dit is precies de notitie die je
 		// waarschijnlijk open hebt staan, en een blinde modify gooit weg wat er
 		// tussen lezen en schrijven bij kwam.
-		await vault.process(file, (latest: string) => this.rebuild(latest));
+		this.lastWritten = await vault.process(file, (latest: string) =>
+			this.rebuild(latest)
+		);
 	}
 
 	/**

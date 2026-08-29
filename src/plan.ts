@@ -63,16 +63,24 @@ function parseUsed(value: unknown): { used?: Record<string, number> } {
 /** Reads and writes the ```meal-plan block that holds one week of planning. */
 export class PlanStore {
 	private plugin: PantryPlugin;
-	/** Timestamp of our own last write, so we can ignore the echo it causes. */
-	private lastWrite = 0;
+	/** De inhoud van onze laatste schrijfactie, om de echo ervan te herkennen. */
+	private lastWritten: string | null = null;
 
 	constructor(plugin: PantryPlugin) {
 		this.plugin = plugin;
 	}
 
-	/** True right after Pantry itself saved, i.e. the change is not external. */
-	recentlyWrote(): boolean {
-		return Date.now() - this.lastWrite < 600;
+	/**
+	 * Is dit precies wat wij net geschreven hebben?
+	 *
+	 * Eerst was dit een tijdvenster van 600 ms, en dat was aan twee kanten mis:
+	 * een wijziging die sync binnen dat venster binnenbracht werd weggegooid,
+	 * en de vertraagde flush van `writeThroughEditor` duurt juist langer dan
+	 * 600 ms. Een vergelijking op inhoud heeft geen van beide problemen — hij
+	 * herkent onze eigen echo precies, en niets anders.
+	 */
+	wroteExactly(content: string): boolean {
+		return this.lastWritten !== null && content === this.lastWritten;
 	}
 
 	/** True voor elke notitie in de planmap. */
@@ -220,27 +228,23 @@ export class PlanStore {
 		const path = this.notePath(weekStart);
 		const block = `\`\`\`${BLOCK_LANGUAGE}\n${PlanStore.serialise(plan)}\n\`\`\``;
 
-		this.lastWrite = Date.now();
-
 		const existing = vault.getFileByPath(path);
 		if (!existing) {
 			await ensureFolder(vault, path);
-			await vault.create(path, PlanStore.template(weekStart, block));
-			this.lastWrite = Date.now();
+			const fresh = PlanStore.template(weekStart, block);
+			this.lastWritten = fresh;
+			await vault.create(path, fresh);
 			return;
 		}
 
 		// Prefer the editor when the note is open: rewriting the whole file
 		// replaces the editor's document, which drops the cursor at the end and
 		// scrolls the note to the bottom under the user.
-		if (this.writeThroughEditor(existing, block)) {
-			this.lastWrite = Date.now();
-			return;
-		}
+		if (this.writeThroughEditor(existing, block)) return;
 
 		const restoreScroll = this.capturePreviewScroll(existing);
 		let refused = false;
-		await vault.process(existing, (content: string) => {
+		this.lastWritten = await vault.process(existing, (content: string) => {
 			if (BLOCK_PATTERN.test(content)) {
 				// De functievorm, want `block` bevat vrije tekst: de dagnotitie
 				// typ je zelf. Als vervangingspatroon zou `$&` het complete
@@ -257,7 +261,6 @@ export class PlanStore {
 			}
 			return `${content.trimEnd()}\n\n${block}\n`;
 		});
-		this.lastWrite = Date.now();
 		restoreScroll();
 
 		if (refused) {
@@ -309,6 +312,9 @@ export class PlanStore {
 				editor.offsetToPos(match.index),
 				editor.offsetToPos(match.index + match[0].length)
 			);
+			// De editor flusht pas seconden later naar schijf; onthoud nu al wat
+			// er straks in het modify-event zal staan.
+			this.lastWritten = editor.getValue();
 
 			// Live Preview tears the rendered block down and builds it again, so
 			// the position is put back once more after that has settled.
@@ -395,11 +401,11 @@ export class PlanStore {
 			if (!touched) continue;
 
 			const block = `\`\`\`${BLOCK_LANGUAGE}\n${PlanStore.serialise(plan)}\n\`\`\``;
-			this.lastWrite = Date.now();
-			await this.plugin.app.vault.process(file, (current: string) =>
-				current.replace(BLOCK_PATTERN, block)
+			this.lastWritten = await this.plugin.app.vault.process(file, (current: string) =>
+				// Functievorm: zie `save()`. Een dagnotitie met `$&` erin zou het
+				// oude blok midden in het nieuwe plakken.
+				current.replace(BLOCK_PATTERN, () => block)
 			);
-			this.lastWrite = Date.now();
 			changedNotes++;
 		}
 

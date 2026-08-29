@@ -20,6 +20,12 @@ export interface PantrySettings {
 	productFolder: string;
 	/** Note the grocery list is mirrored into. */
 	listNote: string;
+	/**
+	 * JSON in de vault met de lopende boodschappenronde: wat er in het mandje
+	 * ligt en wat de telling ervóór was. In de vault en niet in `data.json`,
+	 * zodat Obsidian Sync hem meeneemt van laptop naar telefoon.
+	 */
+	shoppingState: string;
 	/** Folder holding one note per shop, each listing its shelves in order. */
 	shopFolder: string;
 	/** 0 = Sunday, 1 = Monday, ... 6 = Saturday. */

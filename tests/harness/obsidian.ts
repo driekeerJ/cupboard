@@ -40,6 +40,21 @@ export class Setting {}
 export class Notice {}
 export class App {}
 
+/**
+ * Obsidians `debounce`, maar dan meteen: in een test wil je het resultaat van
+ * een schrijfactie in dezelfde stap kunnen nakijken, niet anderhalve seconde
+ * later. `cancel()` hoort erbij omdat de plugin hem bij `onunload` aanroept.
+ */
+export function debounce<T extends unknown[]>(
+	fn: (...args: T) => unknown
+): ((...args: T) => void) & { cancel: () => void } {
+	const run = (...args: T): void => {
+		fn(...args);
+	};
+	run.cancel = (): void => undefined;
+	return run;
+}
+
 export function normalizePath(path: string): string {
 	return path.replace(/\\/g, "/").replace(/\/{2,}/g, "/").replace(/^\/|\/$/g, "");
 }

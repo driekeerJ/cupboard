@@ -349,7 +349,7 @@ export class ShoppingView extends ItemView {
 	private nudge(product: Product, step: number): void {
 		const current = this.amount(product) ?? 0;
 		if (step < 0 && current <= 1) return;
-		this.plugin.list.nudge.set(
+		this.plugin.list.setNudge(
 			product.path,
 			(this.plugin.list.nudge.get(product.path) ?? 0) + step
 		);

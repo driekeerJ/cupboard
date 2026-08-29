@@ -10,7 +10,7 @@ import {
 	debounce,
 	normalizePath,
 } from "obsidian";
-import { DEFAULT_SETTINGS, PantrySettingTab } from "./settings";
+import { DEFAULT_SETTINGS, PantrySettingTab, normaliseSettings } from "./settings";
 import { SetupWizard } from "./ui/setup-wizard";
 import { PLANNER_VIEW_TYPE, PlannerView } from "./view/planner-view";
 import { COOK_VIEW_TYPE, CookView } from "./ui/cook-view";
@@ -125,6 +125,10 @@ export default class PantryPlugin extends Plugin {
 			this.products.build();
 			guarded("could not read your shops", async () => {
 				await this.shops.build();
+				// De lopende boodschappenronde vóór de lijst: anders schrijft
+				// refresh() een lijst zonder mandje, en ben je kwijt wat er al
+				// in het karretje ligt.
+				await this.list.loadState();
 				await this.list.refresh();
 			});
 			// Kooksessies zijn bedoeld om te verlopen: één keer koken, één
@@ -311,8 +315,22 @@ export default class PantryPlugin extends Plugin {
 
 		this.addSettingTab(new PantrySettingTab(this.app, this));
 
+		// Het statebestand is JSON, geen notitie, dus het komt niet langs de
+		// metadata-cache. Zo pikt de telefoon op wat de laptop in de winkel deed.
 		this.registerEvent(
-			this.app.metadataCache.on("changed", (file: TFile) => {
+			this.app.vault.on("modify", (file: TAbstractFile) => {
+				if (!(file instanceof TFile) || !this.list.isStateFile(file.path)) return;
+				guarded("could not read your shopping round", async () => {
+					const content = await this.app.vault.cachedRead(file);
+					if (this.list.wroteStateExactly(content)) return;
+					await this.list.loadState();
+					this.refreshStockViews();
+				});
+			})
+		);
+
+		this.registerEvent(
+			this.app.metadataCache.on("changed", (file: TFile, data: string) => {
 				if (this.shops.isShopNote(file.path)) {
 					// Hertekenen ná de herbouw, niet ernaast: anders lezen de
 					// schermen de winkels zoals ze vóór de wijziging waren.
@@ -325,7 +343,7 @@ export default class PantryPlugin extends Plugin {
 				}
 				if (this.list.isListNote(file.path)) {
 					// Someone ticked a box in the note itself; skip our own echo.
-					if (!this.list.recentlyWrote()) {
+					if (!this.list.wroteExactly(data)) {
 						guarded("could not read your grocery note", () =>
 							this.list.syncFromNote()
 						);
@@ -333,11 +351,12 @@ export default class PantryPlugin extends Plugin {
 					return;
 				}
 				// De echo van onze eigen planwijziging overslaan — het raster
-				// toont die al. Alleen voor de planmap zelf: stond deze check
-				// verderop in scheduleRefresh, dan slikte hij ook een
-				// productwijziging op die toevallig binnen hetzelfde venster
-				// viel, en dat pad is nu het enige dat er is.
-				if (this.plans.isPlanNote(file.path) && this.plans.recentlyWrote()) return;
+				// toont die al. Op inhoud en niet op tijd: een tijdvenster gooit
+				// een wijziging weg die sync er net binnen doorheen duwt, en
+				// dekt tegelijk de vertraagde flush van de editor niet.
+				if (this.plans.isPlanNote(file.path) && this.plans.wroteExactly(data)) {
+					return;
+				}
 				if (this.plans.isPlanNote(file.path) || this.isRecipe(file)) {
 					this.plannerDirty = true;
 				}
@@ -525,6 +544,9 @@ export default class PantryPlugin extends Plugin {
 		// zonder dit blijven ze staan als de plugin wordt uitgezet.
 		EatersPopover.closeAny();
 		this.scheduleRefresh.cancel();
+		// Een ronde die nog in de debounce hing hoort niet verloren te gaan
+		// omdat je de plugin uitzet terwijl je in de winkel staat.
+		guarded("could not save your shopping round", () => this.list.flushState());
 	}
 
 	async activatePlanner(): Promise<void> {
@@ -562,7 +584,8 @@ export default class PantryPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		// Gevalideerd, niet samengevoegd: zie normaliseSettings.
+		this.settings = normaliseSettings(await this.loadData());
 	}
 
 	async saveSettings(): Promise<void> {
