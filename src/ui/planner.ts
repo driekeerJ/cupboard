@@ -281,7 +281,7 @@ export class PlannerGrid {
 			cls: "pantry-title",
 			text: `Week ${weekId(this.weekStart).split("-W")[1]}`,
 		});
-		titles.createEl("span", {
+		titles.createSpan({
 			cls: "pantry-subtitle",
 			text: formatRange(this.weekStart),
 		});
@@ -338,7 +338,9 @@ export class PlannerGrid {
 		const grid = this.gridEl;
 		if (!grid) return;
 		grid.empty();
-		grid.style.setProperty("--pantry-columns", "7");
+		// Een CSS-variabele, geen opmaak: de stylesheet bepaalt wat er met het
+		// aantal kolommen gebeurt, deze regel zegt alleen hoeveel het er zijn.
+		grid.setCssProps({ "--pantry-columns": "7" });
 
 		const { meals } = this.plugin.settings;
 		if (meals.length === 0) {
@@ -446,9 +448,11 @@ export class PlannerGrid {
 		input.value = noteAt(this.plan, isoDate);
 		if (input.value.length > 0) wrap.addClass("has-note");
 
+		// Meegroeien met wat je typt kan alleen gemeten worden, niet in CSS
+		// gezet: de hoogte volgt uit `scrollHeight` van dit ene veld.
 		const grow = (): void => {
-			input.style.height = "auto";
-			input.style.height = `${Math.max(input.scrollHeight, 28)}px`;
+			input.setCssStyles({ height: "auto" });
+			input.setCssStyles({ height: `${Math.max(input.scrollHeight, 28)}px` });
 		};
 		// Not laid out yet on the first draw, so scrollHeight is still 0.
 		window.requestAnimationFrame(grow);

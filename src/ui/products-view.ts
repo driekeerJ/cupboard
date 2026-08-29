@@ -48,8 +48,10 @@ export class ProductsView extends ItemView {
 		return "package";
 	}
 
-	async onOpen(): Promise<void> {
+	onOpen(): Promise<void> {
 		this.draw();
+		// Obsidian verwacht een promise; hier valt niets te wachten.
+		return Promise.resolve();
 	}
 
 	refresh(): void {

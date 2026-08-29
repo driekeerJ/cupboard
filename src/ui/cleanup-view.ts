@@ -122,10 +122,10 @@ export class CleanupView extends ItemView {
 	private queue(): Card[] {
 		const unknown: Card[] = this.plugin.cleanup
 			.missing()
-			.map((entry) => ({ kind: "unknown", entry }) as Card);
+			.map((entry) => ({ kind: "unknown", entry }));
 		const products: Card[] = this.plugin.cleanup
 			.open()
-			.map((issue) => ({ kind: "product", issue }) as Card);
+			.map((issue) => ({ kind: "product", issue }));
 
 		const cards = [...unknown, ...products];
 		const key = (card: Card): string =>

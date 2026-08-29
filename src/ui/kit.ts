@@ -63,7 +63,7 @@ export function emptyState(
  */
 export function keepScroll(body: HTMLElement): () => void {
 	const scroller =
-		(body.closest(".view-content") as HTMLElement | null) ?? body.parentElement;
+		(body.closest(".view-content")) ?? body.parentElement;
 	const scroll = scroller?.scrollTop ?? 0;
 	return () => {
 		if (scroller) scroller.scrollTop = scroll;

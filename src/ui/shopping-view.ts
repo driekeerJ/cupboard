@@ -54,12 +54,14 @@ export class ShoppingView extends ItemView {
 		return "shopping-cart";
 	}
 
-	async onOpen(): Promise<void> {
+	onOpen(): Promise<void> {
 		this.draw();
 		guarded("could not load your grocery list", async () => {
 			await this.reload();
 			this.restoreScroll();
 		});
+		// Obsidian verwacht een promise; hier valt niets te wachten.
+		return Promise.resolve();
 	}
 
 	/**

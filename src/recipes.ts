@@ -1,6 +1,7 @@
 import { TFile, normalizePath } from "obsidian";
 import { markdownIn } from "./folder";
 import { matchesQuery } from "./search";
+import { asText } from "./text";
 import type PantryPlugin from "./main";
 
 export interface Recipe {
@@ -31,7 +32,7 @@ export function toValues(raw: unknown): string[] {
 	if (raw === null || raw === undefined) return [];
 	if (Array.isArray(raw)) return raw.flatMap(toValues);
 	if (typeof raw === "boolean") return [raw ? "yes" : "no"];
-	const text = `${raw}`.trim();
+	const text = asText(raw).trim();
 	return text.length > 0 ? [text] : [];
 }
 
@@ -94,7 +95,7 @@ export class RecipeIndex {
 					bucket = new Set<string>();
 					found.set(field, bucket);
 				}
-				values.forEach((value) => bucket!.add(value));
+				values.forEach((value) => bucket.add(value));
 			}
 		}
 

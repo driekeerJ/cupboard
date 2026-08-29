@@ -39,6 +39,6 @@ export async function guard<T>(
 export function guarded(message: string, work: () => Promise<unknown>): void {
 	// De enige plek in de plugin waar een promise bewust niet afgewacht wordt.
 	// Hier mag het: `guard` vangt alles, dus er kan geen rejection ontsnappen.
-	// eslint-disable-next-line @typescript-eslint/no-floating-promises
+	// eslint-disable-next-line @typescript-eslint/no-floating-promises -- zie hierboven: guard() vangt alles, dus hier kan geen rejection ontsnappen.
 	guard(message, work);
 }

@@ -362,7 +362,7 @@ export class ProductSheet extends Modal {
 			label: LABELS[key],
 			value: spec.value,
 			options: spec.options,
-			apply: (value: string): ProductPatch => ({ [spec.field]: value }) as ProductPatch,
+			apply: (value: string): ProductPatch => ({ [spec.field]: value }),
 		});
 	}
 

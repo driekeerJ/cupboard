@@ -35,7 +35,7 @@ export class PlannerView extends ItemView {
 		return "utensils-crossed";
 	}
 
-	async onOpen(): Promise<void> {
+	onOpen(): Promise<void> {
 		const container = this.contentEl;
 		container.empty();
 		container.addClass("pantry-view");
@@ -62,6 +62,8 @@ export class PlannerView extends ItemView {
 
 		this.applyWidth();
 		this.watchWidth();
+		// Obsidian verwacht een promise; hier valt niets te wachten.
+		return Promise.resolve();
 	}
 
 	/**
@@ -88,7 +90,7 @@ export class PlannerView extends ItemView {
 		this.recipeList?.refresh();
 	}
 
-	async onClose(): Promise<void> {
+	onClose(): Promise<void> {
 		EatersPopover.closeAny();
 		this.resizeObserver?.disconnect();
 		this.resizeObserver = null;
@@ -96,5 +98,7 @@ export class PlannerView extends ItemView {
 		this.grid = null;
 		this.recipeList = null;
 		this.layoutEl = null;
+		// Obsidian verwacht een promise; hier valt niets te wachten.
+		return Promise.resolve();
 	}
 }

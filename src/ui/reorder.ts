@@ -49,12 +49,14 @@ export function enableRowDrag(
 		const grabOffset = startY - row.getBoundingClientRect().top;
 		let dragging = false;
 
+		// De rij volgt je vinger: dat is per frame een andere waarde, gemeten
+		// aan de positie op dat moment. Daar is geen CSS-klasse voor.
 		const place = (pointerY: number): void => {
 			// Read the row's own position with the transform cleared, so the
 			// offset stays honest after every re-insertion.
-			row.style.transform = "";
+			row.setCssStyles({ transform: "" });
 			const top = row.getBoundingClientRect().top;
-			row.style.transform = `translateY(${pointerY - grabOffset - top}px)`;
+			row.setCssStyles({ transform: `translateY(${pointerY - grabOffset - top}px)` });
 		};
 
 		const begin = (): void => {
@@ -100,7 +102,7 @@ export function enableRowDrag(
 			window.removeEventListener("pointermove", move);
 			window.removeEventListener("pointerup", stop);
 			window.removeEventListener("pointercancel", stop);
-			row.style.transform = "";
+			row.setCssStyles({ transform: "" });
 			row.removeClass("is-dragging");
 			spec.list.removeClass("is-reordering");
 			if (dragging) spec.commit(rowsOf(spec));

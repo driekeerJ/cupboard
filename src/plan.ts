@@ -10,6 +10,7 @@ import type PantryPlugin from "./main";
 import { addDays, toISODate, weekId } from "./date";
 import { markdownIn } from "./folder";
 import { ensureFolder, linkTarget, toLink } from "./notes";
+import { asText } from "./text";
 import type {
 	MealStatus,
 	MealType,
@@ -40,7 +41,7 @@ function asArray(value: unknown): unknown[] {
 
 /** The block is hand-editable, so anything but the two known words is dropped. */
 function parseStatus(value: unknown): { status?: MealStatus } {
-	const word = `${value ?? ""}`.trim().toLowerCase();
+	const word = asText(value).trim().toLowerCase();
 	if (word === "eaten" || word === "skipped") return { status: word };
 	return {};
 }
@@ -57,7 +58,7 @@ function parseUsed(value: unknown): { used?: Record<string, number> } {
 	const record = asRecord(value);
 	const used: Record<string, number> = {};
 	for (const [key, raw] of Object.entries(record)) {
-		const amount = Number.parseFloat(`${raw}`.replace(",", "."));
+		const amount = Number.parseFloat(asText(raw).replace(",", "."));
 		if (Number.isFinite(amount) && amount > 0) used[key] = amount;
 	}
 	return Object.keys(used).length > 0 ? { used } : {};
@@ -159,20 +160,20 @@ export class PlanStore {
 		const record = asRecord(raw);
 		const days: PlannedDay[] = asArray(record.days).map((rawDay) => {
 			const day = asRecord(rawDay);
-			const note = `${day.note ?? ""}`.trim();
+			const note = asText(day.note).trim();
 			return {
-				date: `${day.date ?? ""}`,
+				date: asText(day.date),
 				...(note.length > 0 ? { note } : {}),
 				meals: asArray(day.meals).map((rawMeal) => {
 					const meal = asRecord(rawMeal);
 					return {
-						meal: `${meal.meal ?? ""}`,
+						meal: asText(meal.meal),
 						recipes: asArray(meal.recipes).map((rawRecipe) => {
 							const entry = asRecord(rawRecipe);
-							const eaters = asArray(entry.eaters).map((id) => `${id}`);
+							const eaters = asArray(entry.eaters).map(asText).filter(Boolean);
 							const guests = Number(entry.guests ?? 0);
 							return {
-								recipe: `${entry.recipe ?? ""}`,
+								recipe: asText(entry.recipe),
 								eaters,
 								guests: Number.isFinite(guests) ? guests : 0,
 								...parseStatus(entry.status),
@@ -185,7 +186,7 @@ export class PlanStore {
 		});
 
 		return {
-			weekStart: `${record.weekStart ?? toISODate(weekStart)}`,
+			weekStart: asText(record.weekStart) || toISODate(weekStart),
 			days: days.filter((day) => day.date.length > 0),
 		};
 	}

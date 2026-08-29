@@ -75,12 +75,14 @@ export class StockView extends ItemView {
 		return "layout-list";
 	}
 
-	async onOpen(): Promise<void> {
+	onOpen(): Promise<void> {
 		this.draw();
 		guarded("could not load your stock", async () => {
 			await this.reload();
 			this.restoreScroll();
 		});
+		// Obsidian verwacht een promise; hier valt niets te wachten.
+		return Promise.resolve();
 	}
 
 	/**
@@ -101,8 +103,10 @@ export class StockView extends ItemView {
 		});
 	}
 
-	async onClose(): Promise<void> {
+	onClose(): Promise<void> {
 		this.forget();
+		// Obsidian verwacht een promise; hier valt niets te wachten.
+		return Promise.resolve();
 	}
 
 	refresh(): void {

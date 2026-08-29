@@ -389,7 +389,7 @@ export class EatersPopover {
 		if (!file) return null;
 		const frontmatter =
 			this.plugin.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
-		const raw = frontmatter[this.plugin.settings.servingsField];
+		const raw: unknown = frontmatter[this.plugin.settings.servingsField];
 		const value = Number(raw);
 		return Number.isFinite(value) && value > 0 ? value : null;
 	}
