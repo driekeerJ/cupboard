@@ -1,5 +1,6 @@
 import { TFile, normalizePath } from "obsidian";
 import { markdownIn } from "./folder";
+import { matchesQuery } from "./search";
 import type PantryPlugin from "./main";
 
 export interface Recipe {
@@ -49,16 +50,35 @@ export class RecipeIndex {
 		const folder = normalizePath(this.plugin.settings.recipeFolder ?? "");
 		if (folder.length === 0 || folder === "/") return [];
 
-		return markdownIn(this.plugin.app.vault, folder)
+		const found = new Map<string, TFile>();
+		for (const file of markdownIn(this.plugin.app.vault, folder)) {
+			found.set(file.path, file);
+		}
+		// Een recept dat ergens anders staat maar `pantry: recipe` in de
+		// frontmatter heeft, telt ook mee. De map blijft de gewone manier; dit
+		// is het uitje voor het recept dat om een andere reden ergens anders
+		// hoort te staan. Pantry stempelt haar eigen notities al zo — dat
+		// stempel werd alleen nooit gelezen.
+		for (const file of this.plugin.app.vault.getMarkdownFiles()) {
+			if (found.has(file.path)) continue;
+			if (isMarkedRecipe(this.frontmatter(file))) found.set(file.path, file);
+		}
+
+		return [...found.values()]
 			.map((file: TFile) => ({
 				path: file.path,
 				name: file.basename,
-				frontmatter:
-					(this.plugin.app.metadataCache.getFileCache(file)?.frontmatter as
-						| Record<string, unknown>
-						| undefined) ?? {},
+				frontmatter: this.frontmatter(file),
 			}))
 			.sort((a, b) => a.name.localeCompare(b.name));
+	}
+
+	private frontmatter(file: TFile): Record<string, unknown> {
+		return (
+			(this.plugin.app.metadataCache.getFileCache(file)?.frontmatter as
+				| Record<string, unknown>
+				| undefined) ?? {}
+		);
 	}
 
 	/** Every frontmatter field found, with the distinct values it takes. */
@@ -94,10 +114,10 @@ export class RecipeIndex {
 
 	/** Values are OR'd within a field, fields are AND'ed with each other. */
 	static matches(recipe: Recipe, query: string, filter: RecipeFilter): boolean {
-		const trimmed = query.trim().toLowerCase();
-		if (trimmed.length > 0 && !recipe.name.toLowerCase().includes(trimmed)) {
-			return false;
-		}
+		// Naam, aliassen en tags. Obsidian leest bij het zoeken ook de body;
+		// dat kan hier niet zonder elk bestand te lezen, maar zoeken dat alleen
+		// de titel kent is geen zoeken.
+		if (!matchesQuery(query, haystack(recipe))) return false;
 
 		for (const [field, wanted] of Object.entries(filter)) {
 			if (wanted.length === 0) continue;
@@ -122,6 +142,24 @@ function sortKey(recipe: Recipe, field: string): string | null {
 	const values = toValues(recipe.frontmatter[field]);
 	if (values.length === 0) return null;
 	return [...values].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))[0];
+}
+
+/** `pantry: recipe` in de frontmatter: het stempel dat Pantry zelf ook zet. */
+export function isMarkedRecipe(frontmatter: Record<string, unknown>): boolean {
+	return toValues(frontmatter.pantry).some(
+		(value) => value.trim().toLowerCase() === "recipe"
+	);
+}
+
+/** Waar de zoekterm in mag voorkomen: de titel, de aliassen en de tags. */
+function haystack(recipe: Recipe): string[] {
+	return [
+		recipe.name,
+		...toValues(recipe.frontmatter.aliases),
+		...toValues(recipe.frontmatter.alias),
+		...toValues(recipe.frontmatter.tags),
+		...toValues(recipe.frontmatter.tag),
+	];
 }
 
 const NUMBER = /^-?\d+(?:[.,]\d+)?$/;

@@ -19,6 +19,10 @@ import type {
 } from "./types";
 
 const BLOCK_LANGUAGE = "meal-plan";
+
+/** Eerlijk zijn over wat er met hand-edits in dit blok gebeurt. */
+const PLAN_BLOCK_NOTE =
+	"# Pantry herschrijft dit blok bij elke wijziging. Eigen velden en opmerkingen hierin gaan verloren.";
 /** Matches a fenced ```meal-plan block, capturing its body. */
 const BLOCK_PATTERN = /^```meal-plan[ \t]*\r?\n([\s\S]*?)^```[ \t]*$/m;
 
@@ -247,11 +251,17 @@ export class PlanStore {
 				.filter((day) => day.meals.length > 0 || day.note !== undefined)
 				.sort((a, b) => a.date.localeCompare(b.date)),
 		};
-		return stringifyYaml(clean).trimEnd();
+		// Dit blok wordt van nul opgebouwd: lege dagen vallen weg, de dagen
+		// worden gesorteerd en onbekende sleutels overleven het niet. Dat is
+		// verdedigbaar \u2014 het is gegenereerde inhoud \u2014 maar niet als je het
+		// pas merkt nadat je eigen opmerking verdwenen is. Dus staat het er nu
+		// bij, in het blok zelf, waar de lezer is.
+		return `${PLAN_BLOCK_NOTE}\n${stringifyYaml(clean).trimEnd()}`;
 	}
 
 	async save(weekStart: Date, plan: WeekPlan): Promise<void> {
 		const { vault } = this.plugin.app;
+
 		const path = this.notePath(weekStart);
 		const block = `\`\`\`${BLOCK_LANGUAGE}\n${this.serialise(plan)}\n\`\`\``;
 

@@ -78,14 +78,23 @@ export class HomeView extends ItemView {
 		guarded("could not refresh the home screen", () => this.reload());
 	}
 
-	/** Everything a tile can say has to be read before the tiles are drawn. */
+	/**
+	 * Everything a tile can say has to be read before the tiles are drawn.
+	 *
+	 * Lezen, nooit schrijven. Dit stond op `list.refresh()`, en dat is
+	 * `needs.rebuild()` plús een schrijfactie naar `Groceries.md` — bij élke
+	 * gedebouncede kluiswijziging, want dit scherm hangt aan `refreshViews()`.
+	 * Bij een koude metadata-cache leverde dat bovendien een lege lijst op, en
+	 * dan schreef het startscherm je boodschappennotitie leeg.
+	 */
 	private async reload(): Promise<void> {
 		this.plugin.products.build();
 		await this.plugin.shops.build();
-		await this.plugin.list.refresh();
-		await this.plugin.cleanup.rebuild();
 
 		const week = startOfWeek(new Date(), this.plugin.settings.weekStartDay);
+		await this.plugin.needs.rebuild(week);
+		await this.plugin.cleanup.rebuild();
+
 		const plan = await this.plugin.plans.load(week);
 		this.planned = plan.days.reduce(
 			(total, day) =>

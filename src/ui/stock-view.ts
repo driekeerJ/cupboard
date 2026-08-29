@@ -3,6 +3,7 @@ import { startOfWeek } from "../date";
 import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import { UNASSIGNED, type Count, type Product, type ProductPatch } from "../products";
+import { matchesQuery } from "../search";
 import { drawBackLink } from "./nav";
 import { ProductSheet } from "./product-sheet";
 import type { StockFilter as Filter } from "./view-memory";
@@ -175,10 +176,15 @@ export class StockView extends ItemView {
 		return product.minimum + this.extra(product);
 	}
 
+	/**
+	 * Hoeveel je hiervan moet kopen — dezelfde som als de boodschappenlijst.
+	 *
+	 * Stond hier met de hand overgeschreven, en zónder de ± aanpassingen uit
+	 * het boodschappenscherm. Na een handmatige ophoging in de winkel zei
+	 * Groceries "koop 3" en Voorraad "koop 2" over hetzelfde product.
+	 */
 	private buy(product: Product): number | null {
-		if (product.count === null) return null;
-		if (product.count === "plus") return 0;
-		return Math.max(0, this.need(product) - product.count);
+		return this.plugin.list.amount(product);
 	}
 
 	/**
@@ -205,10 +211,7 @@ export class StockView extends ItemView {
 		const query = this.query.trim().toLowerCase();
 		return this.plugin.products.all().filter((product) => {
 			if (query.length > 0) {
-				const haystack = [product.name, ...product.aliases]
-					.join(" ")
-					.toLowerCase();
-				if (!haystack.includes(query)) return false;
+				if (!matchesQuery(query, [product.name, ...product.aliases])) return false;
 				// Wie een naam intypt zoekt dát product, niet een selectie.
 				// `irrelevant()` verbergt een product met minimum 0 waar deze
 				// week geen recept om vraagt — dus je typte "bakpapier" en

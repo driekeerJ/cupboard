@@ -33,7 +33,7 @@ import { fromISODate, startOfWeek, toISODate } from "./date";
 import { guarded } from "./guard";
 import { EatersPopover } from "./ui/eaters-popover";
 import { PlannerGrid } from "./ui/planner";
-import { RecipeIndex } from "./recipes";
+import { RecipeIndex, isMarkedRecipe } from "./recipes";
 import type { PantrySettings } from "./types";
 
 /**
@@ -60,6 +60,9 @@ const SCREENS: { type: string; command: string; name: string }[] = [
 ];
 
 const PANTRY_VIEW_TYPES = SCREENS.map((screen) => screen.type);
+
+/** Hoe lang een losgekoppelde planner blijft wachten of zijn blok terugkomt. */
+const RECLAIM_MS = 2000;
 
 /** Een scherm dat zichzelf opnieuw kan tekenen. */
 interface Refreshable {
@@ -287,7 +290,12 @@ export default class PantryPlugin extends Plugin {
 			const child = new MarkdownRenderChild(el);
 			ctx.addChild(child);
 
-			const key = `${ctx.sourcePath}::${toISODate(anchor)}`;
+			// De regel waar het blok begint hoort in de sleutel: twee
+			// `meal-plan`-blokken voor dezelfde week in één notitie kregen
+			// anders dezelfde sleutel, en dan sloopte `live.destroy()` de
+			// planner van het eerste blok uit de DOM.
+			const line = ctx.getSectionInfo(el)?.lineStart ?? 0;
+			const key = `${ctx.sourcePath}::${toISODate(anchor)}::${line}`;
 			const live = this.embedded.get(key);
 
 			// Saving edits the note, which makes Live Preview tear this block
@@ -314,6 +322,17 @@ export default class PantryPlugin extends Plugin {
 			this.embedded.set(key, grid);
 			child.register(() => {
 				if (grid.element().parentElement === el) grid.detach();
+				// Elke bezochte (notitie, week, regel) hield tot unload een
+				// PlannerGrid met DOM-boom vast. Loslaten mag pas als niemand
+				// hem terugpakt: een gewone bewerking breekt het blok af en
+				// bouwt het meteen opnieuw op, en juist dán is dit geheugen de
+				// hele reden dat het scherm niet flikkert.
+				window.setTimeout(() => {
+					if (this.embedded.get(key) !== grid) return;
+					if (grid.element().parentElement) return;
+					grid.destroy();
+					this.embedded.delete(key);
+				}, RECLAIM_MS);
 			});
 			guarded("could not draw the planner", () => grid.render());
 		});
@@ -566,7 +585,12 @@ export default class PantryPlugin extends Plugin {
 	isRecipe(file: TFile): boolean {
 		if (file.extension !== "md") return false;
 		const folder = normalizePath(this.settings.recipeFolder || "Recipes");
-		return file.path.startsWith(`${folder}/`);
+		if (file.path.startsWith(`${folder}/`)) return true;
+		// Naast de map ook het stempel, zodat een recept dat om een andere
+		// reden ergens anders staat toch meetelt \u2014 en zodat een wijziging
+		// eraan het scherm bijwerkt in plaats van stilletjes te verdwijnen.
+		const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+		return isMarkedRecipe((frontmatter as Record<string, unknown>) ?? {});
 	}
 
 	/**

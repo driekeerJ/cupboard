@@ -8,6 +8,7 @@ import {
 	type UnknownIngredient,
 } from "../cleanup";
 import type { Product } from "../products";
+import { matchesQuery } from "../search";
 import { drawBackLink } from "./nav";
 
 export const CLEANUP_VIEW_TYPE = "pantry-cleanup";
@@ -386,7 +387,7 @@ export class CleanupView extends ItemView {
 			const query = search.value.trim().toLowerCase();
 			this.plugin.products
 				.all()
-				.filter((product) => product.name.toLowerCase().includes(query))
+				.filter((product) => matchesQuery(query, [product.name, ...product.aliases]))
 				.slice(0, 8)
 				.forEach((product) => {
 					const row = results.createEl("button", {

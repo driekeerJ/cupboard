@@ -78,6 +78,32 @@ export interface ProductPatch {
 
 export const UNASSIGNED = "Unsorted";
 
+/**
+ * Wat er onder de frontmatter komt te staan bij een nieuw product.
+ *
+ * De uitleg hoort in de notitie, niet in de broncode van de plugin: wie over
+ * tien jaar `Rijst.md` opent ziet `count: "+"`, `used: 0.33` en `previous: 4`
+ * staan, en heeft dan iets aan een legenda op dezelfde pagina. Winkelnotities
+ * en weeknotities doen dit al.
+ */
+const PRODUCT_BODY = [
+	"",
+	"> [!info]- Wat staat hier",
+	"> `minimum` \u2014 hoeveel je hier altijd van in huis wilt hebben.",
+	"> `unit` \u2014 waarin je telt: stuk, pak, kg.",
+	"> `size` \u2014 hoeveel er in \u00e9\u00e9n verpakking zit, in de eenheid van je recepten.",
+	"> `shop`, `shelf` \u2014 waar je het haalt en waar het in de winkel ligt.",
+	"> `storage` \u2014 waar het thuis staat.",
+	"> `aliases` \u2014 andere namen waarmee je recepten dit product noemen.",
+	"> `count` \u2014 de stand. `+` betekent: genoeg, niet geteld.",
+	"> `used` \u2014 wat er sinds de laatste telling van op is, als deel van \u00e9\u00e9n eenheid.",
+	"> `previous`, `counted` \u2014 de vorige stand en wanneer je voor het laatst telde.",
+	"> `check` \u2014 met de hand gemarkeerd: hier wil je naar kijken.",
+	"",
+	"Pantry beheert de frontmatter hierboven. Deze tekst is van jou.",
+	"",
+].join("\n");
+
 function text(value: unknown): string {
 	return typeof value === "string" ? value.trim() : "";
 }
@@ -405,7 +431,7 @@ export class ProductIndex {
 		const existing = this.plugin.app.vault.getFileByPath(path);
 		if (existing) return existing;
 
-		const file = await this.plugin.app.vault.create(path, "");
+		const file = await this.plugin.app.vault.create(path, PRODUCT_BODY);
 		await this.plugin.app.fileManager.processFrontMatter(
 			file,
 			(frontmatter: Record<string, unknown>) => {

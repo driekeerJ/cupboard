@@ -2,6 +2,7 @@ import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import { UNASSIGNED, missingFields, type Product } from "../products";
+import { matchesQuery } from "../search";
 import { drawBackLink } from "./nav";
 import { ProductSheet } from "./product-sheet";
 
@@ -124,9 +125,7 @@ export class ProductsView extends ItemView {
 		const query = this.query.trim().toLowerCase();
 		return this.plugin.products.all().filter((product) => {
 			if (this.shop && product.shop !== this.shop) return false;
-			if (query.length === 0) return true;
-			const haystack = [product.name, ...product.aliases].join(" ").toLowerCase();
-			return haystack.includes(query);
+			return matchesQuery(query, [product.name, ...product.aliases]);
 		});
 	}
 
