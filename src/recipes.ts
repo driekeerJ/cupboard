@@ -142,7 +142,10 @@ function sortKey(recipe: Recipe, field: string): string | null {
 	if (field === NAME_FIELD) return recipe.name;
 	const values = toValues(recipe.frontmatter[field]);
 	if (values.length === 0) return null;
-	return [...values].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))[0];
+	return (
+		[...values].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))[0] ??
+		null
+	);
 }
 
 /** `pantry: recipe` in de frontmatter: het stempel dat Pantry zelf ook zet. */

@@ -14,12 +14,17 @@
     "strict": true,
 
     // Toegevoegd in stap 0c. Alle vier gaven samen vier fouten, allemaal
-    // meteen opgelost. noUncheckedIndexedAccess staat bewust niet hier maar
-    // in tsconfig.strict.json: die geeft er nog vijftig.
+    // meteen opgelost.
     "noImplicitReturns": true,
     "exactOptionalPropertyTypes": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
+
+    // De achterstand uit stap 0c is weg: elke `arr[i]` en `obj[key]` is nu
+    // `T | undefined`, en dat is precies goed voor een plugin die alles uit
+    // frontmatter en gebruikersinvoer haalt. tsconfig.strict.json bestond
+    // alleen om die achterstand apart te houden en is daarmee overbodig.
+    "noUncheckedIndexedAccess": true,
 
     "lib": ["DOM", "ES2020"]
   },

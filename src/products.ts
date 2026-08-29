@@ -163,9 +163,9 @@ export function parseSize(raw: unknown): { amount: number; unit: string } | null
 	if (!value) return null;
 	const match = /^([\d.,]+)\s*([a-zA-Z]*)$/.exec(value);
 	if (!match) return null;
-	const amount = Number(match[1].replace(",", "."));
+	const amount = Number((match[1] ?? "").replace(",", "."));
 	if (!Number.isFinite(amount) || amount <= 0) return null;
-	return { amount, unit: match[2].toLowerCase() };
+	return { amount, unit: (match[2] ?? "").toLowerCase() };
 }
 
 /** Lowercase, no punctuation, singular. Two spellings of one thing must collide. */
@@ -263,7 +263,7 @@ export class ProductIndex {
 		if (link) {
 			// An explicit link is the author being precise; never second-guess it.
 			const target = this.plugin.app.metadataCache.getFirstLinkpathDest(
-				link[1].trim(),
+				(link[1] ?? "").trim(),
 				""
 			);
 			const linked = target ? this.byPath(target.path) : null;

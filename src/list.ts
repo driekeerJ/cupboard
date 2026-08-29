@@ -358,8 +358,8 @@ export class GroceryList {
 			const match = TICK.exec(line);
 			if (!match) continue;
 
-			const ticked = match[1].toLowerCase() === "x";
-			const product = this.resolve(match[2].trim());
+			const ticked = (match[1] ?? "").toLowerCase() === "x";
+			const product = this.resolve((match[2] ?? "").trim());
 			if (!product) continue;
 
 			if (ticked && !inBought && !this.bought.has(product.path)) {

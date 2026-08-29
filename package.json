@@ -7,7 +7,6 @@
     "dev": "node esbuild.config.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "typecheck:strict": "tsc -noEmit -skipLibCheck -p tsconfig.strict.json",
     "test": "node --import ./tests/harness/register.mjs --test \"tests/**/*.test.ts\"",
     "build": "npm run test && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "build:deploy": "npm run build && node scripts/deploy.mjs"

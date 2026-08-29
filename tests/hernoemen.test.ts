@@ -68,7 +68,8 @@ test("used staat als leesbare link in het weekplan", async () => {
 	// pad bij hernoemen niet bij.
 	const h = await run();
 	const week = await h.plugin.plans.load(WEEK);
-	const entry = week.days[0].meals[0].recipes[0];
+	const entry = week.days[0]?.meals[0]?.recipes[0];
+	assert.ok(entry);
 	entry.status = "eaten";
 	entry.used = { "Products/Rijst.md": 0.334 };
 	await h.plugin.plans.save(WEEK, week);
@@ -77,7 +78,7 @@ test("used staat als leesbare link in het weekplan", async () => {
 
 	// En het leest terug als getal, ook met de eenheid erachter.
 	const again = await h.plugin.plans.load(WEEK);
-	assert.equal(again.days[0].meals[0].recipes[0].used?.["[[Rijst]]"], 0.334);
+	assert.equal(again.days[0]?.meals[0]?.recipes[0]?.used?.["[[Rijst]]"], 0.334);
 });
 
 test("een verdwenen product bij het terugboeken wordt gemeld", async () => {

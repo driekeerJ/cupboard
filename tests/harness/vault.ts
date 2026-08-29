@@ -33,7 +33,7 @@ function splitFrontMatter(markdown: string): {
 } {
 	const match = FRONTMATTER.exec(markdown);
 	if (!match) return { data: {}, body: markdown };
-	const parsed = load(match[1]);
+	const parsed = load(match[1] ?? "");
 	const data =
 		parsed && typeof parsed === "object" && !Array.isArray(parsed)
 			? (parsed as Record<string, unknown>)

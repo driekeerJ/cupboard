@@ -11,7 +11,7 @@ export const LINK_TARGET = /\[\[([^\]|#]+)/;
 /** Turns "[[Chickpea stew|stew]]" into "Chickpea stew". */
 export function linkTarget(value: string): string {
 	const match = new RegExp(`^${LINK_TARGET.source}`).exec(value.trim());
-	return (match ? match[1] : value).trim();
+	return (match?.[1] ?? value).trim();
 }
 
 export function toLink(name: string): string {
@@ -41,6 +41,6 @@ export function linkTargets(line: string): string[] {
 export function withoutLinks(line: string): string {
 	return line.replace(/\[\[([^\]]+)\]\]/g, (_all, inner: string) => {
 		const parts = inner.split("|");
-		return (parts[1] ?? parts[0]).trim();
+		return (parts[1] ?? parts[0] ?? "").trim();
 	});
 }

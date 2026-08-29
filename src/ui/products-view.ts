@@ -290,9 +290,11 @@ export class ProductsView extends ItemView {
 	}
 
 	private openSheet(queue: Product[], index: number): void {
+		const product = queue[index];
+		if (!product) return;
 		new ProductSheet(
 			this.plugin,
-			queue[index],
+			product,
 			"missing",
 			() => this.drawList(),
 			{ queue, index, allowDelete: true }

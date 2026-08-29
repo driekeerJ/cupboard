@@ -18,13 +18,13 @@ test("een huisgenoot zonder portiefactor telt voor één", () => {
 	const { household } = normaliseSettings({
 		household: [{ id: "me", name: "Jeroen" }],
 	});
-	assert.equal(household[0].portionFactor, 1);
+	assert.equal(household[0]?.portionFactor, 1);
 });
 
 test("een onmogelijke portiefactor wordt niet overgenomen", () => {
 	const factor = (value: unknown) =>
 		normaliseSettings({ household: [{ id: "x", name: "X", portionFactor: value }] })
-			.household[0].portionFactor;
+			.household[0]?.portionFactor;
 
 	assert.equal(factor(0), 1, "nul porties is geen antwoord");
 	assert.equal(factor(-2), 1);

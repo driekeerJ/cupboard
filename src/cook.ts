@@ -63,8 +63,11 @@ export function parseRecipeBody(markdown: string): RecipeBody {
 	for (const line of lines) {
 		const heading = HEADING.exec(line);
 		if (heading) {
-			const level = heading[1].length;
-			const title = heading[2].trim().toLowerCase().replace(/[:*_]+/g, "");
+			const level = (heading[1] ?? "").length;
+			const title = (heading[2] ?? "")
+				.trim()
+				.toLowerCase()
+				.replace(/[:*_]+/g, "");
 			if (INGREDIENT_HEADINGS.includes(title)) {
 				collecting = ingredients;
 				startLevel = level;
@@ -83,7 +86,8 @@ export function parseRecipeBody(markdown: string): RecipeBody {
 
 		if (!collecting) continue;
 		const item = LIST_ITEM.exec(line);
-		if (item && item[1].trim().length > 0) collecting.push(item[1].trim());
+		const text = item?.[1]?.trim() ?? "";
+		if (text.length > 0) collecting.push(text);
 	}
 
 	return { ingredients, steps };
@@ -118,7 +122,7 @@ export function findDurations(text: string): DurationMatch[] {
 	let match = DURATION.exec(text);
 	while (match) {
 		const amount = match[1] ? Number(match[1].replace(",", ".")) : 1;
-		const seconds = Math.round(amount * unitSeconds(match[3]));
+		const seconds = Math.round(amount * unitSeconds(match[3] ?? ""));
 		if (seconds > 0) {
 			found.push({
 				start: match.index,

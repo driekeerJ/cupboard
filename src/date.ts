@@ -75,7 +75,7 @@ export function weekId(weekStart: Date): string {
 
 export function formatDayHeader(date: Date): { weekday: string; day: string } {
 	return {
-		weekday: WEEKDAY_NAMES[date.getDay()],
+		weekday: WEEKDAY_NAMES[date.getDay()] ?? "",
 		day: `${date.getDate()}`,
 	};
 }

@@ -39,7 +39,7 @@ export function writeShelves(content: string, shelves: string[]): string {
 	for (const line of content.split(/\r?\n/)) {
 		const heading = HEADING.exec(line);
 		if (heading) {
-			inSection = SHELF_HEADING.test(heading[1]) && !wrote;
+			inSection = SHELF_HEADING.test(heading[1] ?? "") && !wrote;
 			kept.push(line);
 			if (inSection) {
 				kept.push("", ...bullets);
@@ -155,14 +155,14 @@ export class ShopIndex {
 				// elkaar op, en `setShelves` schreef ze allebei vol. Twee
 				// koppen betekende twee kopieën, en die verdubbelden bij elke
 				// opslag: 2 → 4 → 8 → 16.
-				const matches = SHELF_HEADING.test(heading[1]);
+				const matches = SHELF_HEADING.test(heading[1] ?? "");
 				collecting = matches && !seenSection;
 				if (matches) seenSection = true;
 				continue;
 			}
 			const bullet = BULLET.exec(line);
 			if (!bullet) continue;
-			const name = bullet[1].replace(/^\[[ xX]\]\s*/, "").trim();
+			const name = (bullet[1] ?? "").replace(/^\[[ xX]\]\s*/, "").trim();
 			if (name.length === 0) continue;
 			everything.push(name);
 			if (collecting) inSection.push(name);

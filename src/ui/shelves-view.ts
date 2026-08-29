@@ -66,7 +66,7 @@ export class ShelvesView extends ItemView {
 	private shopOrFirst(): Shop | null {
 		const shops = this.plugin.shops.all();
 		if (shops.length === 0) return null;
-		return this.plugin.shops.find(this.shop) ?? shops[0];
+		return this.plugin.shops.find(this.shop) ?? shops[0] ?? null;
 	}
 
 	private draw(): void {
@@ -357,7 +357,9 @@ export class ShelvesView extends ItemView {
 		const current =
 			shop.shelves.find(
 				(shelf) => shelf.toLowerCase() === this.shelf.toLowerCase()
-			) ?? shop.shelves[0];
+			) ??
+			shop.shelves[0] ??
+			"";
 
 		const picker = body.createDiv({ cls: "pantry-shelf-picker" });
 		shop.shelves.forEach((shelf) => {

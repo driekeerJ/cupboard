@@ -102,11 +102,14 @@ function readAmount(text: string): { value: number; length: number } | null {
 	// "1 ½", "1½"
 	const mixedGlyph = MIXED_GLYPH.exec(trimmed);
 	if (mixedGlyph) {
-		return at(mixedGlyph, Number(mixedGlyph[1]) + FRACTION_GLYPHS[mixedGlyph[2]]);
+		return at(
+			mixedGlyph,
+			Number(mixedGlyph[1]) + (FRACTION_GLYPHS[mixedGlyph[2] ?? ""] ?? 0)
+		);
 	}
 
 	const glyph = GLYPH.exec(trimmed);
-	if (glyph) return at(glyph, FRACTION_GLYPHS[glyph[1]]);
+	if (glyph) return at(glyph, FRACTION_GLYPHS[glyph[1] ?? ""] ?? 0);
 
 	// "1 1/2" — moet vóór de kale breuk én vóór het kale getal, anders leest
 	// de decimale tak alleen de 1 en wordt het recept met een derde
@@ -130,10 +133,12 @@ function readAmount(text: string): { value: number; length: number } | null {
 	// "2-3 uien". Op een boodschappenlijst is een bereik de bovengrens: met
 	// twee uien in huis sta je in de keuken met een recept dat er drie wil.
 	const range = RANGE.exec(trimmed);
-	if (range) return at(range, Math.max(decimal(range[1]), decimal(range[2])));
+	if (range) {
+		return at(range, Math.max(decimal(range[1] ?? ""), decimal(range[2] ?? "")));
+	}
 
 	const plain = PLAIN.exec(trimmed);
-	if (plain) return at(plain, decimal(plain[1]));
+	if (plain) return at(plain, decimal(plain[1] ?? ""));
 
 	return null;
 }
@@ -196,14 +201,14 @@ export function parseIngredient(line: string): ParsedIngredient {
 
 	const rest = raw.slice(amount.length).trimStart();
 	const word = /^([a-zA-Z]+\.?)(?=\s|$)/.exec(rest);
-	const candidate = word ? word[1] : null;
+	const candidate = word?.[1] ?? null;
 	const kind = classify(candidate);
 
 	// Only a recognised measure is eaten; anything else stays in the name so
 	// "3 cloves garlic" reads back exactly as it was written.
 	const known = candidate !== null && kind !== "piece";
 	const { name, note } = splitNote(
-		known ? rest.slice(word![0].length).trimStart() : rest
+		known ? rest.slice((word?.[0] ?? "").length).trimStart() : rest
 	);
 
 	return {

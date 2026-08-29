@@ -61,8 +61,8 @@ export function hasRegion(content: string, name: string): boolean {
 export function frontmatterValue(content: string, key: string): string | null {
 	const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content);
 	if (!match) return null;
-	const line = new RegExp(`^${key}\\s*:\\s*(.*)$`, "m").exec(match[1]);
-	return line ? line[1].trim().replace(/^["']|["']$/g, "") : null;
+	const line = new RegExp(`^${key}\\s*:\\s*(.*)$`, "m").exec(match[1] ?? "");
+	return line ? (line[1] ?? "").trim().replace(/^["']|["']$/g, "") : null;
 }
 
 /**

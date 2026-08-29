@@ -33,6 +33,7 @@ test("een dagnotitie met $& plakt het oude blok er niet in", async () => {
 	// terugverwijzing, en de dagnotitie is vrije tekst die je zelf typt.
 	const h = plan(`# Week 35\n\n${BLOK}\n`);
 	const week = await h.plugin.plans.load(WEEK);
+	assert.ok(week.days[0]);
 	week.days[0].note = "kosten $& en $1";
 	await h.plugin.plans.save(WEEK, week);
 
@@ -59,6 +60,7 @@ test("een blok zonder sluitende fence wordt niet aangevuld met een tweede", asyn
 test("eigen tekst rond het blok blijft staan", async () => {
 	const h = plan(`# Week 35\n\n## Boven\n\n${BLOK}\n\n## Onder\n\n- blijft\n`);
 	const week = await h.plugin.plans.load(WEEK);
+	assert.ok(week.days[0]);
 	week.days[0].note = "training";
 	await h.plugin.plans.save(WEEK, week);
 

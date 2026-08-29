@@ -120,7 +120,7 @@ export class PlanStore {
 		const match = BLOCK_PATTERN.exec(content);
 		if (!match) return PlanStore.emptyPlan(weekStart);
 
-		return this.normalise(PlanStore.parse(match[1], weekStart));
+		return this.normalise(PlanStore.parse(match[1] ?? "", weekStart));
 	}
 
 	/**
@@ -378,7 +378,7 @@ export class PlanStore {
 		return () => {
 			const apply = (): void =>
 				views.forEach((view, index) =>
-					view.currentMode.applyScroll(offsets[index])
+					view.currentMode.applyScroll(offsets[index] ?? 0)
 				);
 			apply();
 			window.setTimeout(apply, 120);
@@ -416,7 +416,7 @@ export class PlanStore {
 			const match = BLOCK_PATTERN.exec(content);
 			if (!match) continue;
 
-			const plan = PlanStore.parse(match[1], new Date());
+			const plan = PlanStore.parse(match[1] ?? "", new Date());
 			let touched = false;
 
 			for (const day of plan.days) {
@@ -458,7 +458,7 @@ export class PlanStore {
 			const match = BLOCK_PATTERN.exec(content);
 			if (!match) continue;
 
-			const plan = PlanStore.parse(match[1], new Date());
+			const plan = PlanStore.parse(match[1] ?? "", new Date());
 			let touched = false;
 
 			for (const day of plan.days) {

@@ -172,7 +172,9 @@ export class RecipeList {
 				delete this.filter[field];
 				continue;
 			}
-			const kept = this.filter[field].filter((value) => values.includes(value));
+			const kept = (this.filter[field] ?? []).filter((value) =>
+				values.includes(value)
+			);
 			if (kept.length === 0) delete this.filter[field];
 			else this.filter[field] = kept;
 		}

@@ -110,6 +110,7 @@ export class SetupWizard extends Modal {
 		const steps = this.steps;
 		this.step = Math.max(0, Math.min(steps.length - 1, step));
 		const current = steps[this.step];
+		if (!current) return;
 
 		this.titleTextEl?.setText(current.title);
 		this.introEl?.setText(current.intro);
@@ -283,7 +284,7 @@ export class SetupWizard extends Modal {
 			});
 
 			this.iconButton(row, "chevron-up", "Move up", index === 0, () => {
-				meals.splice(index - 1, 0, meals.splice(index, 1)[0]);
+				meals.splice(index - 1, 0, ...meals.splice(index, 1));
 				this.go(this.step);
 			});
 			this.iconButton(
@@ -292,7 +293,7 @@ export class SetupWizard extends Modal {
 				"Move down",
 				index === meals.length - 1,
 				() => {
-					meals.splice(index + 1, 0, meals.splice(index, 1)[0]);
+					meals.splice(index + 1, 0, ...meals.splice(index, 1));
 					this.go(this.step);
 				}
 			);

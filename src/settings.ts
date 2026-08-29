@@ -483,7 +483,7 @@ export class PantrySettingTab extends PluginSettingTab {
 					.setDisabled(index === 0)
 					.onClick(async () => {
 						if (index === 0) return;
-						meals.splice(index - 1, 0, meals.splice(index, 1)[0]);
+						meals.splice(index - 1, 0, ...meals.splice(index, 1));
 						await this.save();
 						this.plugin.refreshViews();
 						this.drawMeals(false);
@@ -496,7 +496,7 @@ export class PantrySettingTab extends PluginSettingTab {
 					.setDisabled(index === meals.length - 1)
 					.onClick(async () => {
 						if (index === meals.length - 1) return;
-						meals.splice(index + 1, 0, meals.splice(index, 1)[0]);
+						meals.splice(index + 1, 0, ...meals.splice(index, 1));
 						await this.save();
 						this.plugin.refreshViews();
 						this.drawMeals(false);

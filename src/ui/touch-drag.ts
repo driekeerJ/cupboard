@@ -161,6 +161,7 @@ export function enableTouchDrag(card: HTMLElement, spec: TouchDragSpec): void {
 		(event: TouchEvent) => {
 			if (event.touches.length !== 1) return;
 			const touch = event.touches[0];
+			if (!touch) return;
 			startX = touch.clientX;
 			startY = touch.clientY;
 			cancelTimer();

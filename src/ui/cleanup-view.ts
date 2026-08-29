@@ -175,16 +175,18 @@ export class CleanupView extends ItemView {
 		)}%`;
 
 		const card = queue[0];
+		if (!card) return;
 		if (card.kind === "unknown") this.drawUnknown(body, card.entry);
 		else this.drawProduct(body, card.issue);
 
-		if (queue.length > 1) {
+		const upcoming = queue[1];
+		if (upcoming) {
 			const next = body.createDiv({ cls: "pantry-queue-next" });
 			next.setText(
 				`Next: ${
-					queue[1].kind === "unknown"
-						? queue[1].entry.name
-						: queue[1].issue.product.name
+					upcoming.kind === "unknown"
+						? upcoming.entry.name
+						: upcoming.issue.product.name
 				}`
 			);
 		}

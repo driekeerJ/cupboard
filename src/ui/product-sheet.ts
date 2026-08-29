@@ -357,6 +357,7 @@ export class ProductSheet extends Modal {
 			};
 
 		const spec = specs[key];
+		if (!spec) return;
 		this.drawPicker(parent, {
 			key,
 			label: LABELS[key],
