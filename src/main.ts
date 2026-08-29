@@ -374,7 +374,38 @@ export default class PantryPlugin extends Plugin {
 		};
 		this.registerEvent(this.app.vault.on("create", touched));
 		this.registerEvent(this.app.vault.on("delete", touched));
-		this.registerEvent(this.app.vault.on("rename", touched));
+		this.registerEvent(
+			this.app.vault.on("rename", (file: TAbstractFile, oldPath: string) => {
+				// Obsidian werkt links in code blocks niet bij, en het weekplan
+				// verwijst naar recepten binnen een ```meal-plan-fence. Zonder
+				// dit vond `cook.file()` het recept daarna niet meer en stopte
+				// de maaltijd stilletjes met meetellen voor de lijst.
+				if (file instanceof TFile && this.shops.isShopNote(file.path)) {
+					const was = oldPath.slice(oldPath.lastIndexOf("/") + 1).replace(/\.md$/, "");
+					guarded("could not update your products", async () => {
+						await this.shops.build();
+						const changed = await this.products.renameShop(was, file.basename);
+						if (changed > 0) {
+							new Notice(
+								`Pantry moved ${changed} product${changed === 1 ? "" : "s"} to ${file.basename}.`
+							);
+						}
+					});
+				}
+				if (file instanceof TFile && this.isRecipe(file)) {
+					const was = oldPath.slice(oldPath.lastIndexOf("/") + 1).replace(/\.md$/, "");
+					guarded("could not update your meal plans", async () => {
+						const notes = await this.plans.renameRecipe(was, file.basename);
+						if (notes > 0) {
+							new Notice(
+								`Pantry updated ${notes} meal plan${notes === 1 ? "" : "s"}.`
+							);
+						}
+					});
+				}
+				touched(file);
+			})
+		);
 
 		// First run: walk the user through the handful of settings that matter.
 		this.app.workspace.onLayoutReady(() => {

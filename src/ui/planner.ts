@@ -164,7 +164,7 @@ export class PlannerGrid {
 	 * be reused instead of rebuilt.
 	 */
 	matches(source: string): boolean {
-		return PlanStore.serialise(this.plan).trim() === source.trim();
+		return this.plugin.plans.serialise(this.plan).trim() === source.trim();
 	}
 
 	/** Moves this planner into a new host, e.g. a freshly rebuilt code block. */

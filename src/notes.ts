@@ -9,6 +9,16 @@ import { Notice, TFile, type Vault } from "obsidian";
  * is. Wat de plugin niet herkent, blijft staan.
  */
 
+/** Turns "[[Chickpea stew|stew]]" into "Chickpea stew". */
+export function linkTarget(value: string): string {
+	const match = /^\[\[([^\]|#]+)/.exec(value.trim());
+	return (match ? match[1] : value).trim();
+}
+
+export function toLink(name: string): string {
+	return `[[${name}]]`;
+}
+
 /** Maakt de map van een pad aan als hij er nog niet is. */
 export async function ensureFolder(vault: Vault, path: string): Promise<void> {
 	const folder = path.slice(0, path.lastIndexOf("/"));

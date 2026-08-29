@@ -78,6 +78,16 @@ export class CookView extends ItemView {
 	}
 
 	async onOpen(): Promise<void> {
+		// Het pad is een string die nergens meeliep. Hernoemde je de notitie —
+		// of de map eromheen — dan zei dit scherm "kon niet meer gevonden
+		// worden" terwijl hij gewoon bestond.
+		this.registerEvent(
+			this.app.vault.on("rename", (file, oldPath) => {
+				if (oldPath !== this.path) return;
+				this.path = file.path;
+				guarded("could not reload the cooking session", () => this.reload());
+			})
+		);
 		this.registerEvent(
 			this.app.vault.on("modify", (file) => {
 				if (file.path !== this.path) return;

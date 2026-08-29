@@ -9,7 +9,7 @@ import {
 import type PantryPlugin from "./main";
 import { addDays, toISODate, weekId } from "./date";
 import { markdownIn } from "./folder";
-import { ensureFolder } from "./notes";
+import { ensureFolder, linkTarget, toLink } from "./notes";
 import type {
 	MealStatus,
 	MealType,
@@ -22,15 +22,7 @@ const BLOCK_LANGUAGE = "meal-plan";
 /** Matches a fenced ```meal-plan block, capturing its body. */
 const BLOCK_PATTERN = /^```meal-plan[ \t]*\r?\n([\s\S]*?)^```[ \t]*$/m;
 
-/** Turns "[[Chickpea stew|stew]]" into "Chickpea stew". */
-export function linkTarget(value: string): string {
-	const match = /^\[\[([^\]|#]+)/.exec(value.trim());
-	return (match ? match[1] : value).trim();
-}
-
-export function toLink(name: string): string {
-	return `[[${name}]]`;
-}
+export { linkTarget, toLink } from "./notes";
 
 function asRecord(value: unknown): Record<string, unknown> {
 	return value && typeof value === "object" && !Array.isArray(value)
@@ -49,13 +41,20 @@ function parseStatus(value: unknown): { status?: MealStatus } {
 	return {};
 }
 
-/** What a tick took off stock, keyed by product path. Junk entries are ignored. */
+/**
+ * Wat een tik van de voorraad haalde.
+ *
+ * De sleutel is een wikilink (`[[Rijst]]`) sinds die vorm leesbaar is; oudere
+ * blokken hebben er een kaal pad staan en die blijven werken — `consume.ts`
+ * zoekt allebei op. De waarde mag "0.33 pak" zijn; die eenheid staat er voor
+ * de lezer en wordt bij het inlezen genegeerd.
+ */
 function parseUsed(value: unknown): { used?: Record<string, number> } {
 	const record = asRecord(value);
 	const used: Record<string, number> = {};
-	for (const [path, raw] of Object.entries(record)) {
-		const amount = Number(`${raw}`.replace(",", "."));
-		if (Number.isFinite(amount) && amount > 0) used[path] = amount;
+	for (const [key, raw] of Object.entries(record)) {
+		const amount = Number.parseFloat(`${raw}`.replace(",", "."));
+		if (Number.isFinite(amount) && amount > 0) used[key] = amount;
 	}
 	return Object.keys(used).length > 0 ? { used } : {};
 }
@@ -187,18 +186,47 @@ export class PlanStore {
 	}
 
 	/** Only the fields that carry meaning, so the block stays readable by hand. */
-	private static cleanRecipe(entry: PlannedRecipe): Record<string, unknown> {
+	private cleanRecipe(entry: PlannedRecipe): Record<string, unknown> {
 		const clean: Record<string, unknown> = {
 			recipe: entry.recipe,
 			eaters: entry.eaters,
 			guests: entry.guests,
 		};
 		if (entry.status) clean.status = entry.status;
-		if (entry.used && Object.keys(entry.used).length > 0) clean.used = entry.used;
+		if (entry.used && Object.keys(entry.used).length > 0) {
+			clean.used = this.describeUsed(entry.used);
+		}
 		return clean;
 	}
 
-	static serialise(plan: WeekPlan): string {
+	/**
+	 * `Products/Rijst.md: 0.33` zegt een mens niets — een derde van wát? En het
+	 * is een kaal pad in een code fence, dus Obsidian werkt het bij hernoemen
+	 * niet bij: daarna gaf `byPath` null en kwam de rijst er bij het uitvinken
+	 * nooit meer bij, zonder dat iets dat meldde.
+	 *
+	 * `[[Rijst]]: 0.33 pak` is te lezen en te volgen.
+	 */
+	private describeUsed(used: Record<string, number>): Record<string, string> {
+		const out: Record<string, string> = {};
+		for (const [key, amount] of Object.entries(used)) {
+			const rounded = `${Math.round(amount * 1000) / 1000}`;
+			const product =
+				this.plugin.products.byPath(key) ?? this.plugin.products.match(key);
+			if (!product) {
+				// Onbekend product: laat de sleutel staan zoals hij is, zodat er
+				// niets verdwijnt wat later weer op te zoeken valt.
+				out[key] = rounded;
+				continue;
+			}
+			out[toLink(product.name)] = product.unit
+				? `${rounded} ${product.unit}`
+				: rounded;
+		}
+		return out;
+	}
+
+	serialise(plan: WeekPlan): string {
 		const clean = {
 			weekStart: plan.weekStart,
 			days: plan.days
@@ -210,9 +238,7 @@ export class PlanStore {
 					meals: day.meals
 						.map((meal) => ({
 							meal: meal.meal,
-							recipes: meal.recipes.map((entry) =>
-								PlanStore.cleanRecipe(entry)
-							),
+							recipes: meal.recipes.map((entry) => this.cleanRecipe(entry)),
 						}))
 						.filter((meal) => meal.recipes.length > 0),
 				}))
@@ -226,7 +252,7 @@ export class PlanStore {
 	async save(weekStart: Date, plan: WeekPlan): Promise<void> {
 		const { vault } = this.plugin.app;
 		const path = this.notePath(weekStart);
-		const block = `\`\`\`${BLOCK_LANGUAGE}\n${PlanStore.serialise(plan)}\n\`\`\``;
+		const block = `\`\`\`${BLOCK_LANGUAGE}\n${this.serialise(plan)}\n\`\`\``;
 
 		const existing = vault.getFileByPath(path);
 		if (!existing) {
@@ -357,6 +383,51 @@ export class PlanStore {
 	 * Rewrites a meal or eater name across every existing plan note, so renaming
 	 * someone in the settings never orphans the weeks you already planned.
 	 */
+	/**
+	 * Werkt de receptverwijzingen in alle weekplannen bij na een hernoeming.
+	 *
+	 * `toLink()` schrijft een nette wikilink, maar hij staat binnen een
+	 * ```meal-plan-fence en **Obsidian indexeert geen links in code blocks**.
+	 * Hernoem je een recept, dan werkt Obsidian deze verwijzing dus niet bij:
+	 * `cook.file()` vindt daarna niets, `NeedIndex` slaat de maaltijd over, en
+	 * die stopt stilletjes met bijdragen aan je boodschappenlijst. Geen melding,
+	 * geen spoor.
+	 */
+	async renameRecipe(oldName: string, newName: string): Promise<number> {
+		const from = oldName.trim().toLowerCase();
+		const to = newName.trim();
+		if (from.length === 0 || to.length === 0 || from === to.toLowerCase()) return 0;
+
+		let changedNotes = 0;
+		for (const file of this.planFiles()) {
+			const content = await this.plugin.app.vault.cachedRead(file);
+			const match = BLOCK_PATTERN.exec(content);
+			if (!match) continue;
+
+			const plan = PlanStore.parse(match[1], new Date());
+			let touched = false;
+
+			for (const day of plan.days) {
+				for (const meal of day.meals) {
+					for (const entry of meal.recipes) {
+						if (linkTarget(entry.recipe).toLowerCase() !== from) continue;
+						entry.recipe = toLink(to);
+						touched = true;
+					}
+				}
+			}
+			if (!touched) continue;
+
+			const block = `\`\`\`${BLOCK_LANGUAGE}\n${this.serialise(plan)}\n\`\`\``;
+			this.lastWritten = await this.plugin.app.vault.process(file, (current: string) =>
+				current.replace(BLOCK_PATTERN, () => block)
+			);
+			changedNotes++;
+		}
+
+		return changedNotes;
+	}
+
 	async renameEverywhere(
 		kind: "meal" | "eater",
 		oldName: string,
@@ -400,7 +471,7 @@ export class PlanStore {
 
 			if (!touched) continue;
 
-			const block = `\`\`\`${BLOCK_LANGUAGE}\n${PlanStore.serialise(plan)}\n\`\`\``;
+			const block = `\`\`\`${BLOCK_LANGUAGE}\n${this.serialise(plan)}\n\`\`\``;
 			this.lastWritten = await this.plugin.app.vault.process(file, (current: string) =>
 				// Functievorm: zie `save()`. Een dagnotitie met `$&` erin zou het
 				// oude blok midden in het nieuwe plakken.

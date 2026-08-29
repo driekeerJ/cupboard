@@ -74,9 +74,13 @@ export interface PlannedRecipe {
 	/** Eaten or skipped. Absent while the meal is still ahead of you. */
 	status?: MealStatus;
 	/**
-	 * Exactly what was taken off stock when this was marked eaten, per product
-	 * path, in the unit that product is counted in. Kept so undoing the tick
-	 * puts back what was actually booked, even if the recipe changed since.
+	 * Exactly what was taken off stock when this was marked eaten, in the unit
+	 * that product is counted in. Kept so undoing the tick puts back what was
+	 * actually booked, even if the recipe changed since.
+	 *
+	 * De sleutel is een wikilink (`[[Rijst]]`) in de notitie en een pad zolang
+	 * hij in het geheugen zit; oudere blokken hebben er een pad staan en die
+	 * blijven werken. Zie `PlanStore.describeUsed` en `consume.apply`.
 	 */
 	used?: Record<string, number>;
 }

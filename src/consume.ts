@@ -84,10 +84,18 @@ async function apply(
 ): Promise<StockChange> {
 	const change: StockChange = { used: {}, unsure: [], failed: [] };
 
-	for (const [path, amount] of amounts) {
+	for (const [key, amount] of amounts) {
 		if (!(amount > 0)) continue;
-		const product = plugin.products.byPath(path);
-		if (!product) continue;
+		// De sleutel is een pad bij het afboeken en een wikilink zodra hij uit
+		// een weekplan komt; allebei moeten hier landen.
+		const product = plugin.products.byPath(key) ?? plugin.products.match(key);
+		if (!product) {
+			// Hernoemd of verwijderd sinds de tik. Dat mag niet stil gebeuren:
+			// zonder melding gaat de voorraad er nooit meer bij.
+			change.unsure.push(linkTarget(key));
+			continue;
+		}
+		const path = product.path;
 		// Salt and oil are kept, not measured; there is nothing to book.
 		if (!product.amountMatters) continue;
 

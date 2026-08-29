@@ -2,7 +2,7 @@ import { TFile, normalizePath } from "obsidian";
 import type PantryPlugin from "./main";
 import { markdownIn } from "./folder";
 import { parseIngredient } from "./ingredients";
-import { ensureFolder } from "./notes";
+import { ensureFolder, linkTarget, toLink } from "./notes";
 
 /**
  * What a count can be. A number is exact. "plus" means "more than the target,
@@ -206,7 +206,10 @@ export class ProductIndex {
 			unit: text(frontmatter.unit),
 			size: parseSize(frontmatter.size),
 			amountMatters: text(frontmatter.amount).toLowerCase() !== "any",
-			shop: text(frontmatter.shop),
+			// `shop: "[[Lidl]]"` geeft de winkelnotitie een backlink en laat
+			// Obsidian de verwijzing bijwerken als je hem hernoemt. Een kale
+			// naam uit een oudere notitie blijft gewoon werken.
+			shop: linkTarget(text(frontmatter.shop)),
 			storage: text(frontmatter.storage) || UNASSIGNED,
 			shelf: text(frontmatter.shelf) || text(frontmatter.aisle),
 			aliases: list(frontmatter.aliases),
@@ -267,7 +270,15 @@ export class ProductIndex {
 					if (patch.amount) frontmatter.amount = patch.amount;
 					else delete frontmatter.amount;
 				}
-				if (patch.shop !== undefined) frontmatter.shop = patch.shop;
+				if (patch.shop !== undefined) {
+					// Als de winkel een notitie heeft, schrijf de link; anders de
+					// naam, want een link naar niets helpt niemand.
+					frontmatter.shop = patch.shop
+						? this.plugin.shops.find(patch.shop)
+							? toLink(patch.shop)
+							: patch.shop
+						: "";
+				}
 				if (patch.storage !== undefined) frontmatter.storage = patch.storage;
 				if (patch.shelf !== undefined) {
 					frontmatter.shelf = patch.shelf;
@@ -356,6 +367,27 @@ export class ProductIndex {
 		}
 	}
 
+	/**
+	 * Zet elke verwijzing naar een hernoemde winkel om.
+	 *
+	 * Obsidian werkt een `[[Lidl]]` in de frontmatter zelf bij, maar een kale
+	 * `shop: Lidl` uit een oudere notitie niet — en dan geeft `shops.find()`
+	 * null en zakt de looproute stilzwijgend terug naar alfabetisch.
+	 */
+	async renameShop(oldName: string, newName: string): Promise<number> {
+		const from = oldName.trim().toLowerCase();
+		const to = newName.trim();
+		if (from.length === 0 || to.length === 0 || from === to.toLowerCase()) return 0;
+
+		let changed = 0;
+		for (const product of this.products) {
+			if (product.shop.trim().toLowerCase() !== from) continue;
+			await this.update(product, { shop: to });
+			changed++;
+		}
+		return changed;
+	}
+
 	/** Adds an alias, so a line that needed the cleanup screen never does again. */
 	async learn(product: Product, alias: string): Promise<void> {
 		const value = alias.trim();
@@ -380,7 +412,10 @@ export class ProductIndex {
 				frontmatter.minimum = patch.minimum ?? 0;
 				frontmatter.unit = patch.unit ?? "";
 				frontmatter.size = patch.size ?? "";
-				frontmatter.shop = patch.shop ?? "";
+				frontmatter.shop =
+					patch.shop && this.plugin.shops.find(patch.shop)
+						? toLink(patch.shop)
+						: (patch.shop ?? "");
 				frontmatter.storage = patch.storage ?? "";
 				frontmatter.shelf = patch.shelf ?? "";
 				frontmatter.aliases = patch.aliases ?? [];
