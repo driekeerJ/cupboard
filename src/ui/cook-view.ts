@@ -5,24 +5,28 @@ import type PantryPlugin from "../main";
 import {
 	findDurations,
 	formatClock,
-	parseRecipeBody,
 	remaining,
 	timerKey,
-	type RecipeBody,
 } from "../cook";
-import { scaleIngredient, withoutLinks } from "../ingredients";
-import { groupIngredientsByStep } from "../cook-groups";
+import type { CookLine, CookNote } from "../cook-session";
+import { withoutLinks } from "../ingredients";
 import { formatServings } from "../plan";
-import type { CookSession } from "../types";
 
 export const COOK_VIEW_TYPE = "pantry-cook";
 
 /** Half a portion is the smallest step that ever makes sense. */
 const SERVINGS_STEP = 0.5;
 
+/**
+ * Zolang na onze eigen schrijfactie een `modify` niet als vreemde wijziging
+ * telt. Zonder dit hertekent elk vinkje het scherm en spring je terug naar
+ * boven — met natte handen, midden in stap zeven.
+ */
+const OWN_WRITE_MS = 1200;
+
 export interface CookViewState {
+	/** Pad van de kooksessie-notitie, niet van het recept. */
 	path: string;
-	servings: number;
 }
 
 interface TimerChip {
@@ -32,22 +36,18 @@ interface TimerChip {
 	clockEl: HTMLElement;
 }
 
+const EMPTY: CookNote = { servings: null, recipe: null, ingredients: [], steps: [] };
+
 export class CookView extends ItemView {
 	private plugin: PantryPlugin;
 	private path = "";
-	private servings = 1;
 	private file: TFile | null = null;
-	private body: RecipeBody = { ingredients: [], steps: [] };
-	private session: CookSession = {
-		ingredients: [],
-		steps: [],
-		timers: {},
-		updatedAt: 0,
-	};
+	private note: CookNote = EMPTY;
 	private chips: TimerChip[] = [];
 	/** Timers already announced, so the sound plays once per finish. */
 	private announced: Set<string> = new Set();
 	private audio: AudioContext | null = null;
+	private lastWrite = 0;
 
 	constructor(leaf: WorkspaceLeaf, plugin: PantryPlugin) {
 		super(leaf);
@@ -59,7 +59,7 @@ export class CookView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return this.file ? this.file.basename : "Cooking";
+		return this.note.recipe ?? this.file?.basename ?? "Cooking";
 	}
 
 	getIcon(): string {
@@ -67,16 +67,12 @@ export class CookView extends ItemView {
 	}
 
 	getState(): Record<string, unknown> {
-		return { path: this.path, servings: this.servings };
+		return { path: this.path };
 	}
 
-	async setState(
-		state: unknown,
-		result: ViewStateResult
-	): Promise<void> {
+	async setState(state: unknown, result: ViewStateResult): Promise<void> {
 		const incoming = state as Partial<CookViewState> | null;
 		if (incoming?.path) this.path = incoming.path;
-		if (typeof incoming?.servings === "number") this.servings = incoming.servings;
 		await super.setState(state, result);
 		await this.reload();
 	}
@@ -84,9 +80,10 @@ export class CookView extends ItemView {
 	async onOpen(): Promise<void> {
 		this.registerEvent(
 			this.app.vault.on("modify", (file) => {
-				if (file.path === this.path) {
-					guarded("could not reload the recipe", () => this.reload());
-				}
+				if (file.path !== this.path) return;
+				// Onze eigen vinkjes staan al op het scherm.
+				if (Date.now() - this.lastWrite < OWN_WRITE_MS) return;
+				guarded("could not reload the cooking session", () => this.reload());
 			})
 		);
 		// Half a second keeps the seconds flipping over cleanly without churn.
@@ -94,49 +91,40 @@ export class CookView extends ItemView {
 		await this.reload();
 	}
 
-	async onClose(): Promise<void> {
+	onClose(): Promise<void> {
 		this.chips = [];
 		// Geluid is versiering: mislukt het sluiten, dan is dat geen boodschap
 		// voor de kok. Wel opvangen, want een losse rejection is geen stijl.
 		this.audio?.close().catch(() => undefined);
 		this.audio = null;
+		return Promise.resolve();
+	}
+
+	refresh(): void {
+		guarded("could not reload the cooking session", () => this.reload());
 	}
 
 	private async reload(): Promise<void> {
-		this.file = this.plugin.cook.file(this.path);
+		this.file = this.app.vault.getFileByPath(this.path);
 		if (!this.file) {
 			this.contentEl.empty();
 			this.contentEl.createDiv({
 				cls: "pantry-empty-state",
-				text: "That recipe could not be found any more.",
+				text: "That cooking session could not be found any more.",
 			});
 			return;
 		}
 
-		this.session = this.plugin.cook.session(this.file.path);
-		if (this.session.servings && this.servings <= 0) {
-			this.servings = this.session.servings;
-		}
-		if (this.servings <= 0) this.servings = this.plugin.cook.householdServings();
-
-		const content = await this.app.vault.cachedRead(this.file);
-		this.body = parseRecipeBody(content);
+		this.note = await this.plugin.cook.read(this.file);
 		this.draw();
 	}
 
-	private async persist(): Promise<void> {
-		if (!this.file) return;
-		await this.plugin.cook.write(this.file.path, {
-			...this.session,
-			servings: this.servings,
-		});
+	private servings(): number {
+		return this.note.servings ?? this.plugin.cook.householdServings();
 	}
 
-	private factor(): number {
-		if (!this.file) return 1;
-		const base = this.plugin.cook.baseServings(this.file);
-		if (!base) return 1;
-		return this.servings / base;
+	private recipeFile(): TFile | null {
+		return this.note.recipe ? this.plugin.cook.file(this.note.recipe) : null;
 	}
 
 	private draw(): void {
@@ -157,7 +145,7 @@ export class CookView extends ItemView {
 		const top = header.createDiv({ cls: "pantry-cook-top" });
 		top.createEl("h2", {
 			cls: "pantry-cook-title",
-			text: this.file?.basename ?? "Cooking",
+			text: this.note.recipe ?? this.file?.basename ?? "Cooking",
 		});
 
 		const actions = top.createDiv({ cls: "pantry-cook-actions" });
@@ -168,9 +156,23 @@ export class CookView extends ItemView {
 			attr: { "aria-label": "Open recipe note" },
 		});
 		openNote.onclick = () => {
-			const file = this.file;
+			const file = this.recipeFile();
 			if (file) {
 				guarded("could not open the recipe note", () =>
+					this.app.workspace.getLeaf(false).openFile(file)
+				);
+			}
+		};
+
+		const openSession = actions.createEl("button", {
+			cls: "pantry-text-button",
+			text: "Note",
+			attr: { "aria-label": "Open this cooking session as a note" },
+		});
+		openSession.onclick = () => {
+			const file = this.file;
+			if (file) {
+				guarded("could not open the session note", () =>
 					this.app.workspace.getLeaf(false).openFile(file)
 				);
 			}
@@ -193,13 +195,13 @@ export class CookView extends ItemView {
 		});
 		minus.onclick = () =>
 			guarded("could not change the servings", () =>
-				this.setServings(this.servings - SERVINGS_STEP)
+				this.setServings(this.servings() - SERVINGS_STEP)
 			);
 
 		row.createSpan({
 			cls: "pantry-servings-value",
-			text: `${formatServings(this.servings)} ${
-				this.servings === 1 ? "serving" : "servings"
+			text: `${formatServings(this.servings())} ${
+				this.servings() === 1 ? "serving" : "servings"
 			}`,
 		});
 
@@ -210,104 +212,84 @@ export class CookView extends ItemView {
 		});
 		plus.onclick = () =>
 			guarded("could not change the servings", () =>
-				this.setServings(this.servings + SERVINGS_STEP)
+				this.setServings(this.servings() + SERVINGS_STEP)
 			);
 
-		const base = this.file ? this.plugin.cook.baseServings(this.file) : null;
+		const recipe = this.recipeFile();
+		const base = recipe ? this.plugin.cook.baseServings(recipe) : null;
 		row.createSpan({
 			cls: "pantry-cook-scale",
 			text: base
-				? `recipe serves ${formatServings(base)} · ×${formatServings(
-						Math.round(this.factor() * 100) / 100
-				  )}`
+				? `recipe serves ${formatServings(base)}`
 				: `no ${this.plugin.settings.servingsField} in this recipe`,
 		});
 	}
 
 	private async setServings(value: number): Promise<void> {
 		const next = Math.max(SERVINGS_STEP, Math.round(value * 2) / 2);
-		if (next === this.servings) return;
-		this.servings = next;
-		await this.persist();
-		this.draw();
+		if (next === this.servings() || !this.file) return;
+		this.lastWrite = Date.now();
+		await this.plugin.cook.rescale(this.file, next);
+		await this.reload();
 	}
 
 	private async reset(): Promise<void> {
-		this.session = { ingredients: [], steps: [], timers: {}, updatedAt: 0 };
+		if (!this.file) return;
 		this.announced.clear();
-		await this.persist();
-		this.draw();
-		new Notice("Cooking session cleared.");
+		this.lastWrite = Date.now();
+		await this.plugin.cook.restart(this.file, this.servings());
+		await this.reload();
+		new Notice("Cooking session started over.");
 	}
 
 	private drawIngredients(root: HTMLElement): void {
 		const section = root.createDiv({ cls: "pantry-cook-section" });
 		section.createDiv({ cls: "pantry-cook-heading", text: "Ingredients" });
 
-		if (this.body.ingredients.length === 0) {
+		if (this.note.ingredients.length === 0) {
 			section.createDiv({
 				cls: "pantry-settings-hint",
-				text: "No ingredients found. Add an \"Ingredients\" heading with a list underneath.",
+				text: "This session has no ingredients. Use Start over to build it from the recipe again.",
 			});
 			return;
 		}
 
-		// Gegroepeerd op de stap waarin het ingrediënt voor het eerst gebruikt
-		// wordt: dat is de volgorde waarin je snijdt. Levert het raden niets
-		// op, dan blijft het één lijst — een enkele groep "Rest" is geen
-		// indeling maar een leugen.
-		const groups = groupIngredientsByStep(this.body.ingredients, this.body.steps);
-		if (!groups) {
-			this.body.ingredients.forEach((_line, index) =>
-				this.drawIngredient(section, index)
-			);
-			return;
-		}
-
-		for (const group of groups) {
-			const wrap = section.createDiv({ cls: "pantry-cook-group" });
-			wrap.createDiv({
-				cls: "pantry-cook-group-heading",
-				text: group.step === null ? "Rest" : `Step ${group.step + 1}`,
-			});
-			for (const index of group.indexes) this.drawIngredient(wrap, index);
+		// De kopjes komen uit de notitie zelf: wat je daar hernoemt of
+		// verschuift, staat hier zo op het scherm.
+		let host: HTMLElement = section;
+		let group: string | null | undefined;
+		for (const line of this.note.ingredients) {
+			if (line.group !== group) {
+				group = line.group;
+				host = section.createDiv({ cls: "pantry-cook-group" });
+				if (group) {
+					host.createDiv({ cls: "pantry-cook-group-heading", text: group });
+				}
+			}
+			this.drawIngredient(host, line);
 		}
 	}
 
-	/**
-	 * Eén ingrediëntregel. De index is die van de oorspronkelijke lijst en niet
-	 * die van de groep: de vinkjes in de sessie hangen eraan, en die moeten na
-	 * een hergroepering nog op dezelfde regel staan.
-	 */
-	private drawIngredient(host: HTMLElement, index: number): void {
-		const line = this.body.ingredients[index];
-		if (line === undefined) return;
-
-		const scaled = scaleIngredient(line, this.factor());
-		const ticked = this.session.ingredients[index] === true;
-
+	private drawIngredient(host: HTMLElement, line: CookLine): void {
 		const row = host.createEl("button", { cls: "pantry-check-row" });
-		row.toggleClass("is-done", ticked);
-		row.setAttr("aria-pressed", `${ticked}`);
+		row.toggleClass("is-done", line.done);
+		row.setAttr("aria-pressed", `${line.done}`);
 
 		const box = row.createSpan({ cls: "pantry-check-box" });
 		// A character, for the same reason as the stepper: it always renders.
-		if (ticked) box.setText("✓");
+		if (line.done) box.setText("✓");
 
 		const text = row.createDiv({ cls: "pantry-check-body" });
-		text.createDiv({ cls: "pantry-check-text", text: scaled.text });
+		text.createDiv({ cls: "pantry-check-text", text: withoutLinks(line.text) });
 
 		row.onclick = () => {
-			// Alleen deze rij bijwerken. `draw()` leegt `contentEl`, en dat
-			// ís de scroller: je stond bij stap zeven van een lang recept,
-			// vinkte er een af, en stond weer bovenaan — met natte handen,
-			// op de telefoon.
-			const now = this.session.ingredients[index] !== true;
-			this.session.ingredients[index] = now;
-			row.toggleClass("is-done", now);
-			row.setAttr("aria-pressed", `${now}`);
-			box.setText(now ? "✓" : "");
-			guarded("could not save your ticks", () => this.persist());
+			// Alleen deze rij bijwerken; het bestand volgt. Hertekenen zou de
+			// scrollpositie weggooien.
+			line.done = !line.done;
+			row.toggleClass("is-done", line.done);
+			row.setAttr("aria-pressed", `${line.done}`);
+			box.setText(line.done ? "✓" : "");
+			guarded("could not save your ticks", () => this.write(line));
 		};
 	}
 
@@ -315,45 +297,46 @@ export class CookView extends ItemView {
 		const section = root.createDiv({ cls: "pantry-cook-section" });
 		section.createDiv({ cls: "pantry-cook-heading", text: "Method" });
 
-		if (this.body.steps.length === 0) {
+		if (this.note.steps.length === 0) {
 			section.createDiv({
 				cls: "pantry-settings-hint",
-				text: "No steps found. Add a \"Method\" heading with a numbered list underneath.",
+				text: "This session has no steps. Use Start over to build it from the recipe again.",
 			});
 			return;
 		}
 
-		this.body.steps.forEach((line, index) => this.drawStep(section, line, index));
+		this.note.steps.forEach((line) => this.drawStep(section, line));
 	}
 
-	private drawStep(section: HTMLElement, line: string, index: number): void {
-		const ticked = this.session.steps[index] === true;
-
+	private drawStep(section: HTMLElement, line: CookLine): void {
 		const row = section.createDiv({ cls: "pantry-step" });
-		row.toggleClass("is-done", ticked);
+		row.toggleClass("is-done", line.done);
 
 		const box = row.createSpan({ cls: "pantry-check-box" });
-		if (ticked) box.setText("✓");
+		if (line.done) box.setText("✓");
 
 		const body = row.createDiv({ cls: "pantry-step-body" });
-		body.createSpan({ cls: "pantry-step-number", text: `${index + 1}.` });
+		body.createSpan({ cls: "pantry-step-number", text: `${line.index + 1}.` });
 
 		const text = body.createSpan({ cls: "pantry-step-text" });
-		this.drawStepText(text, line, index);
+		this.drawStepText(text, line.text, line.index);
 
 		const toggle = (event: MouseEvent): void => {
 			// A tap on a timer must not also tick the step off.
 			if ((event.target as HTMLElement).closest(".pantry-timer")) return;
-			// Zie drawIngredients: niet hertekenen, want dat springt terug naar
-			// de bovenkant van het recept.
-			const now = this.session.steps[index] !== true;
-			this.session.steps[index] = now;
-			row.toggleClass("is-done", now);
-			box.setText(now ? "✓" : "");
-			guarded("could not save your ticks", () => this.persist());
+			line.done = !line.done;
+			row.toggleClass("is-done", line.done);
+			box.setText(line.done ? "✓" : "");
+			guarded("could not save your ticks", () => this.write(line));
 		};
 		box.onclick = toggle;
 		body.onclick = toggle;
+	}
+
+	private async write(line: CookLine): Promise<void> {
+		if (!this.file) return;
+		this.lastWrite = Date.now();
+		await this.plugin.cook.tick(this.file, line.line, line.done);
 	}
 
 	/** Writes the step out, turning every duration into its own timer button. */
@@ -389,24 +372,28 @@ export class CookView extends ItemView {
 	}
 
 	private async toggleTimer(key: string, seconds: number): Promise<void> {
-		if (this.session.timers[key]) {
-			delete this.session.timers[key];
+		const running = this.plugin.cook.timers(this.path)[key];
+		if (running) {
+			await this.plugin.cook.setTimer(this.path, key, null);
 			this.announced.delete(key);
 		} else {
-			this.session.timers[key] = { startedAt: Date.now(), seconds };
+			await this.plugin.cook.setTimer(this.path, key, {
+				startedAt: Date.now(),
+				seconds,
+			});
 			// Touching the audio graph inside the tap keeps iOS willing to play.
 			this.primeAudio();
 		}
-		await this.persist();
 		this.tick();
 	}
 
 	/** Repaints the running clocks; the rest of the view stays untouched. */
 	private tick(): void {
 		const now = Date.now();
+		const timers = this.plugin.cook.timers(this.path);
 
 		this.chips.forEach((chip) => {
-			const timer = this.session.timers[chip.key];
+			const timer = timers[chip.key];
 			if (!timer) {
 				chip.el.removeClass("is-running");
 				chip.el.removeClass("is-finished");

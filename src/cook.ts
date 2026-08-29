@@ -1,7 +1,23 @@
 import { TFile } from "obsidian";
 import type PantryPlugin from "./main";
+import { groupIngredientsByStep } from "./cook-groups";
+import {
+	COOK_MARK,
+	COOK_MARK_VALUE,
+	parseCookSession,
+	renderSession,
+	replaceCookRegion,
+	sessionPath,
+	setServings,
+	setTick,
+	type CookNote,
+	type SessionInput,
+} from "./cook-session";
+import { toISODate } from "./date";
+import { scaleIngredient } from "./ingredients";
+import { ensureFolder, frontmatterValue } from "./notes";
 import { parseNumber } from "./products";
-import type { CookSession, TimerState } from "./types";
+import type { TimerState } from "./types";
 
 const INGREDIENT_HEADINGS = [
 	"ingredients", "ingredient", "ingrediënten", "ingredienten", "boodschappen",
@@ -137,15 +153,12 @@ export function remaining(timer: TimerState, now: number): number {
 	return timer.seconds - (now - timer.startedAt) / 1000;
 }
 
-function emptySession(): CookSession {
-	return { ingredients: [], steps: [], timers: {}, updatedAt: 0 };
-}
-
 /**
- * Cooking state lives in the plugin's own data, keyed by recipe path, so it
- * survives the app closing. Timers store the moment they were started rather
- * than a countdown, which is the only way a timer can be correct after the
- * app has been asleep.
+ * Cooking state lives in a note of its own — one per time you cook, not one
+ * per recipe. Timers are the exception: those store the moment they were
+ * started rather than a countdown, which is the only way a timer can be
+ * correct after the app has been asleep, and a timestamp has no business in a
+ * note you read with wet hands.
  */
 export class CookStore {
 	private plugin: PantryPlugin;
@@ -154,28 +167,179 @@ export class CookStore {
 		this.plugin = plugin;
 	}
 
-	session(path: string): CookSession {
-		const stored = this.plugin.settings.cook[path];
-		if (!stored) return emptySession();
-		const session: CookSession = {
-			ingredients: stored.ingredients ?? [],
-			steps: stored.steps ?? [],
-			timers: stored.timers ?? {},
-			updatedAt: stored.updatedAt ?? 0,
-		};
-		// `servings` is optioneel; met exactOptionalPropertyTypes is het zetten
-		// van een expliciete `undefined` iets anders dan het weglaten.
-		if (stored.servings !== undefined) session.servings = stored.servings;
-		return session;
+	private get vault() {
+		return this.plugin.app.vault;
 	}
 
-	async write(path: string, session: CookSession): Promise<void> {
-		this.plugin.settings.cook[path] = { ...session, updatedAt: Date.now() };
+	/** True als deze notitie een kooksessie van Pantry is. */
+	isSession(content: string): boolean {
+		return frontmatterValue(content, COOK_MARK) === COOK_MARK_VALUE;
+	}
+
+	/**
+	 * De notitie voor deze keer koken: die van vandaag als hij er al is, en
+	 * anders een nieuwe.
+	 *
+	 * Hetzelfde recept twee keer op één dag krijgt " 2" achter de naam. Dat is
+	 * zeldzaam genoeg om lelijk te mogen zijn, en de sessie van vanmiddag
+	 * overschrijven is erger.
+	 */
+	async openSession(recipe: TFile, servings: number): Promise<TFile | null> {
+		const today = toISODate(new Date());
+		const folder = this.plugin.settings.cookFolder;
+
+		const first = sessionPath(folder, today, recipe.basename);
+		const existing = this.vault.getFileByPath(first);
+		if (existing) return existing;
+
+		const input = await this.build(recipe, servings, today);
+		if (!input) return null;
+
+		await ensureFolder(this.vault, first);
+		return this.vault.create(first, renderSession(input)).catch(async () => {
+			// Bestaat hij toch al (race, of een map die net verscheen), dan is
+			// die van nu goed genoeg; anders een nummer erachter.
+			const again = this.vault.getFileByPath(first);
+			if (again) return again;
+			for (let n = 2; n < 20; n += 1) {
+				const path = sessionPath(folder, today, `${recipe.basename} ${n}`);
+				if (!this.vault.getFileByPath(path)) {
+					return this.vault.create(path, renderSession(input));
+				}
+			}
+			return null;
+		});
+	}
+
+	/** Het recept, de porties en de stappen, klaar om weg te schrijven. */
+	async build(
+		recipe: TFile,
+		servings: number,
+		date: string
+	): Promise<SessionInput | null> {
+		const content = await this.vault.cachedRead(recipe);
+		const body = parseRecipeBody(content);
+		const base = this.baseServings(recipe);
+		const factor = base && base > 0 ? servings / base : 1;
+
+		const scaled = body.ingredients.map(
+			(line) => scaleIngredient(line, factor).text
+		);
+		const grouped = groupIngredientsByStep(body.ingredients, body.steps);
+
+		const groups: SessionInput["groups"] = grouped
+			? grouped.map((group) => ({
+					label: group.step === null ? "Rest" : `Step ${group.step + 1}`,
+					lines: group.indexes.map((index) => scaled[index] ?? ""),
+			  }))
+			: [{ label: "Ingredients", lines: scaled }];
+
+		return {
+			recipe: recipe.basename,
+			date,
+			servings,
+			groups,
+			steps: body.steps,
+		};
+	}
+
+	/** De sessie zoals hij nu in zijn notitie staat. */
+	async read(session: TFile): Promise<CookNote> {
+		return parseCookSession(await this.vault.cachedRead(session));
+	}
+
+	/** Eén vinkje omzetten, op regelnummer. */
+	async tick(session: TFile, line: number, done: boolean): Promise<void> {
+		await this.vault.process(session, (content) => setTick(content, line, done));
+	}
+
+	/**
+	 * Ander aantal porties: de ingrediëntenlijst wordt opnieuw gerekend uit het
+	 * recept. Handmatige wijzigingen in díe lijst gaan daarbij verloren — dat
+	 * is de afspraak, want herrekenen is precies wat je vraagt. Alles onder het
+	 * beheerde stuk, je notities, blijft staan.
+	 */
+	async rescale(session: TFile, servings: number): Promise<void> {
+		const before = await this.read(session);
+		const recipe = before.recipe ? this.file(before.recipe) : null;
+		if (!recipe) return;
+
+		const input = await this.build(recipe, servings, toISODate(new Date()));
+		if (!input) return;
+
+		const ticked = {
+			ingredient: new Set(
+				before.ingredients.filter((line) => line.done).map((line) => line.index)
+			),
+			step: new Set(before.steps.filter((line) => line.done).map((line) => line.index)),
+		};
+
+		// Alles in één `process`: tussen twee schrijfacties door is de
+		// gelezen inhoud niet meer per se de inhoud op schijf.
+		await this.vault.process(session, (content) => {
+			let next = setServings(replaceCookRegion(content, input), servings);
+			const parsed = parseCookSession(next);
+			for (const line of [...parsed.ingredients, ...parsed.steps]) {
+				if (ticked[line.kind].has(line.index)) next = setTick(next, line.line, true);
+			}
+			return next;
+		});
+	}
+
+	/** De sessie terugzetten naar het recept zoals het nu is. */
+	async restart(session: TFile, servings: number): Promise<void> {
+		const note = await this.read(session);
+		const recipe = note.recipe ? this.file(note.recipe) : null;
+		if (!recipe) return;
+		const input = await this.build(recipe, servings, toISODate(new Date()));
+		if (!input) return;
+		this.clearTimers(session.path);
+		await this.plugin.saveSettings();
+		await this.vault.process(session, (content) =>
+			setServings(replaceCookRegion(content, input), servings)
+		);
+	}
+
+	timers(path: string): Record<string, TimerState> {
+		return this.plugin.settings.cookTimers[path] ?? {};
+	}
+
+	async setTimer(path: string, key: string, timer: TimerState | null): Promise<void> {
+		const all = { ...this.timers(path) };
+		if (timer) all[key] = timer;
+		else delete all[key];
+		if (Object.keys(all).length === 0) delete this.plugin.settings.cookTimers[path];
+		else this.plugin.settings.cookTimers[path] = all;
 		await this.plugin.saveSettings();
 	}
 
-	async clear(path: string): Promise<void> {
-		delete this.plugin.settings.cook[path];
+	clearTimers(path: string): void {
+		delete this.plugin.settings.cookTimers[path];
+	}
+
+	/**
+	 * Ruimt kooksessies op die ouder zijn dan de ingestelde termijn.
+	 *
+	 * Alleen notities met `pantry: cook` in de frontmatter, en via Obsidians
+	 * eigen prullenbak: wat je zelf in die map hebt gezet blijft staan, en wat
+	 * de plugin weggooit is terug te halen.
+	 */
+	async sweep(): Promise<void> {
+		const days = this.plugin.settings.cookKeepDays;
+		if (!days || days <= 0) return;
+
+		const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+		const folder = this.vault.getFolderByPath(this.plugin.settings.cookFolder);
+		if (!folder) return;
+
+		for (const child of folder.children) {
+			if (!(child instanceof TFile) || child.extension !== "md") continue;
+			if (child.stat.mtime > cutoff) continue;
+			const content = await this.vault.cachedRead(child);
+			if (!this.isSession(content)) continue;
+			this.clearTimers(child.path);
+			await this.plugin.app.fileManager.trashFile(child);
+		}
 		await this.plugin.saveSettings();
 	}
 

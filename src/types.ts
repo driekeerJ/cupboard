@@ -31,27 +31,24 @@ export interface PantrySettings {
 	/** Frontmatter field holding the number of servings a recipe is written for. */
 	servingsField: string;
 	setupComplete: boolean;
-	/** Cooking state per recipe path: ticks and running timers. */
-	cook: Record<string, CookSession>;
+	/** Folder the cook session notes are written to. */
+	cookFolder: string;
+	/** Sessions older than this are cleaned up on start. 0 keeps them forever. */
+	cookKeepDays: number;
+	/**
+	 * Lopende timers per kooksessie-notitie.
+	 *
+	 * Het enige stukje kookmodus dat níet in de notitie staat. Een timer is een
+	 * tijdstip, geen tekst: hem in het bestand zetten maakt de notitie
+	 * onleesbaar en levert bij handmatig bewerken alleen maar onzin op.
+	 */
+	cookTimers: Record<string, Record<string, TimerState>>;
 }
 
 /** A timer as stored: the moment it started, not a countdown. */
 export interface TimerState {
 	startedAt: number;
 	seconds: number;
-}
-
-/** What one recipe remembers between cooking sessions. */
-export interface CookSession {
-	/** Ticked ingredients, by position in the list. */
-	ingredients: boolean[];
-	/** Ticked steps, by position in the list. */
-	steps: boolean[];
-	/** Key is `${stepIndex}:${durationIndex}`. */
-	timers: Record<string, TimerState>;
-	/** Servings last cooked for, so reopening keeps the same scaling. */
-	servings?: number;
-	updatedAt: number;
 }
 
 /**

@@ -20,7 +20,9 @@ export const DEFAULT_SETTINGS: PantrySettings = {
 	displayFields: [],
 	servingsField: "servings",
 	setupComplete: false,
-	cook: {},
+	cookFolder: "Cook sessions",
+	cookKeepDays: 30,
+	cookTimers: {},
 };
 
 /** Slug that stays stable once created, so plans keep pointing at the right person. */
@@ -169,6 +171,38 @@ export class PantrySettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.planFolder)
 					.onChange(async (value) => {
 						this.plugin.settings.planFolder = value.trim();
+						await this.save();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Cook session folder")
+			.setDesc(
+				"Every time you cook, Pantry writes a note here: the ingredients scaled for that meal, the steps, and your ticks."
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("Cook sessions")
+					.setValue(this.plugin.settings.cookFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.cookFolder = value.trim();
+						await this.save();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Keep cook sessions for")
+			.setDesc(
+				"Days. Older sessions go to the trash when Obsidian starts. Notes you wrote yourself in that folder are left alone. 0 keeps everything."
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("30")
+					.setValue(`${this.plugin.settings.cookKeepDays}`)
+					.onChange(async (value) => {
+						const days = Number(value.trim());
+						this.plugin.settings.cookKeepDays =
+							Number.isFinite(days) && days >= 0 ? Math.floor(days) : 0;
 						await this.save();
 					})
 			);

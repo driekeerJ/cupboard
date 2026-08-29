@@ -127,6 +127,11 @@ export default class PantryPlugin extends Plugin {
 				await this.shops.build();
 				await this.list.refresh();
 			});
+			// Kooksessies zijn bedoeld om te verlopen: één keer koken, één
+			// notitie. Zonder opruimen groeit die map ongemerkt door.
+			guarded("could not tidy up old cooking sessions", () =>
+				this.cook.sweep()
+			);
 		});
 
 		this.registerView(
@@ -221,9 +226,35 @@ export default class PantryPlugin extends Plugin {
 			},
 		});
 
+		this.addCommand({
+			id: "continue-cooking",
+			name: "Continue this cooking session",
+			checkCallback: (checking: boolean) => {
+				const file = this.app.workspace.getActiveFile();
+				if (!file || !this.isCookSession(file)) return false;
+				if (!checking) {
+					guarded("could not open cook mode", () => this.resumeCook(file.path));
+				}
+				return true;
+			},
+		});
+
 		// Same entry point from the file explorer and the note menu.
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu: Menu, file: TAbstractFile) => {
+				if (file instanceof TFile && this.isCookSession(file)) {
+					menu.addItem((item) =>
+						item
+							.setTitle("Continue cooking")
+							.setIcon("chef-hat")
+							.onClick(() =>
+								guarded("could not open cook mode", () =>
+									this.resumeCook(file.path)
+								)
+							)
+					);
+					return;
+				}
 				if (!(file instanceof TFile) || !this.isRecipe(file)) return;
 				menu.addItem((item) =>
 					item
@@ -434,6 +465,24 @@ export default class PantryPlugin extends Plugin {
 	}
 
 	/** A note counts as a recipe when it lives in the configured recipe folder. */
+	/** Een notitie in de kooksessie-map, herkend aan zijn plek. */
+	isCookSession(file: TFile): boolean {
+		if (file.extension !== "md") return false;
+		const folder = normalizePath(this.settings.cookFolder || "Cook sessions");
+		return file.path.startsWith(`${folder}/`);
+	}
+
+	/** Zet de kookmodus terug op een sessie die al bestaat. */
+	async resumeCook(path: string): Promise<void> {
+		const leaf = this.app.workspace.getLeaf("tab");
+		await leaf.setViewState({
+			type: COOK_VIEW_TYPE,
+			active: true,
+			state: { path },
+		});
+		await this.app.workspace.revealLeaf(leaf);
+	}
+
 	isRecipe(file: TFile): boolean {
 		if (file.extension !== "md") return false;
 		const folder = normalizePath(this.settings.recipeFolder || "Recipes");
@@ -451,14 +500,20 @@ export default class PantryPlugin extends Plugin {
 			return;
 		}
 
-		const stored = this.cook.session(file.path).servings;
-		const wanted = servings ?? stored ?? this.cook.householdServings();
+		// Koken doe je een keer, voor dit aantal mensen. Die keer krijgt zijn
+		// eigen notitie; de kookmodus staat daarop en niet op het recept.
+		const wanted = servings ?? this.cook.householdServings();
+		const session = await this.cook.openSession(file, wanted);
+		if (!session) {
+			new Notice("Could not start a cooking session for that recipe.");
+			return;
+		}
 
 		const leaf = this.app.workspace.getLeaf("tab");
 		await leaf.setViewState({
 			type: COOK_VIEW_TYPE,
 			active: true,
-			state: { path: file.path, servings: wanted },
+			state: { path: session.path },
 		});
 		await this.app.workspace.revealLeaf(leaf);
 	}
