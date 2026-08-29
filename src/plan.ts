@@ -1,5 +1,4 @@
 import {
-	MarkdownView,
 	Notice,
 	TFile,
 	normalizePath,
@@ -9,6 +8,7 @@ import {
 import type PantryPlugin from "./main";
 import { addDays, toISODate, weekId } from "./date";
 import { markdownIn } from "./folder";
+import { capturePreviewScroll, viewsFor, writeThroughEditor } from "./plan-note-write";
 import { ensureFolder, linkTarget, toLink } from "./notes";
 import { asText } from "./text";
 import type {
@@ -278,9 +278,20 @@ export class PlanStore {
 		// Prefer the editor when the note is open: rewriting the whole file
 		// replaces the editor's document, which drops the cursor at the end and
 		// scrolls the note to the bottom under the user.
-		if (this.writeThroughEditor(existing, block)) return;
+		// De editor flusht pas seconden later naar schijf; onthoud nu al wat er
+		// straks in het modify-event zal staan.
+		const throughEditor = writeThroughEditor(
+			this.plugin.app,
+			existing,
+			block,
+			BLOCK_PATTERN
+		);
+		if (throughEditor !== null) {
+			this.lastWritten = throughEditor;
+			return;
+		}
 
-		const restoreScroll = this.capturePreviewScroll(existing);
+		const restoreScroll = capturePreviewScroll(this.plugin.app, existing);
 		let refused = false;
 		this.lastWritten = await vault.process(existing, (content: string) => {
 			if (BLOCK_PATTERN.test(content)) {
@@ -309,80 +320,13 @@ export class PlanStore {
 		}
 	}
 
-	/** Every open markdown view currently showing this file. */
 	/** De inhoud zoals de open editor hem kent, of null als hij niet openstaat. */
 	private readFromEditor(file: TFile): string | null {
-		for (const view of this.viewsFor(file)) {
+		for (const view of viewsFor(this.plugin.app, file)) {
 			if (view.getMode() !== "source") continue;
 			return view.editor.getValue();
 		}
 		return null;
-	}
-
-	private viewsFor(file: TFile): MarkdownView[] {
-		return this.plugin.app.workspace
-			.getLeavesOfType("markdown")
-			.map((leaf) => leaf.view)
-			.filter(
-				(view): view is MarkdownView =>
-					view instanceof MarkdownView && view.file === file
-			);
-	}
-
-	/**
-	 * Replaces just the block through the editor, so the surrounding text, the
-	 * cursor and the scroll position all stay exactly where they were.
-	 * Returns false when the note is not open for editing.
-	 */
-	private writeThroughEditor(file: TFile, block: string): boolean {
-		for (const view of this.viewsFor(file)) {
-			if (view.getMode() !== "source") continue;
-
-			const editor = view.editor;
-			const content = editor.getValue();
-			const match = BLOCK_PATTERN.exec(content);
-			if (!match) continue;
-			if (match[0] === block) return true;
-
-			const scroll = editor.getScrollInfo();
-			editor.replaceRange(
-				block,
-				editor.offsetToPos(match.index),
-				editor.offsetToPos(match.index + match[0].length)
-			);
-			// De editor flusht pas seconden later naar schijf; onthoud nu al wat
-			// er straks in het modify-event zal staan.
-			this.lastWritten = editor.getValue();
-
-			// Live Preview tears the rendered block down and builds it again, so
-			// the position is put back once more after that has settled.
-			const restore = (): void => editor.scrollTo(scroll.left, scroll.top);
-			restore();
-			window.requestAnimationFrame(restore);
-			return true;
-		}
-		return false;
-	}
-
-	/**
-	 * Reading view re-renders the block after a write and can lose its place, so
-	 * the scroll offset is put back once the new content has been laid out.
-	 */
-	private capturePreviewScroll(file: TFile): () => void {
-		const views = this.viewsFor(file).filter(
-			(view) => view.getMode() === "preview"
-		);
-		if (views.length === 0) return () => undefined;
-
-		const offsets = views.map((view) => view.currentMode.getScroll());
-		return () => {
-			const apply = (): void =>
-				views.forEach((view, index) =>
-					view.currentMode.applyScroll(offsets[index] ?? 0)
-				);
-			apply();
-			window.setTimeout(apply, 120);
-		};
 	}
 
 	/** Every plan note in the plan folder. */

@@ -321,8 +321,7 @@ export class ProductSheet extends Modal {
 
 	private async remove(): Promise<void> {
 		const name = this.product.name;
-		await this.app.fileManager.trashFile(this.product.file);
-		this.plugin.products.build();
+		await this.plugin.products.remove(this.product);
 		this.onChange();
 		new Notice(`${name} moved to trash.`);
 		const last = !this.run || this.run.index >= this.run.queue.length - 1;

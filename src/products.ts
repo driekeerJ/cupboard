@@ -453,6 +453,18 @@ export class ProductIndex {
 	}
 
 	/**
+	 * Gooit een productnotitie weg, via Obsidians eigen prullenbak.
+	 *
+	 * Hier en niet in het productscherm: de index weet wat een product is en
+	 * moet daarna toch opnieuw gebouwd worden. Een scherm dat zelf bestanden
+	 * weggooit is een scherm dat de index kan laten liggen.
+	 */
+	async remove(product: Product): Promise<void> {
+		await this.plugin.app.fileManager.trashFile(product.file);
+		this.build();
+	}
+
+	/**
 	 * Every distinct ingredient across all recipes that has no product yet.
 	 * Used to fill the base list in one go instead of typing dozens of notes.
 	 */
