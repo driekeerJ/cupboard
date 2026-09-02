@@ -7,6 +7,7 @@ servings: 2
 ## Ingrediënten
 
 - 500 g [[Rijst]]
+- 350 g [[Tahini]]
 
 ## Bereiding
 

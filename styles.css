@@ -977,9 +977,13 @@
 
 /* --- Add button in a slot ------------------------------------------ */
 
+/* Rechtsonder en niet rechtsboven: rechtsboven zit het kruisje van de
+ * bovenste kaart, en die twee verschenen allebei bij hover — twee knoppen
+ * op één plek, waarvan er één wist wat je net gepland had. Rechtsonder is
+ * altijd leeg, want de vinkjes van de onderste kaart staan links. */
 .pantry-slot-add {
 	position: absolute;
-	top: 4px;
+	bottom: 4px;
 	right: 4px;
 	display: flex;
 	align-items: center;
@@ -3743,6 +3747,35 @@
 	font-weight: 600;
 }
 
+/* Het rangnummer op een winkelchip: bij een product dat bij twee winkels
+ * ligt bepaalt de volgorde waar het vandaan komt, en een volgorde die je
+ * niet kunt zien kun je ook niet bedoelen. Verschijnt pas vanaf twee. */
+.pantry-app button.pantry-sheet-option {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+}
+
+.pantry-sheet-option-rank {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 18px;
+	height: 18px;
+	padding: 0 4px;
+	border-radius: 999px;
+	background: var(--background-modifier-border);
+	color: var(--text-muted);
+	font-size: calc(var(--font-ui-smaller) - 1px);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+.pantry-app button.pantry-sheet-option.is-active .pantry-sheet-option-rank {
+	background: hsla(0, 0%, 100%, 0.25);
+	color: var(--text-on-accent);
+}
+
 .pantry-app button.pantry-sheet-option.is-add {
 	border-style: dashed;
 	color: var(--text-muted);
@@ -3967,6 +4000,78 @@
  * gegeven, dit is een beslissing die uitleg verdient. */
 .pantry-buy-meta.is-moved {
 	color: var(--text-accent);
+}
+
+/* Een maaltijd die je niet op tijd kunt inkopen. Geel en niet rood: er
+ * is niets stuk, er is een keuze te maken — tellen wat je al hebt, een
+ * tweede winkel bij het product zetten, of de maaltijd verzetten. */
+.pantry-planner .pantry-planned-card.is-late {
+	border-color: hsl(45, 85%, 45%);
+	background: hsla(45, 90%, 55%, 0.12);
+}
+
+.pantry-planned-warning {
+	display: flex;
+	align-items: flex-start;
+	gap: 5px;
+	margin-top: 4px;
+	color: hsl(38, 75%, 38%);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.3;
+}
+
+.theme-dark .pantry-planned-warning {
+	color: hsl(45, 85%, 66%);
+}
+
+.pantry-planned-warning-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	margin-top: 1px;
+}
+
+.pantry-planned-warning-icon .svg-icon {
+	width: 13px;
+	height: 13px;
+}
+
+/* De productnaam in de waarschuwing is een knop naar het productblad.
+ * Onderstreept en niet als knop vormgegeven: het is een woord in een zin,
+ * en een echte knop zou het blokje overschreeuwen. De ruimte eromheen
+ * blijft wel groot genoeg om er met een duim op te mikken. */
+
+.pantry-planned-warning-names {
+	min-width: 0;
+}
+
+.pantry-planned-warning-name {
+	padding: 2px 1px;
+	margin: -2px 0;
+	border: none;
+	border-radius: 3px;
+	background: none;
+	box-shadow: none;
+	color: inherit;
+	font-size: inherit;
+	font-family: inherit;
+	line-height: inherit;
+	text-align: left;
+	text-decoration: underline;
+	text-decoration-style: dotted;
+	text-underline-offset: 2px;
+	cursor: pointer;
+}
+
+.pantry-planned-warning-name:hover,
+.pantry-planned-warning-name:focus-visible {
+	background: hsla(38, 75%, 45%, 0.16);
+	text-decoration-style: solid;
+	box-shadow: none;
+}
+
+.theme-dark .pantry-planned-warning-name:hover,
+.theme-dark .pantry-planned-warning-name:focus-visible {
+	background: hsla(45, 85%, 66%, 0.18);
 }
 
 /* --- Groceries row -------------------------------------------------- *

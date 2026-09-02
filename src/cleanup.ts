@@ -144,7 +144,16 @@ export class CleanupIndex {
 					continue;
 				}
 
-				if (parsed.amount === null || parsed.kind === "vague") {
+				// Een product waarvan de hoeveelheid niet uitmaakt levert per
+				// definitie nul op. Dat is een antwoord, geen probleem: zonder
+				// deze regel stond elk kruidenpotje en elke teen knoflook op
+				// de "telt nog steeds niet mee"-lijst, waar niets aan te doen
+				// viel — vijfenzestig van de drieëntachtig regels.
+				if (
+					parsed.amount === null ||
+					parsed.kind === "vague" ||
+					!product.amountMatters
+				) {
 					line.status = "vague";
 				} else if (inProductUnits(parsed, product, 1) > 0) {
 					line.status = "counts";

@@ -139,6 +139,12 @@ export default class PantryPlugin extends Plugin {
 				// in het karretje ligt.
 				await this.list.loadState();
 				await this.list.refresh();
+				// En dan pas de schermen die op die index leunen. Een planner
+				// die Obsidian bij het opstarten terugzet, tekent zichzelf
+				// vóór dit blok: producten en winkels waren er dan nog niet,
+				// dus elk maaltijdblokje bleef wit ook als je de boodschappen
+				// niet op tijd haalt.
+				this.refreshViews();
 			});
 			// Kooksessies zijn bedoeld om te verlopen: één keer koken, één
 			// notitie. Zonder opruimen groeit die map ongemerkt door.

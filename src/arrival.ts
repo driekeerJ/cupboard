@@ -126,45 +126,31 @@ export interface Assignment {
 /**
  * Waar dit product gekocht moet worden als het op `need` in huis moet zijn.
  *
- * De voorkeurswinkel van het product wint zolang hij op tijd is. Is hij dat
- * niet, dan neemt de winkel over die het eerst binnen is.
+ * De lijst is de voorkeursvolgorde: de eerste winkel die op tijd is, wint. Dat
+ * is voorspelbaar — jij bepaalt per product waar het bij voorkeur vandaan komt
+ * — en het verklaart zichzelf, want de volgorde staat in de productnotitie.
  *
- * Bewust géén instelbare voorkeursvolgorde: "wat het eerst binnen is" is de
- * enige ordening die het probleem zelf oplevert, hij vraagt geen configuratie,
- * en hij is niet aan winkels of landen gebonden. Bij een gelijk moment beslist
- * de naam, zodat de uitkomst niet per herstart verspringt.
+ * Redt geen enkele winkel uit de lijst het, dan blijft het bij de eerste staan
+ * met `late`. Het naar een winkel duwen waar dit product niet te krijgen is,
+ * maakt het niet op tijd; het maakt alleen onzichtbaar dat er iets niet kan.
+ * Dat is precies het moment waarop de planner moet waarschuwen.
  */
 export function assignShop(
-	preferred: string,
+	preferred: string[],
 	need: Moment | null,
-	arrivals: Map<string, Moment>,
-	shops: string[]
+	arrivals: Map<string, Moment>
 ): Assignment {
-	const name = preferred.trim();
-	const own = name.length > 0 ? (arrivals.get(name.toLowerCase()) ?? null) : null;
-	if (name.length === 0 || arrivesInTime(own, need)) {
-		return { shop: name, late: false };
-	}
+	const shops = preferred.map((shop) => shop.trim()).filter(Boolean);
+	const first = shops[0];
+	if (!first) return { shop: "", late: false };
 
-	let best: { shop: string; arrival: Moment | null } | null = null;
 	for (const shop of shops) {
-		const arrival = arrivals.get(shop.trim().toLowerCase()) ?? null;
+		const arrival = arrivals.get(shop.toLowerCase()) ?? null;
 		if (!arrivesInTime(arrival, need)) continue;
-		if (!best) {
-			best = { shop, arrival };
-			continue;
-		}
-		if (!best.arrival) continue;
-		if (!arrival) {
-			best = { shop, arrival };
-			continue;
-		}
-		const order = compareMoments(arrival, best.arrival);
-		if (order < 0 || (order === 0 && shop.localeCompare(best.shop) < 0)) {
-			best = { shop, arrival };
-		}
+		return shop === first
+			? { shop, late: false }
+			: { shop, late: false, movedFrom: first };
 	}
 
-	if (!best) return { shop: name, late: true };
-	return { shop: best.shop, late: false, movedFrom: name };
+	return { shop: first, late: true };
 }

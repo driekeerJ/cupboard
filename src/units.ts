@@ -29,6 +29,23 @@ export const SPOON_UNITS = [
 	"tl", "el", "cup", "cups", "mug", "mugs", "kopje", "kopjes",
 ];
 
+/**
+ * Een lepel of kop in milliliter.
+ *
+ * Los van `SPOON_UNITS`, dat alleen zegt *dat* het een lepel is. Deze tabel
+ * zegt hoe groot hij ongeveer is, en wordt uitsluitend gebruikt om te bepalen
+ * hoeveel er van een pot af gaat — nooit om een recept mee te herschalen: dat
+ * blijft in lepels rekenen, want in lepels is het opgeschreven.
+ *
+ * De maten zijn de Nederlandse keukenstandaard: een theelepel 5 ml, een
+ * eetlepel 15 ml, een kopje 240 ml.
+ */
+export const SPOON_ML: Record<string, number> = {
+	tsp: 5, tsps: 5, teaspoon: 5, teaspoons: 5, tl: 5,
+	tbsp: 15, tbsps: 15, tablespoon: 15, tablespoons: 15, el: 15,
+	cup: 240, cups: 240, mug: 240, mugs: 240, kopje: 240, kopjes: 240,
+};
+
 /** Measures that mean "roughly this much" and do not survive being scaled. */
 export const VAGUE_UNITS = [
 	"handful", "handfuls", "handvol", "pinch", "pinches", "snufje",

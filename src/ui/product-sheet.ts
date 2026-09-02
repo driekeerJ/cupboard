@@ -136,7 +136,9 @@ export class ProductSheet extends Modal {
 
 	/** Shelves of this product's shop first; other known shelves after. */
 	private shelfOptions(): string[] {
-		const shop = this.product.shop;
+		// De eerste winkel bepaalt welke schappen bovenaan komen: dat is de
+		// winkel waar dit product bij voorkeur vandaan komt.
+		const shop = this.product.shops[0] ?? "";
 		const route = shop
 			? this.plugin.shops.shelves(shop)
 			: this.plugin.shops.all().flatMap((item) => item.shelves);
@@ -256,7 +258,7 @@ export class ProductSheet extends Modal {
 
 	private facts(): string {
 		const parts: string[] = [];
-		if (this.product.shop) parts.push(this.product.shop);
+		if (this.product.shops.length > 0) parts.push(this.product.shops.join(" / "));
 		if (this.product.shelf) parts.push(this.product.shelf);
 		if (this.product.storage && this.product.storage !== UNASSIGNED) {
 			parts.push(this.product.storage);
@@ -342,6 +344,11 @@ export class ProductSheet extends Modal {
 			return;
 		}
 
+		if (key === "shop") {
+			this.drawShops(parent);
+			return;
+		}
+
 		const specs: Record<string, { value: string; options: string[]; field: keyof ProductPatch }> =
 			{
 				unit: {
@@ -349,7 +356,6 @@ export class ProductSheet extends Modal {
 					options: this.plugin.products.values("unit"),
 					field: "unit",
 				},
-				shop: { value: this.product.shop, options: this.shopOptions(), field: "shop" },
 				shelf: { value: this.product.shelf, options: this.shelfOptions(), field: "shelf" },
 				storage: {
 					value: this.product.storage === UNASSIGNED ? "" : this.product.storage,
@@ -366,6 +372,39 @@ export class ProductSheet extends Modal {
 			value: spec.value,
 			options: spec.options,
 			apply: (value: string): ProductPatch => ({ [spec.field]: value }),
+		});
+	}
+
+	/**
+	 * Winkels: meerdere mogen, en de volgorde is de voorkeursvolgorde.
+	 *
+	 * Aantikken zet een winkel erbij, achteraan; nog eens aantikken haalt hem
+	 * eraf. Achteraan en niet vooraan, want de eerste keus is degene die je
+	 * het eerst koos — die mag niet verschuiven doordat je er later een
+	 * uitwijkwinkel bij zet.
+	 */
+	private drawShops(parent: HTMLElement): void {
+		chipPicker(parent, {
+			label: LABELS.shop,
+			value: this.product.shops,
+			options: this.shopOptions(),
+			typing: this.typing === "shop",
+			setTyping: (open: boolean) => {
+				this.typing = open ? "shop" : null;
+				this.render();
+			},
+			pick: (value: string) => {
+				const picked = value.trim();
+				if (picked.length === 0) return;
+				const key = picked.toLowerCase();
+				const current = this.product.shops;
+				const shops = current.some((shop) => shop.toLowerCase() === key)
+					? current.filter((shop) => shop.toLowerCase() !== key)
+					: [...current, picked];
+				guarded(`could not update ${this.product.name}`, () =>
+					this.apply({ shops })
+				);
+			},
 		});
 	}
 

@@ -1,10 +1,8 @@
 ---
 minimum: 0
-unit: pak
-size: 500 g
-shop:
-  - AH
-  - Lidl
+unit: pot
+size: 350 g
+shop: AH
 storage: Voorraadkast
 shelf: Droogwaren
 count: 0

@@ -72,14 +72,26 @@ export function keepScroll(body: HTMLElement): () => void {
 
 export interface ChipPicker {
 	label: string;
-	/** What is set now; "" draws the block as still unanswered. */
-	value: string;
+	/**
+	 * What is set now; "" draws the block as still unanswered.
+	 *
+	 * Een array betekent: er mogen er meerdere aan staan, en de volgorde telt.
+	 * De chips krijgen dan een rangnummer, want bij een product dat bij twee
+	 * winkels ligt bepaalt die volgorde waar het vandaan komt — en een
+	 * volgorde die je niet kunt zien, kun je ook niet bedoelen.
+	 */
+	value: string | string[];
 	options: string[];
 	/** True while this picker's free-text field is the open one. */
 	typing: boolean;
 	/** Opens or closes that field. Only ever one at a time per screen. */
 	setTyping: (open: boolean) => void;
-	/** A chip tap or a typed value. "" means: clear this field. */
+	/**
+	 * A chip tap or a typed value. "" means: clear this field.
+	 *
+	 * Bij een meervoudig veld krijgt de callback de aangetikte optie; wat dat
+	 * betekent — erbij of eraf — beslist de aanroeper.
+	 */
 	pick: (value: string) => void;
 }
 
@@ -95,22 +107,34 @@ export interface ChipPicker {
  * draft until you press Add — and that difference is the `pick` callback.
  */
 export function chipPicker(parent: HTMLElement, spec: ChipPicker): HTMLElement {
+	const multi = Array.isArray(spec.value);
+	const chosen = (Array.isArray(spec.value) ? spec.value : [spec.value])
+		.map((item) => item.trim())
+		.filter(Boolean);
+
 	const block = parent.createDiv({ cls: "pantry-sheet-block" });
-	block.toggleClass("is-empty", spec.value.trim().length === 0);
+	block.toggleClass("is-empty", chosen.length === 0);
 	block.createDiv({ cls: "pantry-sheet-label", text: spec.label });
 
 	const options = block.createDiv({ cls: "pantry-sheet-options" });
-	const current = spec.value.trim().toLowerCase();
+	const rank = new Map(chosen.map((item, index) => [item.toLowerCase(), index]));
 
 	spec.options.forEach((option) => {
-		const chip = options.createEl("button", {
-			cls: "pantry-sheet-option",
-			text: option,
-		});
-		const active = option.trim().toLowerCase() === current;
+		const chip = options.createEl("button", { cls: "pantry-sheet-option" });
+		const place = rank.get(option.trim().toLowerCase());
+		const active = place !== undefined;
+		// Het rangnummer alleen als er iets te kiezen valt: bij één winkel
+		// zegt "1" niets en staat het alleen maar in de weg.
+		if (multi && active && chosen.length > 1) {
+			chip.createSpan({
+				cls: "pantry-sheet-option-rank",
+				text: `${(place ?? 0) + 1}`,
+			});
+		}
+		chip.createSpan({ text: option });
 		chip.toggleClass("is-active", active);
 		chip.setAttr("aria-pressed", active ? "true" : "false");
-		chip.onclick = () => spec.pick(active ? "" : option);
+		chip.onclick = () => spec.pick(active && !multi ? "" : option);
 	});
 
 	if (spec.typing) {
@@ -118,7 +142,7 @@ export function chipPicker(parent: HTMLElement, spec: ChipPicker): HTMLElement {
 			cls: "pantry-field-input pantry-sheet-input",
 			attr: { type: "text", placeholder: `New ${spec.label.toLowerCase()}` },
 		});
-		input.value = spec.value;
+		input.value = multi ? "" : (chosen[0] ?? "");
 		window.setTimeout(() => input.focus(), 0);
 		const commit = (): void => {
 			const value = input.value.trim();
@@ -136,7 +160,7 @@ export function chipPicker(parent: HTMLElement, spec: ChipPicker): HTMLElement {
 	} else {
 		const add = options.createEl("button", {
 			cls: "pantry-sheet-option is-add",
-			text: spec.value ? "Other…" : "Type one…",
+			text: chosen.length > 0 ? "Other…" : "Type one…",
 		});
 		add.onclick = () => spec.setTyping(true);
 	}

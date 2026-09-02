@@ -127,7 +127,14 @@ export class ProductsView extends ItemView {
 	private matching(): Product[] {
 		const query = this.query.trim().toLowerCase();
 		return this.plugin.products.all().filter((product) => {
-			if (this.shop && product.shop !== this.shop) return false;
+			if (
+				this.shop &&
+				!product.shops.some(
+					(shop) => shop.toLowerCase() === this.shop.toLowerCase()
+				)
+			) {
+				return false;
+			}
 			return matchesQuery(query, [product.name, ...product.aliases]);
 		});
 	}
@@ -275,7 +282,7 @@ export class ProductsView extends ItemView {
 			const facts: string[] = [];
 			facts.push(`min ${product.minimum}${product.unit ? ` ${product.unit}` : ""}`);
 			if (product.size) facts.push(`${product.size.amount} ${product.size.unit}`.trim());
-			if (product.shop) facts.push(product.shop);
+			if (product.shops.length > 0) facts.push(product.shops.join(" / "));
 			if (product.shelf) facts.push(product.shelf);
 			main.createDiv({ cls: "pantry-product-facts", text: facts.join(" · ") });
 		}

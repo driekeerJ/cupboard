@@ -31,7 +31,28 @@ export interface Product {
 	 * bought, which is a decision the user made and not a failure to convert.
 	 */
 	amountMatters: boolean;
-	shop: string;
+	/**
+	 * Nooit kopen, nooit naar vragen.
+	 *
+	 * Water is een ingrediënt en geen boodschap. Zonder een plek om dat te
+	 * zeggen bleef elke regel water op de opruimlijst staan als onbekend
+	 * ingrediënt — dertig ervan — en was er niets dat je eraan kon doen.
+	 * `pantry: ignore` in de frontmatter is dat antwoord: de notitie bestaat
+	 * zodat recepten ernaar kunnen wijzen, en verder houdt hij zijn mond.
+	 */
+	ignored: boolean;
+	/**
+	 * Waar dit te koop is, in volgorde van voorkeur.
+	 *
+	 * Een lijst en niet één winkel, want uien haal je bij de Lidl óf bij de
+	 * AH. Die vrijheid is precies wat de boodschappenlijst nodig heeft: als de
+	 * eerste winkel te laat is voor de maaltijd waarvoor je het nodig hebt,
+	 * mag de volgende het overnemen — en staat er niets anders in de lijst,
+	 * dan is dat een waarschuwing en geen stille verhuizing.
+	 *
+	 * Leeg betekent: de vraag is nog niet beantwoord.
+	 */
+	shops: string[];
 	storage: string;
 	/** Which shelf it sits on, for the walking route. */
 	shelf: string;
@@ -68,7 +89,8 @@ export interface ProductPatch {
 	size?: string;
 	/** "any" writes off the amount question; "" asks it again. */
 	amount?: string;
-	shop?: string;
+	/** Winkels in volgorde van voorkeur; een lege lijst wist het veld. */
+	shops?: string[];
 	storage?: string;
 	shelf?: string;
 	aliases?: string[];
@@ -247,11 +269,16 @@ export class ProductIndex {
 			minimum: parseNumber(frontmatter.minimum) ?? parseNumber(frontmatter.target) ?? 0,
 			unit: text(frontmatter.unit),
 			size: parseSize(frontmatter.size),
-			amountMatters: text(frontmatter.amount).toLowerCase() !== "any",
+			amountMatters:
+				text(frontmatter.pantry).toLowerCase() !== "ignore" &&
+				text(frontmatter.amount).toLowerCase() !== "any",
+			ignored: text(frontmatter.pantry).toLowerCase() === "ignore",
 			// `shop: "[[Lidl]]"` geeft de winkelnotitie een backlink en laat
 			// Obsidian de verwijzing bijwerken als je hem hernoemt. Een kale
-			// naam uit een oudere notitie blijft gewoon werken.
-			shop: linkTarget(text(frontmatter.shop)),
+			// naam uit een oudere notitie blijft gewoon werken, en één winkel
+			// als losse waarde is een lijst van één — oude notities hoeven
+			// nergens voor omgezet te worden.
+			shops: list(frontmatter.shop).map((name) => linkTarget(name)),
 			storage: text(frontmatter.storage) || UNASSIGNED,
 			shelf: text(frontmatter.shelf) || text(frontmatter.aisle),
 			aliases: list(frontmatter.aliases),
@@ -278,11 +305,21 @@ export class ProductIndex {
 		const link = LINK_TARGET.exec(rawName);
 		if (link) {
 			// An explicit link is the author being precise; never second-guess it.
-			const target = this.plugin.app.metadataCache.getFirstLinkpathDest(
-				(link[1] ?? "").trim(),
+			const target = (link[1] ?? "").trim();
+
+			// Eerst de productmap zelf. Obsidian lost `[[Rijst]]` op over de
+			// hele vault, en één oude notitie die toevallig ook Rijst heet
+			// kaapte daarmee elke rijstregel in elk recept: het product werd
+			// niet gevonden en de rijst stond als "onbekend ingrediënt" op de
+			// opruimlijst. Heet een product zo, dan is dát bedoeld.
+			const named = this.lookup.get(normalise(target));
+			if (named) return named;
+
+			const dest = this.plugin.app.metadataCache.getFirstLinkpathDest(
+				target,
 				""
 			);
-			const linked = target ? this.byPath(target.path) : null;
+			const linked = dest ? this.byPath(dest.path) : null;
 			if (linked) return linked;
 		}
 		return this.lookup.get(normalise(rawName)) ?? null;
@@ -292,6 +329,12 @@ export class ProductIndex {
 	values(field: "shop" | "storage" | "unit" | "shelf"): string[] {
 		const found = new Set<string>();
 		this.products.forEach((product) => {
+			if (field === "shop") {
+				product.shops.forEach((shop) => {
+					if (shop) found.add(shop);
+				});
+				return;
+			}
 			const value = product[field];
 			if (value) found.add(value);
 		});
@@ -313,14 +356,8 @@ export class ProductIndex {
 					if (patch.amount) frontmatter.amount = patch.amount;
 					else delete frontmatter.amount;
 				}
-				if (patch.shop !== undefined) {
-					// Als de winkel een notitie heeft, schrijf de link; anders de
-					// naam, want een link naar niets helpt niemand.
-					frontmatter.shop = patch.shop
-						? this.plugin.shops.find(patch.shop)
-							? toLink(patch.shop)
-							: patch.shop
-						: "";
+				if (patch.shops !== undefined) {
+					frontmatter.shop = this.writeShops(patch.shops);
 				}
 				if (patch.storage !== undefined) frontmatter.storage = patch.storage;
 				if (patch.shelf !== undefined) {
@@ -380,7 +417,7 @@ export class ProductIndex {
 		if (patch.amount !== undefined) {
 			product.amountMatters = patch.amount.toLowerCase() !== "any";
 		}
-		if (patch.shop !== undefined) product.shop = patch.shop;
+		if (patch.shops !== undefined) product.shops = [...patch.shops];
 		if (patch.storage !== undefined) {
 			product.storage = patch.storage || UNASSIGNED;
 		}
@@ -413,6 +450,24 @@ export class ProductIndex {
 	}
 
 	/**
+	 * De vorm waarin `shop` in de frontmatter belandt.
+	 *
+	 * Eén winkel blijft een losse waarde, zodat elke bestaande notitie er
+	 * precies zo uit blijft zien als hij was; pas vanaf twee wordt het een
+	 * lijst. Winkels met een eigen notitie worden een wikilink, zodat Obsidian
+	 * ze bijwerkt bij hernoemen en de backlink klopt.
+	 */
+	private writeShops(shops: string[]): string | string[] {
+		const written = shops
+			.map((shop) => shop.trim())
+			.filter(Boolean)
+			.map((shop) => (this.plugin.shops.find(shop) ? toLink(shop) : shop));
+		if (written.length === 0) return "";
+		if (written.length === 1) return written[0] ?? "";
+		return written;
+	}
+
+	/**
 	 * Zet elke verwijzing naar een hernoemde winkel om.
 	 *
 	 * Obsidian werkt een `[[Lidl]]` in de frontmatter zelf bij, maar een kale
@@ -426,8 +481,16 @@ export class ProductIndex {
 
 		let changed = 0;
 		for (const product of this.products) {
-			if (product.shop.trim().toLowerCase() !== from) continue;
-			await this.update(product, { shop: to });
+			if (!product.shops.some((shop) => shop.trim().toLowerCase() === from)) {
+				continue;
+			}
+			// Op zijn plek in de lijst laten staan: de volgorde is de
+			// voorkeursvolgorde, en een hernoeming is geen herrangschikking.
+			await this.update(product, {
+				shops: product.shops.map((shop) =>
+					shop.trim().toLowerCase() === from ? to : shop
+				),
+			});
 			changed++;
 		}
 		return changed;
@@ -457,10 +520,7 @@ export class ProductIndex {
 				frontmatter.minimum = patch.minimum ?? 0;
 				frontmatter.unit = patch.unit ?? "";
 				frontmatter.size = patch.size ?? "";
-				frontmatter.shop =
-					patch.shop && this.plugin.shops.find(patch.shop)
-						? toLink(patch.shop)
-						: (patch.shop ?? "");
+				frontmatter.shop = this.writeShops(patch.shops ?? []);
 				frontmatter.storage = patch.storage ?? "";
 				frontmatter.shelf = patch.shelf ?? "";
 				frontmatter.aliases = patch.aliases ?? [];
@@ -540,10 +600,12 @@ export type MandatoryField = (typeof MANDATORY)[number];
  * is nothing to convert and asking for a size would be busywork.
  */
 export function missingFields(product: Product): MandatoryField[] {
+	// Een product dat je nooit koopt hoeft niet te weten waar het te koop is.
+	if (product.ignored) return [];
 	const gaps: MandatoryField[] = [];
 	if (!product.unit) gaps.push("unit");
 	if (!product.size && product.amountMatters) gaps.push("size");
-	if (!product.shop) gaps.push("shop");
+	if (product.shops.length === 0) gaps.push("shop");
 	if (!product.shelf) gaps.push("shelf");
 	if (!product.storage || product.storage === UNASSIGNED) gaps.push("storage");
 	return gaps;

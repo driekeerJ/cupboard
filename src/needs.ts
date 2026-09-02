@@ -16,17 +16,41 @@ import {
 } from "./ingredients";
 import { linkTarget, servingsFor } from "./plan";
 import type { Product } from "./products";
-import { family, sameUnit, unitKey } from "./units";
+import { SPOON_ML, family, sameUnit, unitKey } from "./units";
 import type { PlannedRecipe, WeekPlan } from "./types";
 
-/** Converts `amount from` into `to`, or null when the units are unrelated. */
-function convert(amount: number, from: string, to: string): number | null {
+/** Converts `amount from` into `to` binnen één maatfamilie, anders null. */
+function inFamily(amount: number, from: string, to: string): number | null {
 	const table = family(from);
 	if (!table || table !== family(to)) return null;
 	const a = table[unitKey(from)];
 	const b = table[unitKey(to)];
 	if (!a || !b) return null;
 	return (amount * a) / b;
+}
+
+/**
+ * Converts `amount from` into `to`, or null when the units are unrelated.
+ *
+ * Lepels horen bij geen enkele familie, en dat kostte de boodschappenlijst het
+ * meeste: "2 el tomatenpuree" tegen een blikje van 70 g leverde nul op, en
+ * zestien recepten met tomatenpuree vroegen samen om geen enkel blikje. Een
+ * lepel gaat daarom eerst naar milliliter.
+ *
+ * Staat de verpakking in grammen, dan wordt 1 ml als 1 g gerekend. Dat is een
+ * benadering, maar wel een die kleiner is dan de fout die er al in zit: een
+ * afgestreken en een volle eetlepel schelen meer dan de dichtheid van stroop
+ * en water. En de uitkomst wordt alsnog naar hele verpakkingen afgerond. De
+ * brug geldt bewust *alleen* voor lepels: "240 ml water" tegen een product in
+ * grammen blijft null, want daar is niets aan te benaderen.
+ */
+function convert(amount: number, from: string, to: string): number | null {
+	const spoon = SPOON_ML[unitKey(from)];
+	if (spoon !== undefined) {
+		const ml = amount * spoon;
+		return inFamily(ml, "ml", to) ?? inFamily(ml, "g", to);
+	}
+	return inFamily(amount, from, to);
 }
 
 /**
@@ -159,6 +183,15 @@ export class NeedIndex {
 	private moments: Map<string, Moment> = new Map();
 	/** Vanaf wanneer elke winkel in huis is, gesleuteld op naam in kleine letters. */
 	private shopArrivals: Map<string, Moment> = new Map();
+	/**
+	 * Welke producten er per maaltijdvak gevraagd worden, gesleuteld op
+	 * `datum|maaltijdindex`.
+	 *
+	 * Nodig omdat de planner per blokje wil weten of het te koken valt, en dat
+	 * antwoord hangt aan dát moment — niet aan het vroegste moment waarop een
+	 * product ergens in de week voorkomt.
+	 */
+	private slots: Map<string, Set<string>> = new Map();
 
 	constructor(plugin: PantryPlugin) {
 		this.plugin = plugin;
@@ -188,6 +221,19 @@ export class NeedIndex {
 	}
 
 	/**
+	 * De producten die dit maaltijdvak vraagt, voor zover ze een hoeveelheid
+	 * opleveren. Regels die nergens op uitkomen — een snuf zout, een vage maat
+	 * — staan er niet bij: die zeggen niets over of je dit kunt koken.
+	 */
+	productsAt(date: string, meal: number): Product[] {
+		const paths = this.slots.get(`${date}|${meal}`);
+		if (!paths) return [];
+		return [...paths]
+			.map((path) => this.plugin.products.byPath(path))
+			.filter((product): product is Product => product !== null);
+	}
+
+	/**
 	 * Leest het plan van `from` tot en met `from + days - 1`.
 	 *
 	 * Een rollende horizon en niet "deze week", want boodschappen doen loopt
@@ -203,6 +249,7 @@ export class NeedIndex {
 
 		this.origins = new Map();
 		this.moments = new Map();
+		this.slots = new Map();
 
 		const raw = new Map<string, number>();
 		const stops: DatedStop[] = [];
@@ -277,7 +324,8 @@ export class NeedIndex {
 						raw,
 						file,
 						factorFor(this.plugin, file, entry),
-						moment
+						moment,
+						`${day.date}|${moment.meal}`
 					);
 				}
 			}
@@ -288,7 +336,8 @@ export class NeedIndex {
 		into: Map<string, number>,
 		file: TFile,
 		factor: number,
-		moment: Moment
+		moment: Moment,
+		slot: string
 	): Promise<void> {
 		for (const { product, line, amount } of await amountsForRecipe(
 			this.plugin,
@@ -309,6 +358,10 @@ export class NeedIndex {
 			// mee verzetten.
 			const best = earliest(this.moments.get(product.path) ?? null, moment);
 			if (best) this.moments.set(product.path, best);
+
+			const here = this.slots.get(slot) ?? new Set<string>();
+			here.add(product.path);
+			this.slots.set(slot, here);
 		}
 	}
 }

@@ -39,6 +39,9 @@ import {
 	takeFromStock,
 	type StockChange,
 } from "../consume";
+import { lateProducts } from "../list";
+import type { Product } from "../products";
+import { ProductSheet } from "./product-sheet";
 import { AddRecipeModal } from "./add-recipe-modal";
 import { DRAG_MIME, readPayload, type DragPayload } from "./drag";
 import { EatersPopover } from "./eaters-popover";
@@ -179,8 +182,26 @@ export class PlannerGrid {
 		this.renderToolbar();
 
 		this.scrollerEl = this.root.createDiv({ cls: "pantry-grid-scroll" });
+		// Doorrekenen vóór het tekenen: de waarschuwing op een maaltijdblokje
+		// leest de behoefte-index, en die werd hiervoor alleen bijgewerkt door
+		// de andere schermen. Opende je de planner als eerste, dan was hij leeg
+		// en bleef elk blokje wit tot je toevallig iets versleepte.
+		await this.refreshNeeds();
+		if (token !== this.renderToken) return;
 		this.drawBody();
 		this.watchWidth();
+	}
+
+	/**
+	 * Werkt de behoefte-index bij, zonder de render te laten sneuvelen als dat
+	 * misgaat: een plan zonder waarschuwingen is te lezen, een leeg scherm niet.
+	 */
+	private async refreshNeeds(): Promise<void> {
+		try {
+			await this.plugin.needs.rebuild(new Date());
+		} catch (error) {
+			console.error("Pantry: could not work out what the week needs", error);
+		}
 	}
 
 	/** Stops the width watcher; call when the host view or block goes away. */
@@ -318,6 +339,11 @@ export class PlannerGrid {
 		this.drawGrid();
 		try {
 			await this.plugin.plans.save(this.weekStart, this.plan);
+			// Opnieuw doorrekenen en dán pas de waarschuwingen tekenen: sleep
+			// je een maaltijd naar een dag waar je de boodschappen niet meer
+			// voor haalt, dan moet dat blokje meteen geel zijn.
+			await this.refreshNeeds();
+			this.drawGrid();
 		} catch (error) {
 			console.error("Pantry: could not save the meal plan", error);
 			new Notice("Pantry could not save your meal plan. See the console for details.");
@@ -689,7 +715,7 @@ export class PlannerGrid {
 
 		const entries = recipesAt(this.plan, isoDate, meal);
 		entries.forEach((entry, index) =>
-			this.drawPlannedCard(slot, entry, isoDate, meal, index)
+			this.drawPlannedCard(slot, entry, isoDate, meal, index, mealIndex)
 		);
 
 		if (entries.length === 0) {
@@ -742,7 +768,8 @@ export class PlannerGrid {
 		entry: PlannedRecipe,
 		date: string,
 		meal: MealType,
-		index: number
+		index: number,
+		mealIndex: number
 	): void {
 		const name = linkTarget(entry.recipe);
 		const card = slot.createDiv({ cls: "pantry-planned-card" });
@@ -771,6 +798,7 @@ export class PlannerGrid {
 			text: `${formatServings(servings)} ${servings === 1 ? "serving" : "servings"}`,
 		});
 
+		this.drawShoppingWarning(card, entry, date, mealIndex);
 		this.drawTicks(card, entry);
 
 		card.addEventListener("dragstart", (event: DragEvent) => {
@@ -848,6 +876,92 @@ export class PlannerGrid {
 	 * Eaten or skipped, on the card itself. Tapping the button that is already
 	 * on takes the answer back, which is the only undo the screen needs.
 	 */
+	/**
+	 * Geel als deze maaltijd iets vraagt wat je er niet op tijd voor in huis
+	 * krijgt.
+	 *
+	 * Een melding en geen blokkade: er zijn meerdere goede antwoorden — je hebt
+	 * het al staan en telt het, je voegt een tweede winkel toe bij het product,
+	 * je verzet de maaltijd, of je haalt het alsnog ergens. Welke van die vier
+	 * de juiste is weet alleen jij, dus de planner wijst het aan en laat de
+	 * keuze bij jou.
+	 *
+	 * Al afgevinkte maaltijden komen hier nooit: die vragen niets meer.
+	 */
+	private drawShoppingWarning(
+		card: HTMLElement,
+		entry: PlannedRecipe,
+		date: string,
+		mealIndex: number
+	): void {
+		if (entry.status) return;
+
+		const stuck = lateProducts(this.plugin, date, mealIndex).filter((item) =>
+			this.plugin.needs
+				.sources(item.product)
+				.some((source) => source.recipe === linkTarget(entry.recipe))
+		);
+		if (stuck.length === 0) return;
+
+		card.addClass("is-late");
+		const warning = card.createDiv({ cls: "pantry-planned-warning" });
+		setIcon(warning.createSpan({ cls: "pantry-planned-warning-icon" }), "alert-triangle");
+
+		// De naam is de knop. De waarschuwing wijst het product aan dat in de
+		// weg zit, en de meest gekozen oplossing — er ligt ook een tweede
+		// winkel die het verkoopt — staat in het productblad. Die twee een tik
+		// uit elkaar houden betekende: onthouden hoe het heette, terug naar
+		// Products, zoeken. Hier is het één tik, op de plek waar het opvalt.
+		const names = warning.createSpan({ cls: "pantry-planned-warning-names" });
+		stuck.forEach((item, at) => {
+			if (at > 0) names.createSpan({ text: ", " });
+			const button = names.createEl("button", {
+				cls: "pantry-planned-warning-name",
+				text: item.product.name,
+				attr: {
+					"aria-label": `Edit ${item.product.name}: only at ${item.shop}, and that arrives after this meal`,
+					title: `Only at ${item.shop}, and that arrives after this meal. Tap to fix it.`,
+				},
+			});
+			// Anders opent de eterspopover van de kaart eroverheen.
+			button.onclick = (event: MouseEvent) => {
+				event.stopPropagation();
+				this.editProduct(item.product);
+			};
+		});
+
+		// De reden hoort erbij, anders is het een uitroepteken zonder zin.
+		const shops = [...new Set(stuck.map((item) => item.shop))].join(", ");
+		warning.setAttribute(
+			"aria-label",
+			`Not in the house in time: ${stuck
+				.map((item) => item.product.name)
+				.join(", ")}. Only sold at ${shops}, which arrives after this meal.`
+		);
+		warning.setAttribute("title", `Only at ${shops}, and that arrives after this meal.`);
+	}
+
+	/**
+	 * Het productblad, op de winkelvraag.
+	 *
+	 * `"shop"` en niet `"missing"`: hier staat niets ongevraagd open — het
+	 * product weet alles, alleen ligt het in één winkel die te laat is. De
+	 * winkellijst is precies het veld dat dat oplost, en `shelf` en `storage`
+	 * staan eronder omdat een tweede winkel er meestal een tweede schap bij
+	 * krijgt.
+	 *
+	 * Na afloop eerst opnieuw doorrekenen en dán tekenen, anders blijft het
+	 * blokje geel terwijl het probleem al weg is.
+	 */
+	private editProduct(product: Product): void {
+		new ProductSheet(this.plugin, product, "shop", () =>
+			guarded("could not work out what the week needs", async () => {
+				await this.refreshNeeds();
+				this.drawGrid();
+			})
+		).open();
+	}
+
 	private drawTicks(card: HTMLElement, entry: PlannedRecipe): void {
 		const status = entry.status ?? null;
 		card.toggleClass("is-eaten", status === "eaten");

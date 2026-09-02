@@ -6,12 +6,17 @@ import { dedupe } from "../text";
 import { chipPicker } from "./kit";
 
 /** The fields you fill in by tapping a chip. All of them plain strings. */
-type PickerKey = "shop" | "shelf" | "storage" | "unit";
+/**
+ * De velden die één waarde hebben. `shop` staat er niet bij: dat zijn er
+ * meerdere en het heeft zijn eigen blok.
+ */
+type PickerKey = "shelf" | "storage" | "unit";
 
 /** What the form holds until you press Add. */
 interface Draft {
 	name: string;
-	shop: string;
+	/** Winkels in volgorde van voorkeur; zie Product.shops. */
+	shops: string[];
 	shelf: string;
 	storage: string;
 	unit: string;
@@ -29,7 +34,7 @@ const DEFAULT_MINIMUM = 1;
 function blank(): Draft {
 	return {
 		name: "",
-		shop: "",
+		shops: [],
 		shelf: "",
 		storage: "",
 		unit: "",
@@ -109,7 +114,7 @@ export class NewProductModal extends Modal {
 
 		const body = root.createDiv({ cls: "pantry-sheet-body" });
 		this.drawName(body);
-		this.drawPicker(body, "shop", "Shop", this.draft.shop, this.shopOptions());
+		this.drawShops(body);
 		this.drawPicker(body, "shelf", "Shelf", this.draft.shelf, this.shelfOptions());
 		this.drawPicker(
 			body,
@@ -135,7 +140,7 @@ export class NewProductModal extends Modal {
 
 	/** Shelves of the chosen shop first; other known shelves after. */
 	private shelfOptions(): string[] {
-		const shop = this.draft.shop;
+		const shop = this.draft.shops[0] ?? "";
 		const route = shop
 			? this.plugin.shops.shelves(shop)
 			: this.plugin.shops.all().flatMap((item) => item.shelves);
@@ -230,6 +235,39 @@ export class NewProductModal extends Modal {
 
 	// --------------------------------------------------------------- pickers
 
+	/**
+	 * Winkels: meerdere mogen, de eerste is de voorkeur. Zelfde gedrag als in
+	 * het productblad, alleen schrijft dit nog niets weg.
+	 */
+	private drawShops(parent: HTMLElement): void {
+		chipPicker(parent, {
+			label: "Shop",
+			value: this.draft.shops,
+			options: this.shopOptions(),
+			typing: this.typing === "shop",
+			setTyping: (open: boolean) => {
+				this.typing = open ? "shop" : null;
+				this.render();
+			},
+			pick: (picked: string) => {
+				const value = picked.trim();
+				if (value.length === 0) return;
+				const key = value.toLowerCase();
+				const had = this.draft.shops[0] ?? "";
+				this.draft.shops = this.draft.shops.some(
+					(shop) => shop.toLowerCase() === key
+				)
+					? this.draft.shops.filter((shop) => shop.toLowerCase() !== key)
+					: [...this.draft.shops, value];
+				// Alleen als de éérste winkel verandert, verandert de
+				// schappenlijst; anders blijft een gekozen schap gewoon staan.
+				if ((this.draft.shops[0] ?? "") !== had) this.draft.shelf = "";
+				this.typing = null;
+				this.render();
+			},
+		});
+	}
+
 	private drawPicker(
 		parent: HTMLElement,
 		key: PickerKey,
@@ -247,9 +285,6 @@ export class NewProductModal extends Modal {
 				this.render();
 			},
 			pick: (picked: string) => {
-				// De keuze van winkel bepaalt welke schappen er zijn, dus het
-				// hele formulier wordt hertekend; het concept houdt de rest vast.
-				if (key === "shop" && picked !== this.draft.shop) this.draft.shelf = "";
 				this.draft[key] = picked;
 				this.typing = null;
 				this.render();
@@ -349,20 +384,26 @@ export class NewProductModal extends Modal {
 			this.draft.url = input.value;
 		});
 
-		const target = this.plugin.shops.searchFor(this.draft.shop, this.draft.name);
-		if (target) {
+		// Een knop per winkel die een zoekadres heeft: ligt het product bij
+		// twee winkels, dan wil je het bij allebei kunnen opzoeken.
+		let found = false;
+		for (const shop of this.draft.shops) {
+			const target = this.plugin.shops.searchFor(shop, this.draft.name);
+			if (!target) continue;
+			found = true;
 			const look = row.createEl("button", {
 				cls: "pantry-sheet-option",
-				text: `Search at ${this.draft.shop}`,
+				text: `Search at ${shop}`,
 			});
 			look.onclick = () => window.open(target, "_blank");
-			return;
 		}
+		if (found) return;
 
-		if (this.draft.shop && !this.plugin.shops.searchFor(this.draft.shop, "x")) {
+		const first = this.draft.shops[0];
+		if (first) {
 			block.createDiv({
 				cls: "pantry-sheet-hint",
-				text: `Put a search address in ${this.draft.shop}'s note to look products up from here.`,
+				text: `Put a search address in ${first}'s note to look products up from here.`,
 			});
 		}
 	}
@@ -440,7 +481,7 @@ export class NewProductModal extends Modal {
 			unit: this.draft.unit,
 			size: this.draft.size.trim(),
 			amount: this.draft.amountMatters ? "" : "any",
-			shop: this.draft.shop,
+			shops: this.draft.shops,
 			storage: this.draft.storage,
 			shelf: this.draft.shelf,
 			aliases: this.draft.aliases
@@ -466,7 +507,7 @@ export class NewProductModal extends Modal {
 		const kept = this.draft;
 		this.draft = {
 			...blank(),
-			shop: kept.shop,
+			shops: [...kept.shops],
 			shelf: kept.shelf,
 			storage: kept.storage,
 			unit: kept.unit,

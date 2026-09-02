@@ -114,49 +114,63 @@ const WEEK = arrivalsByShop(
 	],
 	MEALS
 );
-const SHOPS = ["AH", "Lidl"];
 
-test("een AH-product voor donderdagavond verhuist naar de Lidl", () => {
-	assert.deepEqual(assignShop("AH", { date: "2026-09-03", meal: 2 }, WEEK, SHOPS), {
-		shop: "Lidl",
-		late: false,
-		movedFrom: "AH",
+test("alleen bij de AH te krijgen en nodig vóór de bezorging: te laat", () => {
+	// Geen stille verhuizing naar een winkel waar dit niet ligt. Dit is het
+	// signaal waarop de planner het maaltijdblokje geel maakt.
+	assert.deepEqual(assignShop(["AH"], { date: "2026-09-03", meal: 2 }, WEEK), {
+		shop: "AH",
+		late: true,
 	});
 });
 
-test("een AH-product voor vrijdagavond verhuist ook nog", () => {
-	// De bezorging valt ná dat avondeten, dus hij is er niet op tijd voor.
+test("ook bij de Lidl te krijgen: dan verhuist het wél", () => {
+	assert.deepEqual(
+		assignShop(["AH", "Lidl"], { date: "2026-09-03", meal: 2 }, WEEK),
+		{ shop: "Lidl", late: false, movedFrom: "AH" }
+	);
+});
+
+test("de bezorging valt ná het avondeten van die dag, dus die maaltijd niet", () => {
 	assert.equal(
-		assignShop("AH", { date: "2026-09-04", meal: 2 }, WEEK, SHOPS).shop,
+		assignShop(["AH", "Lidl"], { date: "2026-09-04", meal: 2 }, WEEK).shop,
 		"Lidl"
 	);
 });
 
+test("de eerste winkel wint zodra hij op tijd is", () => {
+	// Zaterdagochtend haalt de AH-bezorging het wél, en dan telt de voorkeur
+	// uit de productnotitie — niet welke winkel toevallig het eerst langskomt.
+	assert.deepEqual(
+		assignShop(["AH", "Lidl"], { date: "2026-09-05", meal: 0 }, WEEK),
+		{ shop: "AH", late: false }
+	);
+});
+
 test("een AH-product voor zaterdagochtend blijft bij de AH", () => {
-	assert.deepEqual(assignShop("AH", { date: "2026-09-05", meal: 0 }, WEEK, SHOPS), {
+	assert.deepEqual(assignShop(["AH"], { date: "2026-09-05", meal: 0 }, WEEK), {
 		shop: "AH",
 		late: false,
 	});
 });
 
 test("een Lidl-product blijft bij de Lidl", () => {
-	assert.deepEqual(assignShop("Lidl", { date: "2026-09-03", meal: 2 }, WEEK, SHOPS), {
+	assert.deepEqual(assignShop(["Lidl"], { date: "2026-09-03", meal: 2 }, WEEK), {
 		shop: "Lidl",
 		late: false,
 	});
 });
 
-test("nodig vóór de eerste winkel: te laat, en het blijft staan waar het stond", () => {
-	// Woensdagochtend is er nog niets binnen. Het ergens anders neerzetten
-	// maakt het niet op tijd, het maakt alleen onzichtbaar dat er iets mist.
-	assert.deepEqual(assignShop("AH", { date: "2026-09-02", meal: 0 }, WEEK, SHOPS), {
-		shop: "AH",
-		late: true,
-	});
+test("nodig vóór élke winkel: te laat, en het blijft bij de eerste staan", () => {
+	// Woensdagochtend is er nog niets binnen, ook de Lidl niet.
+	assert.deepEqual(
+		assignShop(["AH", "Lidl"], { date: "2026-09-02", meal: 0 }, WEEK),
+		{ shop: "AH", late: true }
+	);
 });
 
 test("een product zonder winkel wordt nergens heen geduwd", () => {
-	assert.deepEqual(assignShop("", { date: "2026-09-02", meal: 0 }, WEEK, SHOPS), {
+	assert.deepEqual(assignShop([], { date: "2026-09-02", meal: 0 }, WEEK), {
 		shop: "",
 		late: false,
 	});
@@ -164,7 +178,7 @@ test("een product zonder winkel wordt nergens heen geduwd", () => {
 
 test("zonder boodschappenmomenten verandert er niets", () => {
 	const empty = arrivalsByShop([], MEALS);
-	assert.deepEqual(assignShop("AH", { date: "2026-09-02", meal: 0 }, empty, SHOPS), {
+	assert.deepEqual(assignShop(["AH"], { date: "2026-09-02", meal: 0 }, empty), {
 		shop: "AH",
 		late: false,
 	});

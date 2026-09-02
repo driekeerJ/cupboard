@@ -11,7 +11,7 @@ import { test } from "node:test";
 import { atMidnight } from "../src/date";
 import { loadFixture } from "./harness/fixtures";
 import { makeHarness } from "./harness/plugin";
-import { assignmentFor } from "../src/list";
+import { assignmentFor, lateProducts } from "../src/list";
 
 const HOUSEHOLD = [{ id: "jeroen", name: "Jeroen", portionFactor: 1 }];
 /** Woensdag 2 september 2026: de dag waarop hij bestelt. */
@@ -46,12 +46,32 @@ test("een kortere horizon knipt de tweede week er weer af", async () => {
 });
 
 test("rijst voor woensdagavond verhuist van de AH naar de Lidl", async () => {
-	// De AH-bezorging valt pas vrijdag na het avondeten.
+	// Rijst staat als [AH, Lidl] genoteerd. De AH-bezorging valt pas vrijdag
+	// na het avondeten, dus de tweede winkel neemt het over.
 	const h = await run();
 	const move = assignmentFor(h.plugin, product(h, "Rijst"));
 	assert.equal(move.shop, "Lidl");
 	assert.equal(move.movedFrom, "AH");
 	assert.equal(move.late, false);
+});
+
+test("tahini is alleen bij de AH te krijgen en is dus te laat", async () => {
+	// Geen stille verhuizing naar een winkel waar het niet ligt: het blijft
+	// bij de AH staan en wordt gemarkeerd, zodat je zelf kunt kiezen.
+	const h = await run();
+	const stuck = assignmentFor(h.plugin, product(h, "Tahini"));
+	assert.equal(stuck.shop, "AH");
+	assert.equal(stuck.late, true);
+	assert.equal(stuck.movedFrom, undefined);
+});
+
+test("een tweede winkel toevoegen lost het op", async () => {
+	const h = await run();
+	const tahini = product(h, "Tahini");
+	await h.plugin.products.update(tahini, { shops: [...tahini.shops, "Lidl"] });
+	const fixed = assignmentFor(h.plugin, product(h, "Tahini"));
+	assert.equal(fixed.shop, "Lidl");
+	assert.equal(fixed.late, false);
 });
 
 test("linzen voor volgende week dinsdag blijven bij de AH", async () => {
@@ -72,6 +92,7 @@ test("de boodschappennotitie zet ze onder de juiste kop, met de reden erbij", as
 	assert.ok(note.indexOf("[[Rijst]]") > lidl && note.indexOf("[[Rijst]]") < ah, note);
 	assert.ok(note.indexOf("[[Linzen]]") > ah, note);
 	assert.match(note, /\[\[Rijst\]\].*needed before AH arrives/);
+	assert.match(note, /\[\[Tahini\]\].*AH arrives too late/);
 });
 
 test("zonder boodschappenmomenten blijft alles bij zijn eigen winkel", async () => {
@@ -90,4 +111,52 @@ test("zonder boodschappenmomenten blijft alles bij zijn eigen winkel", async () 
 	await h.plugin.needs.rebuild(VANDAAG, 7);
 
 	assert.equal(assignmentFor(h.plugin, product(h, "Rijst")).shop, "AH");
+	assert.equal(assignmentFor(h.plugin, product(h, "Tahini")).late, false);
+});
+
+// ------------------------------------------------------- de waarschuwing
+
+/** Woensdagavond is maaltijd 2 (Breakfast, Lunch, Dinner). */
+const WOENSDAGAVOND = ["2026-09-02", 2] as const;
+
+test("het maaltijdvak meldt wat je er niet op tijd voor in huis hebt", async () => {
+	const h = await run();
+	const stuck = lateProducts(h.plugin, ...WOENSDAGAVOND);
+	assert.deepEqual(
+		stuck.map((item) => item.product.name),
+		["Tahini"],
+		"rijst kan bij de Lidl, tahini nergens op tijd"
+	);
+	assert.equal(stuck[0]?.shop, "AH");
+});
+
+test("een tweede winkel bij het product laat de melding verdwijnen", async () => {
+	const h = await run();
+	const tahini = product(h, "Tahini");
+	await h.plugin.products.update(tahini, { shops: [...tahini.shops, "Lidl"] });
+	assert.deepEqual(lateProducts(h.plugin, ...WOENSDAGAVOND), []);
+});
+
+test("het al in huis hebben laat de melding ook verdwijnen", async () => {
+	// Het andere geldige antwoord: je telt wat er staat.
+	const h = await run();
+	await h.plugin.products.update(product(h, "Tahini"), { count: 5 });
+	assert.deepEqual(lateProducts(h.plugin, ...WOENSDAGAVOND), []);
+});
+
+test("een maaltijd die je wél kunt inkopen meldt niets", async () => {
+	// Volgende week dinsdag: de AH-bezorging is er dan allang.
+	const h = await run();
+	assert.deepEqual(lateProducts(h.plugin, "2026-09-08", 2), []);
+});
+
+test("een afgevinkte maaltijd vraagt niets meer", async () => {
+	const h = await run();
+	const plan = await h.plugin.plans.load(new Date(2026, 7, 31));
+	const entry = plan.days.find((day) => day.date === "2026-09-02")?.meals[0]?.recipes[0];
+	assert.ok(entry);
+	entry.status = "eaten";
+	await h.plugin.plans.save(new Date(2026, 7, 31), plan);
+	await h.plugin.needs.rebuild(VANDAAG, 7);
+	assert.deepEqual(lateProducts(h.plugin, ...WOENSDAGAVOND), []);
 });

@@ -58,9 +58,27 @@ test("gelijke eenheid zonder verpakkingsgrootte telt één op één", () => {
 	assert.equal(of("3 stuk eieren", product({ unit: "stuk", size: null })), 3);
 });
 
+test("lepels gaan via milliliter de verpakking in", () => {
+	const p = product({ unit: "pot", size: { amount: 350, unit: "g" } });
+	// 2 el = 30 ml, en bij grammen op de verpakking rekent 1 ml als 1 g.
+	assert.equal(of("2 el mosterd", p), 30 / 350);
+
+	const fles = product({ unit: "fles", size: { amount: 250, unit: "ml" } });
+	assert.equal(of("2 el ahornsiroop", fles), 30 / 250);
+	assert.equal(of("3 tl vanille", fles), 15 / 250);
+});
+
+test("de gram-brug geldt alleen voor lepels", () => {
+	// Millimeters tegen een verpakking in grammen blijft een gok die niet
+	// gemaakt wordt: daar valt niets te benaderen.
+	const p = product({ unit: "pak", size: { amount: 150, unit: "g" } });
+	assert.equal(of("720 ml bouillon", p), 0);
+});
+
 test("onconverteerbaar levert nul op, geen gok", () => {
 	const p = product({ unit: "pot", size: { amount: 350, unit: "g" } });
-	assert.equal(of("2 el mosterd", p), 0, "lepels uit een pot zijn niet te delen");
+	assert.equal(of("2 plakjes mosterd", p), 2, "een onbekend woord is geen maat");
+	assert.equal(of("1 bosje mosterd", p), 0, "een vage maat blijft nul");
 });
 
 test("vage maten leveren nul op", () => {

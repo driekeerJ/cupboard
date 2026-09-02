@@ -38,10 +38,9 @@ export interface ShopGroup {
  */
 export function assignmentFor(plugin: PantryPlugin, product: Product): Assignment {
 	return assignShop(
-		product.shop ?? "",
+		product.shops,
 		plugin.needs.momentFor(product),
-		plugin.needs.arrivals(),
-		plugin.shops.names()
+		plugin.needs.arrivals()
 	);
 }
 
@@ -57,6 +56,40 @@ export function assignmentNote(assignment: Assignment): string | null {
 	if (assignment.late) return `${assignment.shop} arrives too late`;
 	if (assignment.movedFrom) return `needed before ${assignment.movedFrom} arrives`;
 	return null;
+}
+
+/**
+ * De producten die dit maaltijdvak vraagt en die je er niet op tijd voor in
+ * huis krijgt.
+ *
+ * Drie dingen moeten waar zijn: het recept vraagt erom, je hebt het niet al
+ * staan, en geen van de winkels waar het te krijgen is komt op tijd langs. Dat
+ * eerste is waarom een snuf zout hier nooit opduikt, en dat tweede is waarom
+ * "ik heb het al" een geldige oplossing is — je telt het en de melding gaat weg.
+ *
+ * Het moment is dát van dit vak, niet het vroegste moment van het product:
+ * kikkererwten die woensdag én volgende week dinsdag nodig zijn, zijn alleen
+ * woensdag een probleem.
+ */
+export function lateProducts(
+	plugin: PantryPlugin,
+	date: string,
+	meal: number
+): { product: Product; shop: string }[] {
+	const moment = { date, meal };
+	const arrivals = plugin.needs.arrivals();
+	const late: { product: Product; shop: string }[] = [];
+
+	for (const product of plugin.needs.productsAt(date, meal)) {
+		const amount = plugin.list.amount(product);
+		// null is "nooit geteld": dan weet je niet of je het hebt, en dat is
+		// geen reden om te zwijgen.
+		if (amount !== null && amount <= 0) continue;
+		const assignment = assignShop(product.shops, moment, arrivals);
+		if (assignment.late) late.push({ product, shop: assignment.shop });
+	}
+
+	return late.sort((a, b) => a.product.name.localeCompare(b.product.name));
 }
 
 export function groupForShopping(
@@ -324,6 +357,9 @@ export class GroceryList {
 		const unsure: Product[] = [];
 
 		this.plugin.products.all().forEach((product) => {
+			// `pantry: ignore`: bestaat alleen zodat recepten ernaar kunnen
+			// wijzen. Nooit op de lijst, wat er ook in `minimum` staat.
+			if (product.ignored) return;
 			if (this.bought.has(product.path)) return;
 			const amount = this.amount(product);
 			if (amount === null) {

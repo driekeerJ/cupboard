@@ -44,7 +44,7 @@ test("een hernoemd recept blijft meetellen voor de lijst", async () => {
 
 test("een hernoemde winkel neemt zijn producten mee", async () => {
 	const h = await run();
-	assert.equal(h.plugin.products.byPath("Products/Rijst.md")!.shop, "Lidl");
+	assert.equal(h.plugin.products.byPath("Products/Rijst.md")!.shops.join(), "Lidl");
 
 	const oud = h.vault.read("Shops/Lidl.md");
 	h.vault.files.delete("Shops/Lidl.md");
@@ -53,14 +53,14 @@ test("een hernoemde winkel neemt zijn producten mee", async () => {
 
 	const changed = await h.plugin.products.renameShop("Lidl", "Aldi");
 	assert.equal(changed, 1);
-	assert.equal(h.plugin.products.byPath("Products/Rijst.md")!.shop, "Aldi");
+	assert.equal(h.plugin.products.byPath("Products/Rijst.md")!.shops.join(), "Aldi");
 	// En als wikilink weggeschreven, zodat Obsidian hem voortaan zelf bijwerkt.
 	assert.match(h.vault.read("Products/Rijst.md"), /^shop: '?\[\[Aldi\]\]'?$/m);
 });
 
 test("een kale winkelnaam uit een oudere notitie wordt gewoon gelezen", async () => {
 	const h = await run();
-	assert.equal(h.plugin.products.byPath("Products/Rijst.md")!.shop, "Lidl");
+	assert.equal(h.plugin.products.byPath("Products/Rijst.md")!.shops.join(), "Lidl");
 });
 
 test("used staat als leesbare link in het weekplan", async () => {

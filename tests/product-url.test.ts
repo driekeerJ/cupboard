@@ -66,7 +66,7 @@ test("een product zonder link heeft een lege link, geen undefined", async () => 
 test("een nieuw product bewaart de link die je meegeeft", async () => {
 	const h = await run();
 	const file = await h.plugin.products.create("Havermout", {
-		shop: "AH",
+		shops: ["AH"],
 		unit: "pak",
 		minimum: 2,
 		url: LINK,

@@ -126,7 +126,9 @@ export class ShelvesView extends ItemView {
 			return;
 		}
 
-		const all = this.plugin.products.all();
+		// `pantry: ignore` hoort nergens in een schaproute thuis: water heeft
+		// geen schap en zou hier voor altijd als "nog niet ingedeeld" tellen.
+		const all = this.plugin.products.all().filter((product) => !product.ignored);
 		const sorted = all.filter((product) => product.shelf).length;
 		this.countEl?.setText(`${sorted} of ${all.length} products sorted`);
 
@@ -339,8 +341,10 @@ export class ShelvesView extends ItemView {
 
 	private sameShop(product: Product, shop: Shop): boolean {
 		return (
-			product.shop.trim().length === 0 ||
-			product.shop.toLowerCase() === shop.name.toLowerCase()
+			product.shops.length === 0 ||
+			product.shops.some(
+				(name) => name.toLowerCase() === shop.name.toLowerCase()
+			)
 		);
 	}
 
@@ -409,10 +413,14 @@ export class ShelvesView extends ItemView {
 
 		pool.forEach((product) =>
 			this.drawPick(list, product, false, async () => {
-				await this.plugin.products.update(product, {
-					shop: shop.name,
-					shelf: current,
-				});
+				// Deze winkel erbij als hij er nog niet bij stond: je bent
+				// hem hier aan het inrichten, dus hij hoort erbij te staan.
+				const shops = product.shops.some(
+					(name) => name.toLowerCase() === shop.name.toLowerCase()
+				)
+					? product.shops
+					: [...product.shops, shop.name];
+				await this.plugin.products.update(product, { shops, shelf: current });
 				this.drawBody();
 			})
 		);
