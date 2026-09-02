@@ -113,9 +113,7 @@ export class StockView extends ItemView {
 	}
 
 	private async reload(): Promise<void> {
-		await this.plugin.needs.rebuild(
-			this.plugin.currentWeek()
-		);
+		await this.plugin.needs.rebuild(new Date());
 		this.drawList();
 	}
 

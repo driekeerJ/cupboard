@@ -36,6 +36,16 @@ export interface Product {
 	/** Which shelf it sits on, for the walking route. */
 	shelf: string;
 	aliases: string[];
+	/**
+	 * Where to find this product at the shop, as a full URL.
+	 *
+	 * Deliberately not a shop-specific field. This replaced `ahId` + `ahUrl`,
+	 * and those were useless to anyone whose supermarket is not Albert Heijn:
+	 * a plugin that has to know what "AH" is cannot travel. A link is a link
+	 * wherever you shop, and the shop's own product code is still inside it
+	 * for whoever needs it.
+	 */
+	url: string;
 	/** null means never counted. */
 	count: Count | null;
 	/**
@@ -62,6 +72,8 @@ export interface ProductPatch {
 	storage?: string;
 	shelf?: string;
 	aliases?: string[];
+	/** Full URL to the product at the shop; "" clears it. */
+	url?: string;
 	count?: Count | null;
 	check?: boolean;
 	/** Leftover fraction of a unit; see Product.used. */
@@ -82,6 +94,15 @@ export interface ProductPatch {
 export const UNASSIGNED = "Unsorted";
 
 /**
+ * A note name Obsidian will accept. Shared by the two places that turn a typed
+ * product name into a path, so the duplicate check in the new-product form
+ * asks about exactly the file `create()` is about to write.
+ */
+export function safeProductName(name: string): string {
+	return name.replace(/[\\/:*?"<>|#^[\]]/g, "").trim();
+}
+
+/**
  * Wat er onder de frontmatter komt te staan bij een nieuw product.
  *
  * De uitleg hoort in de notitie, niet in de broncode van de plugin: wie over
@@ -98,6 +119,7 @@ const PRODUCT_BODY = [
 	"> `shop`, `shelf` \u2014 waar je het haalt en waar het in de winkel ligt.",
 	"> `storage` \u2014 waar het thuis staat.",
 	"> `aliases` \u2014 andere namen waarmee je recepten dit product noemen.",
+	"> `url` \u2014 de link naar dit product bij de winkel.",
 	"> `count` \u2014 de stand. `+` betekent: genoeg, niet geteld.",
 	"> `used` \u2014 wat er sinds de laatste telling van op is, als deel van \u00e9\u00e9n eenheid.",
 	"> `previous`, `counted` \u2014 de vorige stand en wanneer je voor het laatst telde.",
@@ -233,6 +255,7 @@ export class ProductIndex {
 			storage: text(frontmatter.storage) || UNASSIGNED,
 			shelf: text(frontmatter.shelf) || text(frontmatter.aisle),
 			aliases: list(frontmatter.aliases),
+			url: text(frontmatter.url),
 			count: parseCount(frontmatter.count),
 			used: Math.max(0, parseNumber(frontmatter.used) ?? 0),
 			counted: text(frontmatter.counted) || null,
@@ -306,6 +329,7 @@ export class ProductIndex {
 					delete frontmatter.aisle;
 				}
 				if (patch.aliases !== undefined) frontmatter.aliases = patch.aliases;
+				if (patch.url !== undefined) frontmatter.url = patch.url;
 				if (patch.check !== undefined) frontmatter.check = patch.check;
 
 				// A fresh count supersedes every leftover fraction, so counting
@@ -362,6 +386,7 @@ export class ProductIndex {
 		}
 		if (patch.shelf !== undefined) product.shelf = patch.shelf;
 		if (patch.aliases !== undefined) product.aliases = [...patch.aliases];
+		if (patch.url !== undefined) product.url = patch.url;
 		if (patch.check !== undefined) product.check = patch.check;
 
 		if (patch.count !== undefined) {
@@ -419,7 +444,7 @@ export class ProductIndex {
 
 	async create(name: string, patch: ProductPatch = {}): Promise<TFile | null> {
 		const folder = this.folder();
-		const safe = name.replace(/[\\/:*?"<>|#^[\]]/g, "").trim() || "New product";
+		const safe = safeProductName(name) || "New product";
 		const path = normalizePath(`${folder}/${safe}.md`);
 		await ensureFolder(this.plugin.app.vault, path);
 		const existing = this.plugin.app.vault.getFileByPath(path);
@@ -439,6 +464,11 @@ export class ProductIndex {
 				frontmatter.storage = patch.storage ?? "";
 				frontmatter.shelf = patch.shelf ?? "";
 				frontmatter.aliases = patch.aliases ?? [];
+				frontmatter.url = patch.url ?? "";
+				// Alleen schrijven als het iets zegt: leeg betekent "de vraag
+				// is nog niet beantwoord", en dat is de afwezigheid van het
+				// veld, niet een lege waarde.
+				if (patch.amount) frontmatter.amount = patch.amount;
 			}
 		);
 		this.build();

@@ -14,3 +14,22 @@ export function asText(value: unknown): string {
 	if (value instanceof Date) return value.toISOString();
 	return "";
 }
+
+/**
+ * Trimmed values, first spelling wins, case-insensitive.
+ *
+ * Every picker in the plugin builds its chips from two or three lists stuck
+ * together — the shop's own shelves plus whatever other products mention —
+ * and those lists overlap. Without this you get "Koeling" twice.
+ */
+export function dedupe(values: string[]): string[] {
+	const seen = new Set<string>();
+	const kept: string[] = [];
+	values.forEach((value) => {
+		const key = value.trim().toLowerCase();
+		if (key.length === 0 || seen.has(key)) return;
+		seen.add(key);
+		kept.push(value.trim());
+	});
+	return kept;
+}

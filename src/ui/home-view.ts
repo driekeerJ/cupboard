@@ -92,7 +92,7 @@ export class HomeView extends ItemView {
 		await this.plugin.shops.build();
 
 		const week = this.plugin.currentWeek();
-		await this.plugin.needs.rebuild(week);
+		await this.plugin.needs.rebuild(new Date());
 		await this.plugin.cleanup.rebuild();
 
 		const plan = await this.plugin.plans.load(week);

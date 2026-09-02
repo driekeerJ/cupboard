@@ -30,6 +30,15 @@ export interface PantrySettings {
 	shopFolder: string;
 	/** 0 = Sunday, 1 = Monday, ... 6 = Saturday. */
 	weekStartDay: number;
+	/**
+	 * Hoeveel dagen vooruit de boodschappenlijst kijkt, vanaf vandaag.
+	 *
+	 * Niet "deze week": een weekplan is een notitie per week, maar boodschappen
+	 * doen is dat niet. Wie op woensdag bestelt voor tot en met volgende week
+	 * dinsdag kijkt over de weekgrens heen, en een lijst die op zondag stopt
+	 * mist dan de helft.
+	 */
+	horizonDays: number;
 	meals: MealType[];
 	/**
 	 * Map met één notitie per huisgenoot, met `portionFactor` in de
@@ -100,6 +109,24 @@ export interface PlannedMeal {
 	recipes: PlannedRecipe[];
 }
 
+/**
+ * Een moment waarop de boodschappen van één winkel in huis komen — of je er
+ * nu heen loopt of het bezorgd wordt. Vanaf dit punt in het plan is alles wat
+ * je daar koopt beschikbaar, en daarvóór niet.
+ *
+ * De positie in de dag staat als een maaltijdnaam plus "ervoor" of "erna", en
+ * niet als een klok: het plan denkt in maaltijden, en een bezorging om 17:45
+ * zegt niets zolang je niet weet hoe laat er gegeten wordt.
+ */
+export interface ShoppingStop {
+	/** Naam van de winkel, zoals de winkelnotitie heet. */
+	shop: string;
+	/** Maaltijd waar dit moment aan hangt. Leeg = het begin van de dag. */
+	meal?: string;
+	/** Ervoor of erna. Standaard "before". */
+	when?: "before" | "after";
+}
+
 export interface PlannedDay {
 	/** ISO date, yyyy-mm-dd. */
 	date: string;
@@ -108,6 +135,11 @@ export interface PlannedDay {
 	 * home late. Written by hand in the planner, never derived.
 	 */
 	note?: string;
+	/**
+	 * Wanneer er die dag boodschappen in huis komen. Meerdere winkels op één
+	 * dag mag: de Lidl om elf uur en de bezorging na het avondeten.
+	 */
+	shopping?: ShoppingStop[];
 	meals: PlannedMeal[];
 }
 

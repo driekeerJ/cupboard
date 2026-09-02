@@ -11,6 +11,12 @@ import {
 import type PantryPlugin from "./main";
 import { guarded } from "./guard";
 import { parseCount, toBuy, type Count, type Product } from "./products";
+import {
+	assignShop,
+	compareMoments,
+	type Assignment,
+	type Moment,
+} from "./arrival";
 
 export const NO_SHOP = "Anywhere";
 export const NO_CATEGORY = "Other";
@@ -30,21 +36,66 @@ export interface ShopGroup {
  * uitgeschreven. Wat er in de notitie stond en wat je op je telefoon zag kon
  * daardoor uit elkaar lopen zonder dat iemand er iets aan veranderd had.
  */
+export function assignmentFor(plugin: PantryPlugin, product: Product): Assignment {
+	return assignShop(
+		product.shop ?? "",
+		plugin.needs.momentFor(product),
+		plugin.needs.arrivals(),
+		plugin.shops.names()
+	);
+}
+
+/**
+ * Waarom dit product niet in zijn eigen winkel ligt, in één regel — of null
+ * als er niets bijzonders aan de hand is.
+ *
+ * Zonder deze regel is het onverklaarbaar: je zet een product bewust op AH en
+ * treft het bij de Lidl aan. De reden hoort naast het product te staan, niet
+ * in een handleiding.
+ */
+export function assignmentNote(assignment: Assignment): string | null {
+	if (assignment.late) return `${assignment.shop} arrives too late`;
+	if (assignment.movedFrom) return `needed before ${assignment.movedFrom} arrives`;
+	return null;
+}
+
 export function groupForShopping(
 	plugin: PantryPlugin,
 	items: Product[]
 ): ShopGroup[] {
 	const byShop = new Map<string, Product[]>();
 	for (const product of items) {
-		const key = product.shop || NO_SHOP;
+		// Niet `product.shop`, maar waar het gekocht móét worden: een winkel
+		// die pas na de maaltijd levert waarvoor je het nodig hebt, is geen
+		// winkel waar je dit kunt halen.
+		const key = assignmentFor(plugin, product).shop || NO_SHOP;
 		const bucket = byShop.get(key) ?? [];
 		bucket.push(product);
 		byShop.set(key, bucket);
 	}
 
+	// Op volgorde van binnenkomst: de winkel waar je vandaag heen loopt hoort
+	// bovenaan te staan, niet de winkel die toevallig met een A begint. Een
+	// winkel zonder moment in het plan is "altijd beschikbaar" en gaat vóór de
+	// bezorgingen; zonder winkel is de restcategorie en staat achteraan.
+	const arrivals = plugin.needs.arrivals();
+	const rank = (shop: string): Moment | null =>
+		arrivals.get(shop.trim().toLowerCase()) ?? null;
+
 	return [...byShop.keys()]
-		// Zonder winkel achteraan: dat is de restcategorie, geen naam.
-		.sort((a, b) => (a === NO_SHOP ? 1 : b === NO_SHOP ? -1 : a.localeCompare(b)))
+		.sort((a, b) => {
+			if (a === NO_SHOP) return 1;
+			if (b === NO_SHOP) return -1;
+			const left = rank(a);
+			const right = rank(b);
+			if (left && right) {
+				const order = compareMoments(left, right);
+				if (order !== 0) return order;
+			} else if (left || right) {
+				return left ? 1 : -1;
+			}
+			return a.localeCompare(b);
+		})
 		.map((shop) => {
 			const own = byShop.get(shop) ?? [];
 			const byShelf = new Map<string, Product[]>();
@@ -499,9 +550,7 @@ export class GroceryList {
 	}
 
 	async refresh(): Promise<void> {
-		await this.plugin.needs.rebuild(
-			this.plugin.currentWeek()
-		);
+		await this.plugin.needs.rebuild(new Date());
 		await this.write();
 	}
 
@@ -564,6 +613,8 @@ export class GroceryList {
 			amount === null
 				? "?"
 				: `${amount}${product.unit ? ` ${product.unit}` : ""}`;
-		return `- [${box}] [[${product.name}]] · ${text}`;
+		const note = assignmentNote(assignmentFor(this.plugin, product));
+		const why = note ? ` — ${note}` : "";
+		return `- [${box}] [[${product.name}]] · ${text}${why}`;
 	}
 }

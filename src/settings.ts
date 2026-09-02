@@ -26,6 +26,7 @@ export const DEFAULT_SETTINGS: PantrySettings = {
 	shoppingState: "Pantry/shopping.json",
 	shopFolder: "Shops",
 	weekStartDay: 1,
+	horizonDays: 14,
 	meals: [
 		{ id: "breakfast", name: "Breakfast" },
 		{ id: "lunch", name: "Lunch" },
@@ -93,6 +94,7 @@ export function normaliseSettings(raw: unknown): PantrySettings {
 
 	const weekStartDay = Number(stored.weekStartDay);
 	const keepDays = Number(stored.cookKeepDays);
+	const horizon = Number(stored.horizonDays);
 
 	return {
 		recipeFolder: text("recipeFolder"),
@@ -112,6 +114,12 @@ export function normaliseSettings(raw: unknown): PantrySettings {
 			Number.isFinite(keepDays) && keepDays >= 0
 				? Math.round(keepDays)
 				: DEFAULT_SETTINGS.cookKeepDays,
+		// Minstens één dag: een horizon van nul betekent dat het weekplan
+		// nergens meer om vraagt, en dan is de boodschappenlijst stil leeg.
+		horizonDays:
+			Number.isFinite(horizon) && horizon >= 1
+				? Math.round(horizon)
+				: DEFAULT_SETTINGS.horizonDays,
 		// Een leeg huishouden of geen enkele maaltijd maakt de plugin
 		// onbruikbaar, dus dan liever de default terug.
 		meals: meals.length > 0 ? meals : DEFAULT_SETTINGS.meals,
@@ -378,6 +386,25 @@ export class PantrySettingTab extends PluginSettingTab {
 					const days = Number(value.trim());
 					this.plugin.settings.cookKeepDays =
 					Number.isFinite(days) && days >= 0 ? Math.floor(days) : 0;
+					await this.save();
+				});
+			});
+
+		new Setting(containerEl)
+			.setName("Plan ahead for")
+			.setDesc(
+				"Days. How far forward the grocery list looks, counting from today. It reads across week notes, so a plan that runs into next week is included."
+			)
+			.addText((text) => {
+				text
+					.setPlaceholder("14")
+					.setValue(`${this.plugin.settings.horizonDays}`);
+				onCommit(text, async (value) => {
+					const days = Number(value.trim());
+					this.plugin.settings.horizonDays =
+						Number.isFinite(days) && days >= 1
+							? Math.floor(days)
+							: DEFAULT_SETTINGS.horizonDays;
 					await this.save();
 				});
 			});

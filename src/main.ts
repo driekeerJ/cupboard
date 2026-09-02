@@ -22,6 +22,7 @@ import { HouseholdIndex } from "./people";
 import { ShopIndex } from "./shops";
 import { SHELVES_VIEW_TYPE, ShelvesView } from "./ui/shelves-view";
 import { PRODUCTS_VIEW_TYPE, ProductsView } from "./ui/products-view";
+import { NewProductModal } from "./ui/new-product-modal";
 import { STOCK_VIEW_TYPE, StockView } from "./ui/stock-view";
 import { SHOPPING_VIEW_TYPE, ShoppingView } from "./ui/shopping-view";
 import { CLEANUP_VIEW_TYPE, CleanupView } from "./ui/cleanup-view";
@@ -214,6 +215,18 @@ export default class PantryPlugin extends Plugin {
 			id: "run-setup",
 			name: "Run setup",
 			callback: () => this.runSetup(),
+		});
+
+		// Het formulier hoort ook in het palet, niet alleen achter een knop in
+		// het productenscherm: dan krijgt het een sneltoets, staat het op de
+		// mobiele werkbalk, en kunnen Commander en QuickAdd erbij. Zie de
+		// toelichting bij SCREENS.
+		this.addCommand({
+			id: "new-product",
+			name: "New product",
+			callback: () => {
+				new NewProductModal(this, () => this.refreshViews()).open();
+			},
 		});
 
 		this.addCommand({

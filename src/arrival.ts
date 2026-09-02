@@ -1,0 +1,170 @@
+import { addDays, fromISODate, toISODate } from "./date";
+import type { MealType, ShoppingStop } from "./types";
+
+/**
+ * Een punt in het plan: een dag, en de hoeveelste maaltijd van die dag.
+ *
+ * De maaltijd is een index in `settings.meals`, niet een naam: de gebruiker
+ * bepaalt zelf welke maaltijden er zijn en in welke volgorde, en die volgorde
+ * is het enige wat "eerder" betekent binnen een dag. Een plugin die "ontbijt"
+ * of "avondeten" zou kennen, kent alleen Nederlandse of Engelse huishoudens.
+ */
+export interface Moment {
+	/** ISO-datum, yyyy-mm-dd. */
+	date: string;
+	/** Index in `settings.meals`. 0 is de eerste maaltijd van de dag. */
+	meal: number;
+}
+
+/** Een boodschappenmoment met de dag waar het in het plan op staat. */
+export interface DatedStop extends ShoppingStop {
+	/** ISO-datum van de dag in het weekplan. */
+	date: string;
+}
+
+/** Negatief als `a` eerder ligt: datum eerst, dan de maaltijd binnen die dag. */
+export function compareMoments(a: Moment, b: Moment): number {
+	if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+	return a.meal - b.meal;
+}
+
+/** Het vroegste van twee momenten; `null` telt als "nog geen". */
+export function earliest(a: Moment | null, b: Moment | null): Moment | null {
+	if (!a) return b;
+	if (!b) return a;
+	return compareMoments(a, b) <= 0 ? a : b;
+}
+
+/**
+ * Zoekt een maaltijd op naam of id, hoofdletterongevoelig. Geeft -1 als de
+ * naam niet bestaat: het blok is met de hand te bewerken en een maaltijd kan
+ * hernoemd zijn, dus een onbekende naam mag niet stil als iets anders gelden.
+ */
+export function mealIndex(meals: MealType[], value: string): number {
+	const key = value.trim().toLowerCase();
+	if (key.length === 0) return -1;
+	return meals.findIndex(
+		(meal) => meal.name.toLowerCase() === key || meal.id.toLowerCase() === key
+	);
+}
+
+/**
+ * Het punt in het plan waarop een boodschappenmoment valt.
+ *
+ * `after` op de laatste maaltijd van de dag schuift door naar de eerste
+ * maaltijd van de volgende dag: een bezorging ná het avondeten is er voor het
+ * ontbijt, niet voor dat avondeten.
+ *
+ * Een onbekende of ontbrekende maaltijdnaam telt als het begin van de dag.
+ * Dat is de enige lezing die niets stilletjes tekort doet: hij maakt de winkel
+ * eerder beschikbaar, en een boodschap die je al in huis hebt is een kleiner
+ * probleem dan een maaltijd waarvoor je hem nog niet had.
+ */
+export function stopMoment(stop: DatedStop, meals: MealType[]): Moment {
+	const date = fromISODate(stop.date);
+	const day = date ? toISODate(date) : stop.date;
+	const index = mealIndex(meals, stop.meal ?? "");
+	if (index === -1) return { date: day, meal: 0 };
+	if (stop.when !== "after") return { date: day, meal: index };
+	if (index + 1 < meals.length) return { date: day, meal: index + 1 };
+	const next = date ? addDays(date, 1) : null;
+	return { date: next ? toISODate(next) : day, meal: 0 };
+}
+
+/**
+ * Het vroegste boodschappenmoment per winkel, gesleuteld op de winkelnaam in
+ * kleine letters.
+ *
+ * Komt een winkel meerdere keren voor, dan telt de eerste: vanaf dát moment
+ * staat haar spul in huis. Een winkel zonder moment komt niet in de kaart voor
+ * en geldt daarmee als altijd beschikbaar — er staat niets in het plan om op
+ * te wachten.
+ */
+export function arrivalsByShop(
+	stops: DatedStop[],
+	meals: MealType[]
+): Map<string, Moment> {
+	const found = new Map<string, Moment>();
+	for (const stop of stops) {
+		const key = stop.shop.trim().toLowerCase();
+		if (key.length === 0) continue;
+		const best = earliest(found.get(key) ?? null, stopMoment(stop, meals));
+		if (best) found.set(key, best);
+	}
+	return found;
+}
+
+/**
+ * Is deze winkel op tijd voor dit moment?
+ *
+ * Geen aankomstmoment betekent: altijd. Geen nodig-moment betekent ook altijd,
+ * want een product dat nergens in het plan voorkomt heeft geen deadline — dat
+ * is gewone voorraadaanvulling en die mag rustig vrijdag komen.
+ */
+export function arrivesInTime(
+	arrival: Moment | null,
+	need: Moment | null
+): boolean {
+	if (!arrival) return true;
+	if (!need) return true;
+	return compareMoments(arrival, need) <= 0;
+}
+
+/** Wat er van de toewijzing terugkomt: waar het heen gaat, en of het te laat is. */
+export interface Assignment {
+	shop: string;
+	/**
+	 * Geen enkele winkel is op tijd. Het product blijft bij zijn voorkeur
+	 * staan, want het ergens anders neerzetten maakt het niet op tijd — het
+	 * maakt alleen onzichtbaar dat er iets niet klopt.
+	 */
+	late: boolean;
+	/** Waar het volgens het product zelf had moeten liggen, als dat verschilt. */
+	movedFrom?: string;
+}
+
+/**
+ * Waar dit product gekocht moet worden als het op `need` in huis moet zijn.
+ *
+ * De voorkeurswinkel van het product wint zolang hij op tijd is. Is hij dat
+ * niet, dan neemt de winkel over die het eerst binnen is.
+ *
+ * Bewust géén instelbare voorkeursvolgorde: "wat het eerst binnen is" is de
+ * enige ordening die het probleem zelf oplevert, hij vraagt geen configuratie,
+ * en hij is niet aan winkels of landen gebonden. Bij een gelijk moment beslist
+ * de naam, zodat de uitkomst niet per herstart verspringt.
+ */
+export function assignShop(
+	preferred: string,
+	need: Moment | null,
+	arrivals: Map<string, Moment>,
+	shops: string[]
+): Assignment {
+	const name = preferred.trim();
+	const own = name.length > 0 ? (arrivals.get(name.toLowerCase()) ?? null) : null;
+	if (name.length === 0 || arrivesInTime(own, need)) {
+		return { shop: name, late: false };
+	}
+
+	let best: { shop: string; arrival: Moment | null } | null = null;
+	for (const shop of shops) {
+		const arrival = arrivals.get(shop.trim().toLowerCase()) ?? null;
+		if (!arrivesInTime(arrival, need)) continue;
+		if (!best) {
+			best = { shop, arrival };
+			continue;
+		}
+		if (!best.arrival) continue;
+		if (!arrival) {
+			best = { shop, arrival };
+			continue;
+		}
+		const order = compareMoments(arrival, best.arrival);
+		if (order < 0 || (order === 0 && shop.localeCompare(best.shop) < 0)) {
+			best = { shop, arrival };
+		}
+	}
+
+	if (!best) return { shop: name, late: true };
+	return { shop: best.shop, late: false, movedFrom: name };
+}

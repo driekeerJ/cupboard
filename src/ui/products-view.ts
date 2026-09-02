@@ -1,10 +1,11 @@
-import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
+import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import { UNASSIGNED, missingFields, type Product } from "../products";
 import { matchesQuery } from "../search";
 import { emptyState, keepScroll, segment as drawSegment } from "./kit";
 import { drawBackLink } from "./nav";
+import { NewProductModal } from "./new-product-modal";
 import { ProductSheet } from "./product-sheet";
 
 export const PRODUCTS_VIEW_TYPE = "pantry-products";
@@ -86,8 +87,7 @@ export class ProductsView extends ItemView {
 			cls: "pantry-text-button pantry-primary-button",
 			text: "New product",
 		});
-		add.onclick = () =>
-			guarded("could not create the product", () => this.createProduct());
+		add.onclick = () => this.createProduct();
 
 		const search = inner.createEl("input", {
 			cls: "pantry-field-search",
@@ -301,13 +301,14 @@ export class ProductsView extends ItemView {
 		).open();
 	}
 
-	private async createProduct(): Promise<void> {
-		const file = await this.plugin.products.create("New product");
-		if (!file) return;
-		this.plugin.products.build();
-		const product = this.plugin.products.byPath(file.path);
-		this.drawList();
-		new Notice("Product added. Rename the note to name it.");
-		if (product) this.openSheet([product], 0);
+	/**
+	 * Eerst maakte deze knop een notitie "New product" aan en zei erbij dat je
+	 * hem moest hernoemen. De naam \u2014 het enige dat alleen jij kunt aanleveren
+	 * \u2014 was daarmee het enige dat het formulier niet vroeg. Nu vraagt het
+	 * formulier alles in \u00e9\u00e9n keer, en wordt er pas geschreven als je op Add
+	 * drukt.
+	 */
+	private createProduct(): void {
+		new NewProductModal(this.plugin, () => this.drawList()).open();
 	}
 }

@@ -2,6 +2,8 @@ import { Modal, Notice, setIcon } from "obsidian";
 import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import type { NeedSource } from "../needs";
+import { chipPicker } from "./kit";
+import { dedupe } from "../text";
 import { parseNumber } from "../number";
 import {
 	UNASSIGNED,
@@ -368,8 +370,9 @@ export class ProductSheet extends Modal {
 	}
 
 	/**
-	 * Chips, not a text box: in a shop you tap, you do not type. The free-text
-	 * field is there for the one time the name you need does not exist yet.
+	 * The block itself lives in `kit.ts`, because the new-product form draws
+	 * exactly the same one. Here a tap writes to the note at once; there it
+	 * only touches a draft.
 	 */
 	private drawPicker(
 		parent: HTMLElement,
@@ -381,66 +384,20 @@ export class ProductSheet extends Modal {
 			apply: (value: string) => ProductPatch;
 		}
 	): void {
-		const block = parent.createDiv({ cls: "pantry-sheet-block" });
-		block.toggleClass("is-empty", spec.value.trim().length === 0);
-		block.createDiv({ cls: "pantry-sheet-label", text: spec.label });
-
-		const options = block.createDiv({ cls: "pantry-sheet-options" });
-		const current = spec.value.trim().toLowerCase();
-
-		spec.options.forEach((option) => {
-			const chip = options.createEl("button", {
-				cls: "pantry-sheet-option",
-				text: option,
-			});
-			const active = option.trim().toLowerCase() === current;
-			chip.toggleClass("is-active", active);
-			chip.setAttr("aria-pressed", active ? "true" : "false");
-			chip.onclick = () => {
-				// Tapping the one that is already set clears it, so a wrong value
-				// never needs a detour through the note.
-				guarded(`could not update ${this.product.name}`, () =>
-					this.apply(spec.apply(active ? "" : option))
-				);
-			};
-		});
-
-		if (this.typing === spec.key) {
-			const input = block.createEl("input", {
-				cls: "pantry-field-input pantry-sheet-input",
-				attr: { type: "text", placeholder: `New ${spec.label.toLowerCase()}` },
-			});
-			input.value = spec.value;
-			window.setTimeout(() => input.focus(), 0);
-			const commit = (): void => {
-				const value = input.value.trim();
-				if (value.length === 0) {
-					this.typing = null;
-					this.render();
-					return;
-				}
+		chipPicker(parent, {
+			label: spec.label,
+			value: spec.value,
+			options: spec.options,
+			typing: this.typing === spec.key,
+			setTyping: (open: boolean) => {
+				this.typing = open ? spec.key : null;
+				this.render();
+			},
+			pick: (value: string) =>
 				guarded(`could not update ${this.product.name}`, () =>
 					this.apply(spec.apply(value))
-				);
-			};
-			input.addEventListener("keydown", (event: KeyboardEvent) => {
-				if (event.key === "Enter") commit();
-				if (event.key === "Escape") {
-					this.typing = null;
-					this.render();
-				}
-			});
-			input.addEventListener("blur", commit);
-		} else {
-			const add = options.createEl("button", {
-				cls: "pantry-sheet-option is-add",
-				text: spec.value ? "Other…" : "Type one…",
-			});
-			add.onclick = () => {
-				this.typing = spec.key;
-				this.render();
-			};
-		}
+				),
+		});
 	}
 
 	/**
@@ -616,16 +573,4 @@ export class ProductSheet extends Modal {
 				.filter(Boolean),
 		}));
 	}
-}
-
-function dedupe(values: string[]): string[] {
-	const seen = new Set<string>();
-	const kept: string[] = [];
-	values.forEach((value) => {
-		const key = value.trim().toLowerCase();
-		if (key.length === 0 || seen.has(key)) return;
-		seen.add(key);
-		kept.push(value.trim());
-	});
-	return kept;
 }

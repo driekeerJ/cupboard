@@ -63,6 +63,33 @@ export interface Shop {
 	path: string;
 	/** Shelves in the order you walk past them. */
 	shelves: string[];
+	/**
+	 * The shop's own search page, with `{q}` where the term goes.
+	 *
+	 * This is how "look this product up at the shop" works without the plugin
+	 * knowing a single shop by name. Whoever owns the note fills in the
+	 * address of the supermarket they actually walk into; an empty template
+	 * simply means no button appears. The plugin never guesses one.
+	 */
+	search: string;
+}
+
+/**
+ * The shop's search page for one search term, or null when there is nothing
+ * usable to open.
+ *
+ * A template without `{q}` gets the term appended, because
+ * `https://shop.example/search?q=` is the shape people paste out of their
+ * address bar. Anything that is not http(s) is refused: a note is user input,
+ * and `javascript:` in a link the plugin opens is not a link.
+ */
+export function searchUrl(template: string, query: string): string | null {
+	const base = template.trim();
+	const term = query.trim();
+	if (base.length === 0 || term.length === 0) return null;
+	if (!/^https?:\/\//i.test(base)) return null;
+	const encoded = encodeURIComponent(term);
+	return base.includes("{q}") ? base.replace(/\{q\}/g, encoded) : `${base}${encoded}`;
 }
 
 const HEADING = /^#{1,6}\s+(.*)$/;
@@ -107,6 +134,12 @@ export class ShopIndex {
 		return this.find(shopName)?.shelves ?? [];
 	}
 
+	/** Where to look this product name up, or null if the shop never said. */
+	searchFor(shopName: string, query: string): string | null {
+		const shop = this.find(shopName);
+		return shop ? searchUrl(shop.search, query) : null;
+	}
+
 	/** Where a shelf sits on the route; unknown shelves sort to the back. */
 	order(shopName: string, shelf: string): number {
 		const shelves = this.shelves(shopName);
@@ -123,10 +156,14 @@ export class ShopIndex {
 
 		const shops: Shop[] = [];
 		for (const file of files) {
+			const frontmatter =
+				this.plugin.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
 			shops.push({
 				name: file.basename,
 				path: file.path,
 				shelves: await this.readShelves(file),
+				search:
+					typeof frontmatter.search === "string" ? frontmatter.search.trim() : "",
 			});
 		}
 		this.shops = shops;
@@ -186,9 +223,17 @@ export class ShopIndex {
 			[
 				"---",
 				"pantry: shop",
+				'search: ""',
 				"---",
 				"",
 				`# ${safe}`,
+				"",
+				"> [!info]- Looking a product up at this shop",
+				"> Put this shop's search address in `search` above, with `{q}` where",
+				"> the product name goes \u2014 for example",
+				"> `https://www.example.com/search?query={q}`. The new product form then",
+				"> offers a button that looks the name up here. Leave it empty and no",
+				"> button appears.",
 				"",
 				"## Shelves",
 				"",

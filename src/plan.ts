@@ -16,6 +16,7 @@ import type {
 	MealType,
 	PlannedDay,
 	PlannedRecipe,
+	ShoppingStop,
 	WeekPlan,
 } from "./types";
 
@@ -161,9 +162,11 @@ export class PlanStore {
 		const days: PlannedDay[] = asArray(record.days).map((rawDay) => {
 			const day = asRecord(rawDay);
 			const note = asText(day.note).trim();
+			const shopping = parseShopping(day.shopping);
 			return {
 				date: asText(day.date),
 				...(note.length > 0 ? { note } : {}),
+				...(shopping.length > 0 ? { shopping } : {}),
 				meals: asArray(day.meals).map((rawMeal) => {
 					const meal = asRecord(rawMeal);
 					return {
@@ -241,6 +244,9 @@ export class PlanStore {
 					...(day.note && day.note.trim().length > 0
 						? { note: day.note.trim() }
 						: {}),
+					...(day.shopping && day.shopping.length > 0
+						? { shopping: day.shopping.map(cleanStop) }
+						: {}),
 					meals: day.meals
 						.map((meal) => ({
 							meal: meal.meal,
@@ -248,8 +254,14 @@ export class PlanStore {
 						}))
 						.filter((meal) => meal.recipes.length > 0),
 				}))
-				// A day with nothing planned but a note still has something to say.
-				.filter((day) => day.meals.length > 0 || day.note !== undefined)
+				// A day with nothing planned but a note or a shopping stop still
+				// has something to say.
+				.filter(
+					(day) =>
+						day.meals.length > 0 ||
+						day.note !== undefined ||
+						day.shopping !== undefined
+				)
 				.sort((a, b) => a.date.localeCompare(b.date)),
 		};
 		// Dit blok wordt van nul opgebouwd: lege dagen vallen weg, de dagen
@@ -506,6 +518,58 @@ export function setNote(plan: WeekPlan, date: string, text: string): void {
 	}
 	if (value.length === 0) delete day.note;
 	else day.note = value;
+}
+
+/**
+ * Leest de boodschappenmomenten van een dag uit het blok.
+ *
+ * In de notitie staat het als `- shop: AH` met daaronder `before: Lunch` of
+ * `after: Dinner`, want dat is te lezen zonder de plugin erbij. Intern wordt
+ * het één maaltijdnaam plus een kant.
+ */
+function parseShopping(raw: unknown): ShoppingStop[] {
+	return asArray(raw)
+		.map((item) => {
+			const record = asRecord(item);
+			const shop = asText(record.shop).trim();
+			if (shop.length === 0) return null;
+			const after = asText(record.after).trim();
+			const before = asText(record.before).trim();
+			if (after.length > 0) return { shop, meal: after, when: "after" as const };
+			if (before.length > 0) {
+				return { shop, meal: before, when: "before" as const };
+			}
+			return { shop };
+		})
+		.filter((stop): stop is ShoppingStop => stop !== null);
+}
+
+function cleanStop(stop: ShoppingStop): Record<string, unknown> {
+	const clean: Record<string, unknown> = { shop: stop.shop };
+	const meal = (stop.meal ?? "").trim();
+	if (meal.length > 0) clean[stop.when === "after" ? "after" : "before"] = meal;
+	return clean;
+}
+
+/** De boodschappenmomenten van deze dag, in de volgorde waarin ze staan. */
+export function shoppingAt(plan: WeekPlan, date: string): ShoppingStop[] {
+	return plan.days.find((day) => day.date === date)?.shopping ?? [];
+}
+
+/** Vervangt de boodschappenmomenten van een dag; leeg haalt de sleutel weg. */
+export function setShopping(
+	plan: WeekPlan,
+	date: string,
+	stops: ShoppingStop[]
+): void {
+	let day = plan.days.find((item) => item.date === date);
+	if (!day) {
+		if (stops.length === 0) return;
+		day = { date, meals: [] };
+		plan.days.push(day);
+	}
+	if (stops.length === 0) delete day.shopping;
+	else day.shopping = stops;
 }
 
 export function addRecipe(

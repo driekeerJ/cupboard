@@ -1,4 +1,4 @@
-import { Notice, setIcon } from "obsidian";
+import { Menu, Notice, setIcon } from "obsidian";
 import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import {
@@ -22,9 +22,17 @@ import {
 	removeRecipe,
 	servingsFor,
 	setNote,
+	setShopping,
+	shoppingAt,
 	toLink,
 } from "../plan";
-import type { MealStatus, MealType, PlannedRecipe, WeekPlan } from "../types";
+import type {
+	MealStatus,
+	MealType,
+	PlannedRecipe,
+	ShoppingStop,
+	WeekPlan,
+} from "../types";
 import {
 	consumptionOf,
 	returnToStock,
@@ -41,6 +49,53 @@ const MEAL_HUES = [152, 8, 38, 205, 268, 330, 186, 96];
 
 /** Shown beside the day-note row and as its placeholder in the day list. */
 const DAY_NOTE_LABEL = "Notes";
+
+/** Shown beside the row where you mark when groceries come into the house. */
+const SHOPPING_LABEL = "Groceries";
+
+/**
+ * Elke plek in een dag waar een boodschappenmoment kan liggen: vóór elke
+ * maaltijd, en één keer na de laatste. Precies één positie per gat, want
+ * "na het ontbijt" en "voor de lunch" zijn hetzelfde punt en twee namen voor
+ * hetzelfde punt maken een menu onleesbaar.
+ */
+function stopPositions(
+	meals: MealType[]
+): { label: string; stop: Omit<ShoppingStop, "shop"> }[] {
+	const spots: { label: string; stop: Omit<ShoppingStop, "shop"> }[] = meals.map((meal) => ({
+		label: `Before ${meal.name || "meal"}`,
+		stop: { meal: meal.name, when: "before" as const },
+	}));
+	const last = meals[meals.length - 1];
+	if (last) {
+		spots.push({
+			label: `After ${last.name || "meal"}`,
+			stop: { meal: last.name, when: "after" as const },
+		});
+	}
+	return spots;
+}
+
+/** Hoe een moment op de chip staat, in dezelfde woorden als in het menu. */
+function stopText(stop: ShoppingStop, meals: MealType[]): string {
+	const spots = stopPositions(meals);
+	const match = spots.find(
+		(spot) =>
+			(spot.stop.meal ?? "").toLowerCase() === (stop.meal ?? "").toLowerCase() &&
+			spot.stop.when === (stop.when ?? "before")
+	);
+	if (match) return match.label;
+	const first = meals[0];
+	return first ? `Before ${first.name || "meal"}` : "Start of day";
+}
+
+function sameStop(a: ShoppingStop, b: ShoppingStop): boolean {
+	return (
+		a.shop === b.shop &&
+		(a.meal ?? "") === (b.meal ?? "") &&
+		(a.when ?? "before") === (b.when ?? "before")
+	);
+}
 
 /** Resolves a meal label coming from a drag payload back to a configured meal. */
 function findMeal(meals: MealType[], label: string): MealType | null {
@@ -374,6 +429,14 @@ export class PlannerGrid {
 			this.drawDayNote(grid, addDays(this.weekStart, offset), "");
 		}
 
+		const shopLabel = grid.createDiv({
+			cls: "pantry-corner pantry-shopping-corner",
+		});
+		shopLabel.setText(SHOPPING_LABEL);
+		for (let offset = 0; offset < 7; offset++) {
+			this.drawShopping(grid, addDays(this.weekStart, offset));
+		}
+
 		meals.forEach((meal, mealIndex) => {
 			const label = grid.createDiv({ cls: "pantry-meal-label" });
 			label.style.setProperty(
@@ -409,6 +472,7 @@ export class PlannerGrid {
 			heading.createSpan({ cls: "pantry-day-number", text: dayNumber });
 
 			this.drawDayNote(day, date, DAY_NOTE_LABEL);
+			this.drawShopping(day, date);
 
 			const rows = day.createDiv({ cls: "pantry-day-meals" });
 			meals.forEach((meal, mealIndex) => {
@@ -422,6 +486,130 @@ export class PlannerGrid {
 				this.drawSlot(row, date, meal, mealIndex, isToday);
 			});
 		}
+	}
+
+	/**
+	 * De rij waarin je aangeeft wanneer er die dag boodschappen in huis komen.
+	 *
+	 * Dit is de enige plek waar dat gezegd wordt, en het staat in het weekplan
+	 * en niet bij de winkel: wanneer je naar de Lidl loopt of wanneer de
+	 * bezorging valt, is iets van déze week. De winkelnotitie beschrijft de
+	 * winkel, niet je agenda.
+	 */
+	private drawShopping(host: HTMLElement, date: Date): void {
+		const isoDate = toISODate(date);
+		const { meals } = this.plugin.settings;
+		const wrap = host.createDiv({ cls: "pantry-shopping" });
+		const stops = shoppingAt(this.plan, isoDate);
+		if (stops.length > 0) wrap.addClass("has-stops");
+
+		for (const stop of stops) {
+			const chip = wrap.createEl("button", { cls: "pantry-shop-chip" });
+			setIcon(chip.createSpan({ cls: "pantry-shop-chip-icon" }), "shopping-cart");
+			chip.createSpan({ cls: "pantry-shop-chip-name", text: stop.shop });
+			chip.createSpan({
+				cls: "pantry-shop-chip-when",
+				text: stopText(stop, meals),
+			});
+			chip.setAttribute(
+				"aria-label",
+				`${stop.shop} — ${stopText(stop, meals)}. Tap to change.`
+			);
+			chip.addEventListener("click", (event) => {
+				event.preventDefault();
+				this.openStopMenu(event, isoDate, stop);
+			});
+		}
+
+		const add = wrap.createEl("button", {
+			cls: "pantry-shop-add",
+			attr: { "aria-label": `Add a shop to ${isoDate}` },
+		});
+		setIcon(add, "plus");
+		add.addEventListener("click", (event) => {
+			event.preventDefault();
+			this.openShopMenu(event, isoDate);
+		});
+	}
+
+	/** Welke winkel er die dag binnenkomt. Nieuw moment: aan het begin van de dag. */
+	private openShopMenu(event: MouseEvent, isoDate: string): void {
+		const names = this.plugin.shops.names();
+		const menu = new Menu();
+
+		if (names.length === 0) {
+			menu.addItem((item) =>
+				item.setTitle("No shops yet — add a note in your Shops folder").setDisabled(true)
+			);
+			menu.showAtMouseEvent(event);
+			return;
+		}
+
+		const first = this.plugin.settings.meals[0];
+		for (const name of names) {
+			menu.addItem((item) =>
+				item
+					.setTitle(name)
+					.setIcon("shopping-cart")
+					.onClick(() => {
+						const stops = [...shoppingAt(this.plan, isoDate)];
+						if (stops.some((stop) => stop.shop === name)) return;
+						stops.push(
+							first
+								? { shop: name, meal: first.name, when: "before" }
+								: { shop: name }
+						);
+						setShopping(this.plan, isoDate, stops);
+						guarded("could not save your meal plan", () =>
+							this.persist()
+						);
+					})
+			);
+		}
+		menu.showAtMouseEvent(event);
+	}
+
+	/** Verplaatsen binnen de dag, of weghalen. */
+	private openStopMenu(
+		event: MouseEvent,
+		isoDate: string,
+		stop: ShoppingStop
+	): void {
+		const meals = this.plugin.settings.meals;
+		const menu = new Menu();
+		const current = stopText(stop, meals);
+
+		for (const spot of stopPositions(meals)) {
+			menu.addItem((item) =>
+				item
+					.setTitle(spot.label)
+					.setChecked(spot.label === current)
+					.onClick(() => {
+						const stops = shoppingAt(this.plan, isoDate).map((entry) =>
+							sameStop(entry, stop) ? { shop: entry.shop, ...spot.stop } : entry
+						);
+						setShopping(this.plan, isoDate, stops);
+						guarded("could not save your meal plan", () =>
+							this.persist()
+						);
+					})
+			);
+		}
+
+		menu.addSeparator();
+		menu.addItem((item) =>
+			item
+				.setTitle("Remove")
+				.setIcon("trash-2")
+				.onClick(() => {
+					const stops = shoppingAt(this.plan, isoDate).filter(
+						(entry) => !sameStop(entry, stop)
+					);
+					setShopping(this.plan, isoDate, stops);
+					guarded("could not save your meal plan", () => this.persist());
+				})
+		);
+		menu.showAtMouseEvent(event);
 	}
 
 	/**

@@ -1,5 +1,13 @@
 import { TFile } from "obsidian";
 import type PantryPlugin from "./main";
+import {
+	arrivalsByShop,
+	earliest,
+	mealIndex,
+	type DatedStop,
+	type Moment,
+} from "./arrival";
+import { addDays, atMidnight, startOfWeek, toISODate } from "./date";
 import { parseRecipeBody } from "./cook";
 import {
 	parseIngredient,
@@ -147,6 +155,10 @@ export class NeedIndex {
 	private plugin: PantryPlugin;
 	private amounts: Map<string, number> = new Map();
 	private origins: Map<string, NeedSource[]> = new Map();
+	/** Het vroegste moment waarop een product in het plan gevraagd wordt. */
+	private moments: Map<string, Moment> = new Map();
+	/** Vanaf wanneer elke winkel in huis is, gesleuteld op naam in kleine letters. */
+	private shopArrivals: Map<string, Moment> = new Map();
 
 	constructor(plugin: PantryPlugin) {
 		this.plugin = plugin;
@@ -161,17 +173,99 @@ export class NeedIndex {
 		return this.origins.get(product.path) ?? [];
 	}
 
-	async rebuild(weekStart: Date): Promise<void> {
-		const plan = await this.plugin.plans.load(weekStart);
-		this.origins = new Map();
-		this.amounts = await this.collect(plan);
+	/**
+	 * Wanneer dit product voor het eerst op tafel moet staan, of null als het
+	 * nergens in het plan voorkomt. Dat laatste is gewone voorraadaanvulling:
+	 * die heeft geen deadline.
+	 */
+	momentFor(product: Product): Moment | null {
+		return this.moments.get(product.path) ?? null;
 	}
 
-	private async collect(plan: WeekPlan): Promise<Map<string, number>> {
+	/** De boodschappenmomenten uit het plan, per winkel het vroegste. */
+	arrivals(): Map<string, Moment> {
+		return this.shopArrivals;
+	}
+
+	/**
+	 * Leest het plan van `from` tot en met `from + days - 1`.
+	 *
+	 * Een rollende horizon en niet "deze week", want boodschappen doen loopt
+	 * niet met de weeknotitie mee: wie op woensdag bestelt voor tot en met
+	 * volgende week dinsdag kijkt over de weekgrens. Er worden dus zoveel
+	 * weeknotities gelezen als de horizon raakt.
+	 */
+	async rebuild(from: Date, days?: number): Promise<void> {
+		const span = Math.max(1, days ?? this.plugin.settings.horizonDays);
+		const start = atMidnight(from);
+		const first = toISODate(start);
+		const last = toISODate(addDays(start, span - 1));
+
+		this.origins = new Map();
+		this.moments = new Map();
+
 		const raw = new Map<string, number>();
+		const stops: DatedStop[] = [];
+
+		for (const plan of await this.plansCovering(start, span)) {
+			await this.collect(plan, first, last, raw, stops);
+		}
+
+		this.shopArrivals = arrivalsByShop(stops, this.plugin.settings.meals);
+
+		const rounded = new Map<string, number>();
+		raw.forEach((amount, path) => {
+			const whole = Math.ceil(amount - 1e-9);
+			if (whole > 0) rounded.set(path, whole);
+		});
+		this.amounts = rounded;
+	}
+
+	/** Elke weeknotitie die de horizon raakt, van vroeg naar laat. */
+	private async plansCovering(start: Date, span: number): Promise<WeekPlan[]> {
+		const { weekStartDay } = this.plugin.settings;
+		const seen = new Set<string>();
+		const plans: WeekPlan[] = [];
+
+		for (let offset = 0; offset < span; offset += 1) {
+			const weekStart = startOfWeek(addDays(start, offset), weekStartDay);
+			const key = toISODate(weekStart);
+			if (seen.has(key)) continue;
+			seen.add(key);
+			plans.push(await this.plugin.plans.load(weekStart));
+		}
+
+		return plans;
+	}
+
+	private async collect(
+		plan: WeekPlan,
+		first: string,
+		last: string,
+		raw: Map<string, number>,
+		stops: DatedStop[]
+	): Promise<void> {
+		const meals = this.plugin.settings.meals;
 
 		for (const day of plan.days) {
+			// De weeknotitie loopt van maandag tot zondag, de horizon niet: een
+			// dag die er buiten valt telt niet mee, ook niet als hij in dezelfde
+			// notitie staat.
+			if (day.date < first || day.date > last) continue;
+
+			for (const stop of day.shopping ?? []) {
+				stops.push({ ...stop, date: day.date });
+			}
+
 			for (const meal of day.meals) {
+				// De maaltijd staat als naam in het blok; de volgorde die de
+				// gebruiker instelt bepaalt wat "eerder op de dag" betekent.
+				const index = mealIndex(meals, meal.meal);
+				const moment: Moment = {
+					date: day.date,
+					meal: index === -1 ? 0 : index,
+				};
+
 				for (const entry of meal.recipes) {
 					// Ticked off, either way: an eaten meal already took its
 					// ingredients out of the house and a skipped one never will.
@@ -179,23 +273,22 @@ export class NeedIndex {
 					// The plan stores the link as written, brackets and all.
 					const file = this.plugin.cook.file(linkTarget(entry.recipe));
 					if (!file) continue;
-					await this.addRecipe(raw, file, factorFor(this.plugin, file, entry));
+					await this.addRecipe(
+						raw,
+						file,
+						factorFor(this.plugin, file, entry),
+						moment
+					);
 				}
 			}
 		}
-
-		const rounded = new Map<string, number>();
-		raw.forEach((amount, path) => {
-			const whole = Math.ceil(amount - 1e-9);
-			if (whole > 0) rounded.set(path, whole);
-		});
-		return rounded;
 	}
 
 	private async addRecipe(
 		into: Map<string, number>,
 		file: TFile,
-		factor: number
+		factor: number,
+		moment: Moment
 	): Promise<void> {
 		for (const { product, line, amount } of await amountsForRecipe(
 			this.plugin,
@@ -210,6 +303,12 @@ export class NeedIndex {
 
 			if (amount <= 0) continue;
 			into.set(product.path, (into.get(product.path) ?? 0) + amount);
+
+			// Alleen een regel die echt iets vraagt zet een deadline. Een vage
+			// maat draagt nul bij aan de lijst en mag er dus ook geen winkel
+			// mee verzetten.
+			const best = earliest(this.moments.get(product.path) ?? null, moment);
+			if (best) this.moments.set(product.path, best);
 		}
 	}
 }

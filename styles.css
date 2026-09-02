@@ -3962,6 +3962,123 @@
 	margin-top: -2px;
 }
 
+/* Waarom een product niet in zijn eigen winkel ligt. Zelfde slot als
+ * "never counted", maar met de accentkleur: dit is geen ontbrekend
+ * gegeven, dit is een beslissing die uitleg verdient. */
+.pantry-buy-meta.is-moved {
+	color: var(--text-accent);
+}
+
+/* --- Groceries row -------------------------------------------------- *
+ * Waar je aangeeft dat er die dag boodschappen in huis komen. Zelfde
+ * plek en zelfde rust als de dagnotitie: het hoort bij de dag, niet bij
+ * een maaltijd, en het mag het plan niet overschreeuwen.
+ */
+
+.pantry-shopping-corner {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	padding: 0 4px;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	letter-spacing: 0.02em;
+}
+
+.pantry-shopping {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	gap: 4px;
+	min-width: 0;
+	padding: 2px 0 4px;
+}
+
+.pantry-planner button.pantry-shop-chip {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0;
+	height: auto;
+	max-width: 100%;
+	padding: 4px 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.25;
+	text-align: left;
+	cursor: pointer;
+	box-shadow: none;
+}
+
+.pantry-planner button.pantry-shop-chip:hover {
+	border-color: var(--text-accent);
+	background: var(--background-primary);
+}
+
+.pantry-shop-chip-icon {
+	display: none;
+}
+
+.pantry-shop-chip-name {
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 100%;
+}
+
+.pantry-shop-chip-when {
+	color: var(--text-faint);
+	font-size: calc(var(--font-ui-smaller) - 1px);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 100%;
+}
+
+/* Het plusje blijft onzichtbaar tot je in de buurt komt: zeven lege
+ * knoppen op een rij lezen als zeven dingen die af moeten. */
+.pantry-planner button.pantry-shop-add {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: 8px;
+	background: transparent;
+	color: var(--text-faint);
+	opacity: 0;
+	cursor: pointer;
+	box-shadow: none;
+	transition: opacity 120ms ease, color 120ms ease;
+}
+
+.pantry-shopping:hover button.pantry-shop-add,
+.pantry-shopping.has-stops button.pantry-shop-add,
+.pantry-planner button.pantry-shop-add:focus-visible {
+	opacity: 1;
+}
+
+.pantry-planner button.pantry-shop-add:hover {
+	border-style: solid;
+	border-color: var(--text-accent);
+	color: var(--text-accent);
+}
+
+/* Op de telefoon staat de rij onder de dagkop en is er ruimte zat. */
+.pantry-day > .pantry-shopping {
+	padding-top: 4px;
+}
+
+.pantry-day > .pantry-shopping button.pantry-shop-add {
+	opacity: 1;
+}
+
 /* --- Products screen ------------------------------------------------ *
  * The base list, and the run through the products that never got
  * finished. A gap is shown where the facts would be, in the same slot,
@@ -4144,4 +4261,33 @@
 .pantry-sheet-suffix.is-quiet {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
+}
+
+/* Nieuw-productformulier: de naam die al bezet is, en de winkel die nog geen
+   zoekadres heeft. Twee gewichten — een zachte waarschuwing laat je door, een
+   harde blokkeert de knop — dus twee kleuren. */
+.pantry-sheet-warn {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	line-height: 1.4;
+}
+
+.pantry-sheet-warn:empty {
+	display: none;
+}
+
+.pantry-sheet-warn.is-hard {
+	color: var(--text-error);
+}
+
+.pantry-sheet-hint {
+	margin-top: 6px;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	line-height: 1.4;
+}
+
+.pantry-app button.pantry-text-button.is-disabled {
+	opacity: 0.45;
+	cursor: default;
 }

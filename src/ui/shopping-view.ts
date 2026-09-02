@@ -2,7 +2,12 @@ import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
 import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import type { Product } from "../products";
-import { groupForShopping, type ShopGroup } from "../list";
+import {
+	assignmentFor,
+	assignmentNote,
+	groupForShopping,
+	type ShopGroup,
+} from "../list";
 import { emptyState, keepScroll } from "./kit";
 import { drawBackLink } from "./nav";
 import { ProductSheet } from "./product-sheet";
@@ -278,6 +283,14 @@ export class ShoppingView extends ItemView {
 		main.onclick = () => this.edit(product);
 		if (unsure) {
 			main.createDiv({ cls: "pantry-buy-meta", text: "never counted" });
+		} else {
+			// Waarom dit product hier ligt en niet in zijn eigen winkel. Staat
+			// naast het product, want daar wordt de vraag gesteld.
+			const why = assignmentNote(assignmentFor(this.plugin, product));
+			if (why) {
+				const meta = main.createDiv({ cls: "pantry-buy-meta", text: why });
+				meta.addClass("is-moved");
+			}
 		}
 
 		const amount = this.amount(product);
