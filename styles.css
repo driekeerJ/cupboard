@@ -2820,10 +2820,15 @@
 	margin-left: -12px;
 }
 
-/* Held on screen for a few seconds after a tap took it out of this list, so a
-   count can still be corrected. Dimmed, because it is on its way out. */
+/* Done with, but still on screen until "Hide checked" is pressed, so a count
+   can still be corrected and the list never moves under your thumb. Dimmed,
+   because it is on its way out. */
 .pantry-stock-row.is-leaving {
 	opacity: 0.5;
+}
+
+.pantry-stock button.pantry-text-button.is-hidden {
+	display: none;
 }
 
 .pantry-stock-line {

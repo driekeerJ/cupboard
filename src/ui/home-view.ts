@@ -173,7 +173,10 @@ export class HomeView extends ItemView {
 				hint: "What to buy, in walking order",
 				state: () => {
 					const { buy, unsure } = this.plugin.list.buckets();
-					const total = buy.length + unsure.length;
+					// Losse boodschappen staan op dezelfde lijst, dus ze horen
+					// ook in het getal op de tegel.
+					const total =
+						buy.length + unsure.length + this.plugin.list.extras.length;
 					return {
 						text: total === 0 ? "nothing to buy" : `${total} on the list`,
 						count: total,

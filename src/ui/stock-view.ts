@@ -13,12 +13,6 @@ export const STOCK_VIEW_TYPE = "pantry-stock";
 /** Above this many, a segmented control stops being a control and becomes a wall. */
 const STRIP_LIMIT = 8;
 
-/**
- * How long a row stays put after a tap has taken it out of the current list.
- * Counting is a rhythm — 1, 2, 3 — and sometimes a correction right after; a
- * row that vanishes on the first tap takes the rest of that rhythm with it.
- */
-const LINGER_MS = 5000;
 
 /**
  * The counting screen. One row per product, and the only thing the user does is
@@ -30,9 +24,15 @@ export class StockView extends ItemView {
 	private bodyEl: HTMLElement | null = null;
 	private countEl: HTMLElement | null = null;
 
-	// Rows that no longer belong in this list but are being held in place for a
-	// moment, by product path, each with the timer that will let it go.
-	private leaving = new Map<string, number>();
+	// Rows that no longer belong in this list but are being held in place, by
+	// product path. Nothing takes them away on its own: counting is a rhythm —
+	// 1, 2, 3 — and often a correction right after, and a list that reflows
+	// under your thumb makes you tap the wrong row. They go when you press
+	// "Hide checked", and not a moment earlier.
+	private leaving = new Set<string>();
+
+	// The "Hide checked (n)" button, kept so the list can update its count.
+	private hideEl: HTMLButtonElement | null = null;
 
 	// Filter, search and folded sections live on the plugin instead of here.
 	// Tapping a product name can take you out to its note, which destroys this
@@ -126,9 +126,17 @@ export class StockView extends ItemView {
 		const inner = head.createDiv({ cls: "pantry-head-inner" });
 		drawBackLink(inner, this);
 
-		const titles = inner.createDiv({ cls: "pantry-head-titles" });
+		const top = inner.createDiv({ cls: "pantry-head-row" });
+		const titles = top.createDiv({ cls: "pantry-head-titles" });
 		titles.createEl("h1", { cls: "pantry-head-title", text: "Stock" });
 		this.countEl = titles.createDiv({ cls: "pantry-head-sub" });
+
+		const actions = top.createDiv({ cls: "pantry-head-actions" });
+		this.hideEl = actions.createEl("button", { cls: "pantry-text-button" });
+		this.hideEl.onclick = () => {
+			this.forget();
+			this.drawList();
+		};
 
 		const search = inner.createEl("input", {
 			cls: "pantry-field-search",
@@ -221,9 +229,9 @@ export class StockView extends ItemView {
 	}
 
 	/**
-	 * Writes a change made from a row, and keeps that row on screen for a beat
-	 * when the change is what removed it from the list. Every further tap on the
-	 * same row starts the wait over, so correcting a count is never a race.
+	 * Writes a change made from a row, and keeps that row on screen when the
+	 * change is what removed it from the list, so correcting a count is never a
+	 * race against the list itself.
 	 */
 	private change(product: Product, patch: ProductPatch): void {
 		// De redraw hoort binnen de guard: mislukt de schrijfactie, dan mag het
@@ -236,25 +244,26 @@ export class StockView extends ItemView {
 	}
 
 	private hold(product: Product): void {
-		const running = this.leaving.get(product.path);
-		if (running !== undefined) window.clearTimeout(running);
-		if (this.belongs(product)) {
-			this.leaving.delete(product.path);
-			return;
-		}
-		this.leaving.set(
-			product.path,
-			window.setTimeout(() => {
-				this.leaving.delete(product.path);
-				this.drawList();
-			}, LINGER_MS)
-		);
+		if (this.belongs(product)) this.leaving.delete(product.path);
+		else this.leaving.add(product.path);
 	}
 
-	/** Drops every held row at once, without waiting out its timer. */
+	/** Drops every held row at once. The button in the header, and nothing else. */
 	private forget(): void {
-		this.leaving.forEach((timer) => window.clearTimeout(timer));
 		this.leaving.clear();
+	}
+
+	/**
+	 * Shows the clean-up button only when there is something to clean up, and
+	 * says how many rows will go, so pressing it holds no surprises.
+	 */
+	private drawHideButton(): void {
+		const button = this.hideEl;
+		if (!button) return;
+		const held = this.leaving.size;
+		button.toggleClass("is-hidden", held === 0);
+		button.setText(`Hide checked (${held})`);
+		button.setAttr("aria-label", `Hide ${held} finished rows`);
 	}
 
 	private drawList(): void {
@@ -263,6 +272,7 @@ export class StockView extends ItemView {
 
 		const restore = keepScroll(body);
 		body.empty();
+		this.drawHideButton();
 
 		const all = this.plugin.products.all();
 		if (all.length === 0) {

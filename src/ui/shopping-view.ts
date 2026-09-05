@@ -8,8 +8,10 @@ import {
 	groupForShopping,
 	type ShopGroup,
 } from "../list";
+import type { Extra } from "../extras";
 import { emptyState, keepScroll } from "./kit";
 import { drawBackLink } from "./nav";
+import { ExtraModal } from "./extra-modal";
 import { ProductSheet } from "./product-sheet";
 
 export const SHOPPING_VIEW_TYPE = "pantry-shopping";
@@ -110,9 +112,16 @@ export class ShoppingView extends ItemView {
 		return { buy: [...buy, ...this.plugin.list.boughtProducts()], unsure };
 	}
 
+	/** De losse boodschappen van deze ronde; zie src/extras.ts. */
+	private get extras(): Extra[] {
+		return this.plugin.list.extras;
+	}
+
 	/** De winkels waar deze lijst langs loopt, in dezelfde volgorde als de lijst. */
 	private shops(items: Product[]): string[] {
-		return groupForShopping(this.plugin, items).map((group) => group.shop);
+		return groupForShopping(this.plugin, items, this.extras).map(
+			(group) => group.shop
+		);
 	}
 
 	private draw(): void {
@@ -127,9 +136,20 @@ export class ShoppingView extends ItemView {
 		const inner = head.createDiv({ cls: "pantry-head-inner" });
 		drawBackLink(inner, this);
 
-		const titles = inner.createDiv({ cls: "pantry-head-titles" });
+		const top = inner.createDiv({ cls: "pantry-head-row" });
+		const titles = top.createDiv({ cls: "pantry-head-titles" });
 		titles.createEl("h1", { cls: "pantry-head-title", text: "Groceries" });
 		this.countEl = titles.createDiv({ cls: "pantry-head-sub" });
+
+		// Bedenk je onderweg iets dat geen product is, dan hoort dat hier op
+		// te kunnen, en niet via een omweg langs de productenmap.
+		const actions = top.createDiv({ cls: "pantry-head-actions" });
+		const add = actions.createEl("button", {
+			cls: "pantry-text-button pantry-primary-button",
+			text: "Add item",
+		});
+		add.setAttr("aria-label", "Add a loose item to the list");
+		add.onclick = () => this.addExtra();
 
 		const track = inner.createDiv({ cls: "pantry-progress" });
 		this.barEl = track.createDiv({ cls: "pantry-progress-bar" });
@@ -185,8 +205,12 @@ export class ShoppingView extends ItemView {
 		body.empty();
 
 		const { buy, unsure } = this.buckets();
+		const extras = this.extras;
 		const done = buy.filter((product) => this.isDone(product)).length;
-		const open = buy.length - done;
+		// Een los regeltje telt gewoon mee: in de winkel is het net zo goed
+		// iets dat nog in je kar moet, en het verdwijnt zodra je het aantikt.
+		const total = buy.length + extras.length;
+		const open = total - done;
 
 		const parts = [`${open} to buy`];
 		if (done > 0) parts.push(`${done} in the basket`);
@@ -194,21 +218,21 @@ export class ShoppingView extends ItemView {
 		this.countEl?.setText(parts.join("  ·  "));
 
 		if (this.barEl) {
-			const ratio = buy.length === 0 ? 0 : done / buy.length;
+			const ratio = total === 0 ? 0 : done / total;
 			this.barEl.style.width = `${Math.round(ratio * 100)}%`;
-			this.barEl.parentElement?.toggleClass("is-hidden", buy.length === 0);
+			this.barEl.parentElement?.toggleClass("is-hidden", total === 0);
 		}
 
-		if (buy.length === 0 && unsure.length === 0) {
+		if (total === 0 && unsure.length === 0) {
 			emptyState(
 				body,
 				"Nothing needed",
-				"Count a few products in Stock and they turn up here."
+				"Count a few products in Stock and they turn up here \u2014 or add something you thought of yourself."
 			);
 			return;
 		}
 
-		const groups = groupForShopping(this.plugin, buy);
+		const groups = groupForShopping(this.plugin, buy, extras);
 		groups
 			.filter((group) => this.shop === "" || group.shop === this.shop)
 			.forEach((group) => {
@@ -240,7 +264,7 @@ export class ShoppingView extends ItemView {
 			heading.createSpan({ cls: "pantry-section-name", text: shop });
 			heading.createSpan({
 				cls: "pantry-section-count",
-				text: `${group.items.length}`,
+				text: `${group.items.length + group.extras.length}`,
 			});
 		}
 
@@ -251,14 +275,65 @@ export class ShoppingView extends ItemView {
 		// notitie uit elkaar zonder dat iemand iets veranderd heeft. Wat hier
 		// bovenop komt is van dit scherm alleen: wat in het mandje ligt zakt
 		// naar onderen.
-		group.shelves.forEach(({ shelf, items }) => {
+		group.shelves.forEach(({ shelf, items, extras }) => {
 			if (group.shelves.length > 1) {
 				list.createDiv({ cls: "pantry-shelf", text: shelf });
 			}
 			[...items]
 				.sort((a, b) => (this.isDone(a) ? 1 : 0) - (this.isDone(b) ? 1 : 0))
 				.forEach((product) => this.drawRow(list, product, false));
+			// Onder de producten van hetzelfde schap: je loopt er in één keer
+			// langs, en dat het geen product is hoef je pas te weten als je het
+			// aantikt.
+			extras.forEach((extra) => this.drawExtraRow(list, extra));
 		});
+	}
+
+	/**
+	 * Een los regeltje in de lijst.
+	 *
+	 * Ziet eruit als elke andere regel — dezelfde ronde tik, dezelfde naam,
+	 * dezelfde stille hoeveelheid — want in de winkel is het onderscheid niet
+	 * interessant. Het verschil zit in wat een tik doet: er is geen voorraad om
+	 * bij te boeken en geen telling om naar terug te vallen, dus afvinken is
+	 * wissen.
+	 */
+	private drawExtraRow(parent: HTMLElement, extra: Extra): void {
+		const row = parent.createDiv({ cls: "pantry-buy-row is-extra" });
+
+		const tick = row.createEl("button", { cls: "pantry-tick" });
+		const glyph = tick.createSpan({ cls: "pantry-tick-glyph" });
+		setIcon(glyph, "check");
+		tick.setAttr("aria-pressed", "false");
+		tick.setAttr("aria-label", `Got ${extra.name}, take it off the list`);
+		tick.onclick = () =>
+			guarded(`could not tick ${extra.name} off`, async () => {
+				await this.plugin.list.removeExtra(extra.id);
+				this.drawList();
+			});
+
+		const main = row.createDiv({ cls: "pantry-buy-main is-tappable" });
+		main.createDiv({ cls: "pantry-buy-name", text: extra.name });
+		main.setAttr("role", "button");
+		main.setAttr("aria-label", `Edit ${extra.name}`);
+		main.onclick = () => this.editExtra(extra);
+		main.createDiv({ cls: "pantry-buy-meta", text: "loose item" });
+
+		row.createDiv({ cls: "pantry-quantity is-static", text: `${extra.amount}` });
+	}
+
+	private addExtra(): void {
+		this.editing = null;
+		new ExtraModal(this.plugin, null, () =>
+			guarded("could not refresh your grocery list", () => this.reload())
+		).open();
+	}
+
+	private editExtra(extra: Extra): void {
+		this.editing = null;
+		new ExtraModal(this.plugin, extra, () =>
+			guarded("could not refresh your grocery list", () => this.reload())
+		).open();
 	}
 
 	private drawRow(parent: HTMLElement, product: Product, unsure: boolean): void {

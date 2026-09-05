@@ -17,6 +17,13 @@ import {
 	type Assignment,
 	type Moment,
 } from "./arrival";
+import {
+	DEFAULT_EXTRA_AMOUNT,
+	extraLabel,
+	newExtraId,
+	parseExtras,
+	type Extra,
+} from "./extras";
 
 export const NO_SHOP = "Anywhere";
 export const NO_CATEGORY = "Other";
@@ -25,7 +32,13 @@ export const NO_CATEGORY = "Other";
 export interface ShopGroup {
 	shop: string;
 	items: Product[];
-	shelves: { shelf: string; items: Product[] }[];
+	/**
+	 * Losse boodschappen voor deze winkel — dingen die geen product zijn.
+	 * Ze lopen mee in dezelfde schappen als de producten, want in de winkel
+	 * is een pak batterijen net zo goed iets dat op een schap ligt.
+	 */
+	extras: Extra[];
+	shelves: { shelf: string; items: Product[]; extras: Extra[] }[];
 }
 
 /**
@@ -92,19 +105,46 @@ export function lateProducts(
 	return late.sort((a, b) => a.product.name.localeCompare(b.product.name));
 }
 
+/**
+ * Eén emmer per winkel of per schap: de naam zoals hij getoond wordt, en wat
+ * erin ligt. Gesleuteld op kleine letters, want "Koeling" en "koeling" zijn
+ * hetzelfde schap — en twee kopjes voor één schap is precies het soort ruis
+ * waar je met een kar in je hand overheen leest.
+ */
+interface Bucket {
+	name: string;
+	items: Product[];
+	extras: Extra[];
+}
+
+function bucketOf(map: Map<string, Bucket>, name: string): Bucket {
+	const key = name.toLowerCase();
+	const found = map.get(key);
+	if (found) return found;
+	const fresh: Bucket = { name, items: [], extras: [] };
+	map.set(key, fresh);
+	return fresh;
+}
+
 export function groupForShopping(
 	plugin: PantryPlugin,
-	items: Product[]
+	items: Product[],
+	extras: readonly Extra[] = []
 ): ShopGroup[] {
-	const byShop = new Map<string, Product[]>();
+	const byShop = new Map<string, Bucket>();
+
 	for (const product of items) {
 		// Niet `product.shop`, maar waar het gekocht móét worden: een winkel
 		// die pas na de maaltijd levert waarvoor je het nodig hebt, is geen
 		// winkel waar je dit kunt halen.
-		const key = assignmentFor(plugin, product).shop || NO_SHOP;
-		const bucket = byShop.get(key) ?? [];
-		bucket.push(product);
-		byShop.set(key, bucket);
+		const shop = assignmentFor(plugin, product).shop || NO_SHOP;
+		bucketOf(byShop, shop).items.push(product);
+	}
+
+	// Een losse boodschap kent de aankomstlogica niet: hij ligt waar jij zegt
+	// dat hij ligt, en anders nergens. Daarom hier geen `assignShop`.
+	for (const extra of extras) {
+		bucketOf(byShop, extra.shop.trim() || NO_SHOP).extras.push(extra);
 	}
 
 	// Op volgorde van binnenkomst: de winkel waar je vandaag heen loopt hoort
@@ -115,46 +155,69 @@ export function groupForShopping(
 	const rank = (shop: string): Moment | null =>
 		arrivals.get(shop.trim().toLowerCase()) ?? null;
 
-	return [...byShop.keys()]
+	return [...byShop.values()]
 		.sort((a, b) => {
-			if (a === NO_SHOP) return 1;
-			if (b === NO_SHOP) return -1;
-			const left = rank(a);
-			const right = rank(b);
+			if (a.name === NO_SHOP) return 1;
+			if (b.name === NO_SHOP) return -1;
+			const left = rank(a.name);
+			const right = rank(b.name);
 			if (left && right) {
 				const order = compareMoments(left, right);
 				if (order !== 0) return order;
 			} else if (left || right) {
 				return left ? 1 : -1;
 			}
-			return a.localeCompare(b);
+			return a.name.localeCompare(b.name);
 		})
 		.map((shop) => {
-			const own = byShop.get(shop) ?? [];
-			const byShelf = new Map<string, Product[]>();
-			for (const product of own) {
-				const key = product.shelf || NO_CATEGORY;
-				const bucket = byShelf.get(key) ?? [];
-				bucket.push(product);
-				byShelf.set(key, bucket);
+			const byShelf = new Map<string, Bucket>();
+			for (const product of shop.items) {
+				bucketOf(byShelf, product.shelf || NO_CATEGORY).items.push(product);
+			}
+			for (const extra of shop.extras) {
+				bucketOf(byShelf, extra.shelf.trim() || NO_CATEGORY).extras.push(extra);
 			}
 
-			const shelves = [...byShelf.keys()]
-				.sort((a, b) => plugin.compareShelves(shop, a, b))
+			const shelves = [...byShelf.values()]
+				.sort((a, b) => plugin.compareShelves(shop.name, a.name, b.name))
 				.map((shelf) => ({
-					shelf,
-					items: (byShelf.get(shelf) ?? []).sort((a, b) =>
+					shelf: shelf.name,
+					items: [...shelf.items].sort((a, b) =>
+						a.name.localeCompare(b.name)
+					),
+					extras: [...shelf.extras].sort((a, b) =>
 						a.name.localeCompare(b.name)
 					),
 				}));
 
-			return { shop, items: own, shelves };
+			return {
+				shop: shop.name,
+				items: shop.items,
+				extras: shop.extras,
+				shelves,
+			};
 		});
 }
+
 const BOUGHT_HEADING = "## In the basket";
 const CHECK_HEADING = "## Check first";
 
 const TICK = /^\s*-\s\[([ xX])\]\s*\[\[([^\]|#]+)/;
+
+/**
+ * Elk vinkvakje, met of zonder wikilink erachter.
+ *
+ * Losse boodschappen wijzen nergens heen — er is geen notitie om naar te
+ * linken — dus `TICK` ziet ze niet. Deze wel, en wat er dan staat wordt
+ * vergeleken met de losse regels die we kennen; iets anders raken we niet aan.
+ */
+const ANY_TICK = /^\s*-\s\[([ xX])\]\s*(.+?)\s*$/;
+
+/** Minstens één, altijd heel: een halve zak batterijen bestaat niet. */
+function cleanAmount(value: number): number {
+	const amount = Math.round(Number(value));
+	return Number.isFinite(amount) && amount > 0 ? amount : DEFAULT_EXTRA_AMOUNT;
+}
 
 /** De naam van het stuk notitie dat Pantry beheert; zie src/notes.ts. */
 const REGION = "groceries";
@@ -202,6 +265,13 @@ export class GroceryList {
 	readonly bought: Map<string, { count: Count | null; check: boolean }> = new Map();
 	/** Tweaks from the + / − buttons, applied to both renderings. */
 	readonly nudge: Map<string, number> = new Map();
+	/**
+	 * Losse boodschappen: wat je erbij bedenkt en wat geen product is.
+	 *
+	 * Ze horen bij deze ronde, net als het mandje, en verdwijnen zodra je ze
+	 * afvinkt. Zie src/extras.ts voor waarom ze hier wonen en niet als notitie.
+	 */
+	readonly extras: Extra[] = [];
 
 	constructor(plugin: PantryPlugin) {
 		this.plugin = plugin;
@@ -244,6 +314,7 @@ export class GroceryList {
 		const state = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
 		this.bought.clear();
 		this.nudge.clear();
+		this.extras.length = 0;
 
 		const bought = state.bought;
 		if (bought && typeof bought === "object") {
@@ -266,6 +337,79 @@ export class GroceryList {
 				if (Number.isFinite(step) && step !== 0) this.nudge.set(path, step);
 			}
 		}
+
+		this.extras.push(...parseExtras(state.extras));
+	}
+
+	// ------------------------------------------------------- losse boodschappen
+
+	extraById(id: string): Extra | null {
+		return this.extras.find((extra) => extra.id === id) ?? null;
+	}
+
+	/**
+	 * Zet een los regeltje op de lijst.
+	 *
+	 * Meteen wegschrijven en niet gedebounced: dit is één bewuste handeling
+	 * met iets erin dat alleen jij wist. Sluit Obsidian een seconde later af,
+	 * dan is precies dat kwijt — en anders dan een tik op een product is er
+	 * geen productnotitie die het alsnog onthoudt.
+	 */
+	async addExtra(draft: Omit<Extra, "id">): Promise<Extra | null> {
+		const name = draft.name.trim();
+		if (name.length === 0) return null;
+
+		const extra: Extra = {
+			id: newExtraId(),
+			name,
+			amount: cleanAmount(draft.amount),
+			shop: draft.shop.trim(),
+			shelf: draft.shelf.trim(),
+		};
+		this.extras.push(extra);
+		await this.flushState();
+		await this.write();
+		return extra;
+	}
+
+	async updateExtra(
+		id: string,
+		patch: Partial<Omit<Extra, "id">>
+	): Promise<void> {
+		const extra = this.extraById(id);
+		if (!extra) return;
+
+		if (patch.name !== undefined) {
+			const name = patch.name.trim();
+			if (name.length > 0) extra.name = name;
+		}
+		if (patch.amount !== undefined) extra.amount = cleanAmount(patch.amount);
+		if (patch.shop !== undefined) extra.shop = patch.shop.trim();
+		if (patch.shelf !== undefined) extra.shelf = patch.shelf.trim();
+
+		await this.flushState();
+		await this.write();
+	}
+
+	/**
+	 * Afvinken is wissen: een los regeltje heeft geen voorraad om naar terug
+	 * te vallen, dus er valt niets te bewaren en niets op te ruimen.
+	 */
+	async removeExtra(id: string): Promise<void> {
+		const at = this.extras.findIndex((extra) => extra.id === id);
+		if (at === -1) return;
+		this.extras.splice(at, 1);
+		await this.flushState();
+		await this.write();
+	}
+
+	/** Dezelfde regel terugvinden vanuit de notitie; zie syncFromNote. */
+	private matchExtra(text: string): Extra | null {
+		const name = text.replace(/\s*·\s*\d+(\s.*)?$/, "").trim().toLowerCase();
+		if (name.length === 0) return null;
+		return (
+			this.extras.find((extra) => extra.name.toLowerCase() === name) ?? null
+		);
 	}
 
 	/** Verandert de ± aanpassing van één product, en bewaart de ronde. */
@@ -296,7 +440,10 @@ export class GroceryList {
 		const path = this.statePath();
 		const file = vault.getFileByPath(path);
 
-		const empty = this.bought.size === 0 && this.nudge.size === 0;
+		const empty =
+			this.bought.size === 0 &&
+			this.nudge.size === 0 &&
+			this.extras.length === 0;
 		// Geen ronde bezig en nog geen bestand: dan ook geen map aanmaken.
 		if (empty && !file) return;
 
@@ -304,6 +451,7 @@ export class GroceryList {
 			version: STATE_VERSION,
 			bought: Object.fromEntries(this.bought),
 			nudge: Object.fromEntries(this.nudge),
+			extras: this.extras,
 		};
 		const content = `${JSON.stringify(state, null, "\t")}\n`;
 
@@ -435,24 +583,46 @@ export class GroceryList {
 
 		const content = await this.plugin.app.vault.cachedRead(file);
 		let inBought = false;
+		const tickedExtras: string[] = [];
 
 		for (const line of content.split(/\r?\n/)) {
 			if (line.startsWith("## ")) {
 				inBought = line.trim() === BOUGHT_HEADING;
 				continue;
 			}
+			const box = ANY_TICK.exec(line);
+			if (!box) continue;
+			const ticked = (box[1] ?? "").toLowerCase() === "x";
+
 			const match = TICK.exec(line);
-			if (!match) continue;
+			if (match) {
+				const product = this.resolve((match[2] ?? "").trim());
+				if (!product) continue;
 
-			const ticked = (match[1] ?? "").toLowerCase() === "x";
-			const product = this.resolve((match[2] ?? "").trim());
-			if (!product) continue;
-
-			if (ticked && !inBought && !this.bought.has(product.path)) {
-				await this.markBoughtQuietly(product);
-			} else if (!ticked && inBought && this.bought.has(product.path)) {
-				await this.undoBoughtQuietly(product);
+				if (ticked && !inBought && !this.bought.has(product.path)) {
+					await this.markBoughtQuietly(product);
+				} else if (!ticked && inBought && this.bought.has(product.path)) {
+					await this.undoBoughtQuietly(product);
+				}
+				continue;
 			}
+
+			// Geen wikilink: dan is het een losse boodschap, of het is niet van
+			// ons. Alleen een naam die we herkennen telt, en alleen een vinkje
+			// — een los regeltje afvinken is het wissen ervan.
+			if (!ticked) continue;
+			const extra = this.matchExtra((box[2] ?? "").trim());
+			if (extra) tickedExtras.push(extra.id);
+		}
+
+		// Pas na de lus, want wissen tijdens het lezen laat `matchExtra` naar
+		// een lijst kijken die halverwege verandert.
+		if (tickedExtras.length > 0) {
+			for (const id of tickedExtras) {
+				const at = this.extras.findIndex((extra) => extra.id === id);
+				if (at !== -1) this.extras.splice(at, 1);
+			}
+			await this.flushState();
 		}
 
 		await this.write();
@@ -582,7 +752,12 @@ export class GroceryList {
 
 	private isEmpty(): boolean {
 		const { buy, unsure } = this.buckets();
-		return buy.length === 0 && unsure.length === 0 && this.bought.size === 0;
+		return (
+			buy.length === 0 &&
+			unsure.length === 0 &&
+			this.bought.size === 0 &&
+			this.extras.length === 0
+		);
 	}
 
 	async refresh(): Promise<void> {
@@ -597,22 +772,26 @@ export class GroceryList {
 		lines.push(SIGNATURE);
 		lines.push("");
 
-		if (buy.length === 0 && unsure.length === 0 && this.bought.size === 0) {
+		if (this.isEmpty()) {
 			lines.push("Nothing needed.");
 			lines.push("");
 			return lines.join("\n");
 		}
 
-		groupForShopping(this.plugin, buy).forEach((group) => {
+		groupForShopping(this.plugin, buy, this.extras).forEach((group) => {
 			lines.push(`## ${group.shop}`);
 			lines.push("");
 
-			group.shelves.forEach(({ shelf, items }) => {
+			group.shelves.forEach(({ shelf, items, extras }) => {
 				if (group.shelves.length > 1) {
 					lines.push(`### ${shelf}`);
 					lines.push("");
 				}
 				items.forEach((product) => lines.push(this.line(product, false)));
+				// Losse boodschappen onder de producten van hetzelfde schap:
+				// je loopt er in één keer langs, en dat het geen product is
+				// merk je aan het ontbreken van de link.
+				extras.forEach((extra) => lines.push(`- [ ] ${extraLabel(extra)}`));
 				lines.push("");
 			});
 		});
