@@ -187,11 +187,19 @@ function serialiseCount(count: Count): string | number {
  * How many to buy. `extra` is what this week's meals ask for on top of the
  * minimum. null means the question cannot be answered yet because the product
  * was never counted. "plus" is enough by definition, so it buys nothing.
+ *
+ * `minimum` is normaal dat van het product; een boodschappenronde geeft 0 mee
+ * voor een product uit een winkel die deze keer niet meedoet (zie
+ * `NeedIndex.minimumOf`).
  */
-export function toBuy(product: Product, extra = 0): number | null {
+export function toBuy(
+	product: Product,
+	extra = 0,
+	minimum = product.minimum
+): number | null {
 	if (product.count === null) return null;
 	if (product.count === "plus") return 0;
-	return Math.max(0, product.minimum + extra - product.count);
+	return Math.max(0, minimum + extra - product.count);
 }
 
 /** "400 g" -> { amount: 400, unit: "g" }. Bare numbers count as pieces. */

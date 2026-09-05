@@ -18,6 +18,7 @@ import { linkTarget, servingsFor } from "./plan";
 import type { Product } from "./products";
 import { SPOON_ML, family, sameUnit, unitKey } from "./units";
 import type { PlannedRecipe, WeekPlan } from "./types";
+import { isActiveRound, type Round } from "./round";
 
 /** Converts `amount from` into `to` binnen één maatfamilie, anders null. */
 function inFamily(amount: number, from: string, to: string): number | null {
@@ -192,9 +193,31 @@ export class NeedIndex {
 	 * product ergens in de week voorkomt.
 	 */
 	private slots: Map<string, Set<string>> = new Map();
+	/**
+	 * De winkels van de lopende ronde, in kleine letters — of null als er geen
+	 * ronde is en het weekplan geldt. Zie `minimumOf`.
+	 */
+	private roundShops: Set<string> | null = null;
 
 	constructor(plugin: PantryPlugin) {
 		this.plugin = plugin;
+	}
+
+	/**
+	 * Hoeveel je hiervan altijd in huis wilt hebben — déze keer.
+	 *
+	 * Zonder ronde is dat gewoon het minimum van het product. Mét een ronde
+	 * telt het minimum alleen voor een product uit een winkel die meedoet: dat
+	 * is wat "de standaard boodschappen van de Lidl" betekent. Al het andere
+	 * heeft even geen minimum, dus het verdwijnt uit Voorraad en van de lijst
+	 * tot de ronde weer weg is.
+	 */
+	minimumOf(product: Product): number {
+		if (this.roundShops === null) return product.minimum;
+		const inRound = product.shops.some((shop) =>
+			this.roundShops?.has(shop.trim().toLowerCase())
+		);
+		return inRound ? product.minimum : 0;
 	}
 
 	get(product: Product): number {
@@ -254,8 +277,21 @@ export class NeedIndex {
 		const raw = new Map<string, number>();
 		const stops: DatedStop[] = [];
 
-		for (const plan of await this.plansCovering(start, span)) {
-			await this.collect(plan, first, last, raw, stops);
+		// Een ronde vervangt het weekplan: dan lezen we geen enkele weeknotitie
+		// en tellen alleen de gekozen recepten mee. Bewust geen mengvorm — een
+		// lijst die "alleen recept B" heet en toch het halve weekplan bevat is
+		// precies waar de ronde tegen bedoeld is.
+		const round = this.plugin.list.round;
+		if (isActiveRound(round)) {
+			this.roundShops = new Set(
+				round.shops.map((shop) => shop.trim().toLowerCase())
+			);
+			await this.collectRound(round, first, raw);
+		} else {
+			this.roundShops = null;
+			for (const plan of await this.plansCovering(start, span)) {
+				await this.collect(plan, first, last, raw, stops);
+			}
 		}
 
 		this.shopArrivals = arrivalsByShop(stops, this.plugin.settings.meals);
@@ -329,6 +365,26 @@ export class NeedIndex {
 					);
 				}
 			}
+		}
+	}
+
+	/**
+	 * De recepten van een ronde, alsof ze vandaag bij de eerste maaltijd op
+	 * tafel moeten. Er is geen boodschappenmoment, dus elke winkel is op tijd
+	 * en de voorkeurswinkel van het product wint gewoon.
+	 */
+	private async collectRound(
+		round: Round,
+		today: string,
+		raw: Map<string, number>
+	): Promise<void> {
+		const moment: Moment = { date: today, meal: 0 };
+		for (const entry of round.recipes) {
+			const file = this.plugin.app.vault.getFileByPath(entry.path);
+			if (!file) continue;
+			const base = this.plugin.cook.baseServings(file);
+			const factor = base && base > 0 ? entry.servings / base : 1;
+			await this.addRecipe(raw, file, factor, moment, `${today}|0`);
 		}
 	}
 

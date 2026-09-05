@@ -13,6 +13,7 @@ import { emptyState, keepScroll } from "./kit";
 import { drawBackLink } from "./nav";
 import { ExtraModal } from "./extra-modal";
 import { ProductSheet } from "./product-sheet";
+import { drawRoundBanner } from "./round-banner";
 
 export const SHOPPING_VIEW_TYPE = "pantry-shopping";
 
@@ -150,6 +151,8 @@ export class ShoppingView extends ItemView {
 		});
 		add.setAttr("aria-label", "Add a loose item to the list");
 		add.onclick = () => this.addExtra();
+
+		drawRoundBanner(inner, this.plugin, this);
 
 		const track = inner.createDiv({ cls: "pantry-progress" });
 		this.barEl = track.createDiv({ cls: "pantry-progress-bar" });

@@ -10,6 +10,7 @@ import { SHOPPING_VIEW_TYPE } from "./shopping-view";
 import { SHELVES_VIEW_TYPE } from "./shelves-view";
 import { CLEANUP_VIEW_TYPE } from "./cleanup-view";
 import { PRODUCTS_VIEW_TYPE } from "./products-view";
+import { ROUND_VIEW_TYPE } from "./round-view";
 
 export { HOME_VIEW_TYPE };
 
@@ -183,6 +184,23 @@ export class HomeView extends ItemView {
 					};
 				},
 				note: () => this.plugin.list.path(),
+			},
+			{
+				type: ROUND_VIEW_TYPE,
+				title: "Shopping round",
+				icon: "list-checks",
+				hint: "Shop for a recipe or one shop only",
+				state: () => {
+					// Een lopende ronde vraagt aandacht: zolang hij staat, volgt
+					// niets het weekplan, en dat hoort op de voordeur te staan.
+					const active = this.plugin.list.hasRound();
+					return {
+						text: active
+							? this.plugin.list.roundLabel()
+							: "following the meal plan",
+						count: active ? 1 : 0,
+					};
+				},
 			},
 			{
 				type: PRODUCTS_VIEW_TYPE,

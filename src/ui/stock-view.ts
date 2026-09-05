@@ -6,6 +6,7 @@ import { matchesQuery } from "../search";
 import { emptyState, keepScroll, segment } from "./kit";
 import { drawBackLink } from "./nav";
 import { ProductSheet } from "./product-sheet";
+import { drawRoundBanner } from "./round-banner";
 import type { StockFilter as Filter } from "./view-memory";
 
 export const STOCK_VIEW_TYPE = "pantry-stock";
@@ -138,6 +139,8 @@ export class StockView extends ItemView {
 			this.drawList();
 		};
 
+		drawRoundBanner(inner, this.plugin, this);
+
 		const search = inner.createEl("input", {
 			cls: "pantry-field-search",
 			attr: { type: "text", placeholder: "Search products", enterkeyhint: "search" },
@@ -177,9 +180,14 @@ export class StockView extends ItemView {
 		return this.plugin.needs.get(product);
 	}
 
-	/** The number the control runs to: the minimum plus this week's cooking. */
+	/**
+	 * The number the control runs to: the minimum plus this week's cooking.
+	 *
+	 * Het minimum komt via `needs`, want tijdens een boodschappenronde telt
+	 * het alleen voor de winkels die meedoen.
+	 */
 	private need(product: Product): number {
-		return product.minimum + this.extra(product);
+		return this.plugin.needs.minimumOf(product) + this.extra(product);
 	}
 
 	/**

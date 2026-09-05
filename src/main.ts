@@ -28,6 +28,7 @@ import { SHOPPING_VIEW_TYPE, ShoppingView } from "./ui/shopping-view";
 import { CLEANUP_VIEW_TYPE, CleanupView } from "./ui/cleanup-view";
 import { CleanupIndex } from "./cleanup";
 import { HOME_VIEW_TYPE, HomeView } from "./ui/home-view";
+import { ROUND_VIEW_TYPE, RoundView } from "./ui/round-view";
 import { PlanStore } from "./plan";
 import { ViewMemory } from "./ui/view-memory";
 import { fromISODate, startOfWeek, toISODate } from "./date";
@@ -55,6 +56,7 @@ const SCREENS: { type: string; command: string; name: string }[] = [
 	{ type: PLANNER_VIEW_TYPE, command: "open-planner", name: "Open meal planner" },
 	{ type: STOCK_VIEW_TYPE, command: "open-stock", name: "Open stock" },
 	{ type: SHOPPING_VIEW_TYPE, command: "open-groceries", name: "Open groceries" },
+	{ type: ROUND_VIEW_TYPE, command: "open-round", name: "Open shopping round" },
 	{ type: SHELVES_VIEW_TYPE, command: "open-shelves", name: "Open shop shelves" },
 	{ type: CLEANUP_VIEW_TYPE, command: "open-cleanup", name: "Open cleanup" },
 	{ type: PRODUCTS_VIEW_TYPE, command: "open-products", name: "Open products" },
@@ -191,6 +193,11 @@ export default class PantryPlugin extends Plugin {
 		this.registerView(
 			HOME_VIEW_TYPE,
 			(leaf: WorkspaceLeaf) => new HomeView(leaf, this)
+		);
+
+		this.registerView(
+			ROUND_VIEW_TYPE,
+			(leaf: WorkspaceLeaf) => new RoundView(leaf, this)
 		);
 
 		// One door into the plugin; the screens behind it navigate to each other.

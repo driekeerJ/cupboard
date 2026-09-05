@@ -24,6 +24,13 @@ import {
 	parseExtras,
 	type Extra,
 } from "./extras";
+import {
+	isActiveRound,
+	parseRound,
+	pathName,
+	roundLabel,
+	type Round,
+} from "./round";
 
 export const NO_SHOP = "Anywhere";
 export const NO_CATEGORY = "Other";
@@ -272,6 +279,13 @@ export class GroceryList {
 	 * afvinkt. Zie src/extras.ts voor waarom ze hier wonen en niet als notitie.
 	 */
 	readonly extras: Extra[] = [];
+	/**
+	 * De lopende boodschappenronde, of null als de lijst het weekplan volgt.
+	 *
+	 * Zie src/round.ts. Hij woont hier omdat hij in hetzelfde rondebestand
+	 * staat als het mandje: wat je deze keer haalt, hoort bij deze ronde.
+	 */
+	round: Round | null = null;
 
 	constructor(plugin: PantryPlugin) {
 		this.plugin = plugin;
@@ -339,6 +353,44 @@ export class GroceryList {
 		}
 
 		this.extras.push(...parseExtras(state.extras));
+		this.round = parseRound(state.round);
+	}
+
+	// ----------------------------------------------------------------- ronde
+
+	/** Of de lijst nu een ronde volgt in plaats van het weekplan. */
+	hasRound(): boolean {
+		return isActiveRound(this.round);
+	}
+
+	/** De ronde in één regel; leeg als er geen ronde staat. */
+	roundLabel(): string {
+		if (!isActiveRound(this.round)) return "";
+		return roundLabel(this.round, (path) => this.recipeName(path));
+	}
+
+	recipeName(path: string): string {
+		return this.plugin.app.vault.getFileByPath(path)?.basename ?? pathName(path);
+	}
+
+	/**
+	 * Zet een ronde neer, of haalt hem weg met null of een lege ronde.
+	 *
+	 * Meteen wegschrijven en dan de lijst opnieuw opbouwen: vanaf nu vraagt de
+	 * voorraad iets anders, en dat hoort op elk scherm en in de notitie
+	 * tegelijk te veranderen. De ± aanpassingen gaan mee weg — die hoorden bij
+	 * de vorige lijst, en een ophoging op een product dat niet meer op de lijst
+	 * staat is een verrassing voor later.
+	 */
+	async setRound(round: Round | null): Promise<void> {
+		this.round = parseRound(round);
+		this.nudge.clear();
+		await this.flushState();
+		await this.refresh();
+	}
+
+	async clearRound(): Promise<void> {
+		await this.setRound(null);
 	}
 
 	// ------------------------------------------------------- losse boodschappen
@@ -443,7 +495,8 @@ export class GroceryList {
 		const empty =
 			this.bought.size === 0 &&
 			this.nudge.size === 0 &&
-			this.extras.length === 0;
+			this.extras.length === 0 &&
+			this.round === null;
 		// Geen ronde bezig en nog geen bestand: dan ook geen map aanmaken.
 		if (empty && !file) return;
 
@@ -452,6 +505,7 @@ export class GroceryList {
 			bought: Object.fromEntries(this.bought),
 			nudge: Object.fromEntries(this.nudge),
 			extras: this.extras,
+			round: this.round,
 		};
 		const content = `${JSON.stringify(state, null, "\t")}\n`;
 
@@ -490,13 +544,17 @@ export class GroceryList {
 	}
 
 	amount(product: Product): number | null {
-		const base = toBuy(product, this.plugin.needs.get(product));
+		const base = toBuy(
+			product,
+			this.plugin.needs.get(product),
+			this.plugin.needs.minimumOf(product)
+		);
 		if (base === null) return null;
 		return Math.max(0, base + (this.nudge.get(product.path) ?? 0));
 	}
 
 	private needed(product: Product): boolean {
-		return product.minimum + this.plugin.needs.get(product) > 0;
+		return this.plugin.needs.minimumOf(product) + this.plugin.needs.get(product) > 0;
 	}
 
 	/** To buy, and what cannot be answered yet because it was never counted. */
@@ -771,6 +829,13 @@ export class GroceryList {
 
 		lines.push(SIGNATURE);
 		lines.push("");
+
+		// Een lijst die het weekplan even niet volgt hoort dat te zeggen, ook
+		// in de notitie: anders mist er "zomaar" van alles.
+		if (this.hasRound()) {
+			lines.push(`*Shopping round: ${this.roundLabel()}. Clear it in Pantry to follow the meal plan again.*`);
+			lines.push("");
+		}
 
 		if (this.isEmpty()) {
 			lines.push("Nothing needed.");
