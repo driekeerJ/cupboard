@@ -37,6 +37,7 @@ export class ListView extends ItemView {
 	private path: string | null = null;
 	private step: ListStep = "setup";
 	private stock: StockPanel | null = null;
+	private shop: ShopStep | null = null;
 	/** Het concept van de setup-stap; overleeft een hertekening, niet een andere lijst. */
 	private setup: SetupStep | null = null;
 	private setupFor: string | null = null;
@@ -84,11 +85,38 @@ export class ListView extends ItemView {
 		return Promise.resolve();
 	}
 
+	/**
+	 * Een verversing van buiten — een telling die net is weggeschreven, een
+	 * wijziging op een ander apparaat — tekent alleen de lijst opnieuw, niet
+	 * het hele scherm.
+	 *
+	 * Dit deed eerst `draw()`, en die begint met `root.empty()`: de scroller
+	 * verloor zijn hoogte en stond weer bovenaan. Omdat de metadata-cache
+	 * een seconde na een tik bijkomt, sprong de lijst dus een seconde ná elke
+	 * tik naar boven — precies als je halverwege het tellen was.
+	 */
 	refresh(): void {
 		guarded("could not refresh your shopping list", async () => {
 			const list = this.list();
 			if (list) await this.plugin.lists.needsOf(list).rebuildFor(list);
-			this.setup?.refresh(list);
+			if (this.path && !list) {
+				// De notitie is weg: dat hoort het scherm te zeggen.
+				this.draw();
+				return;
+			}
+			if (this.step === "setup" || !list) {
+				if (this.setup) this.setup.refresh(list);
+				else this.draw();
+				return;
+			}
+			if (this.step === "stock" && this.stock) {
+				this.stock.drawList();
+				return;
+			}
+			if (this.step === "shop" && this.shop) {
+				this.shop.drawList();
+				return;
+			}
 			this.draw();
 		});
 	}
@@ -111,13 +139,18 @@ export class ListView extends ItemView {
 		if (this.path) this.plugin.ui.list(this.path).step = step;
 		this.step = step;
 		this.stock = null;
+		this.shop = null;
 		this.draw();
 	}
 
 	private draw(): void {
 		const root = this.contentEl;
+		// Een volledige hertekening mag je plek niet afpakken.
+		const scroll = root.scrollTop;
 		root.empty();
 		root.addClass("pantry-app", "pantry-list");
+		this.stock = null;
+		this.shop = null;
 
 		const list = this.list();
 		const head = root.createDiv({ cls: "pantry-head" });
@@ -181,11 +214,14 @@ export class ListView extends ItemView {
 				reload: () => lists.refresh(list),
 			});
 			this.stock.mount(inner, actions, body, sub);
+			if (scroll > 0) root.scrollTop = scroll;
 			return;
 		}
 
 		this.drawDone(actions, list);
-		new ShopStep(this.plugin, list).mount(inner, actions, body, sub);
+		this.shop = new ShopStep(this.plugin, list);
+		this.shop.mount(inner, actions, body, sub);
+		if (scroll > 0) root.scrollTop = scroll;
 	}
 
 	private summary(list: ShoppingList): string {
