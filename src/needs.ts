@@ -7,7 +7,7 @@ import {
 	type DatedStop,
 	type Moment,
 } from "./arrival";
-import { addDays, atMidnight, startOfWeek, toISODate } from "./date";
+import { addDays, atMidnight, fromISODate, toISODate } from "./date";
 import { parseRecipeBody } from "./cook";
 import {
 	parseIngredient,
@@ -18,7 +18,7 @@ import { linkTarget, servingsFor } from "./plan";
 import type { Product } from "./products";
 import { SPOON_ML, family, sameUnit, unitKey } from "./units";
 import type { PlannedRecipe, WeekPlan } from "./types";
-import { isActiveRound, type Round } from "./round";
+import { mealKey, type MealRef, type ShoppingList } from "./shopping-list";
 
 /** Converts `amount from` into `to` binnen één maatfamilie, anders null. */
 function inFamily(amount: number, from: string, to: string): number | null {
@@ -194,10 +194,10 @@ export class NeedIndex {
 	 */
 	private slots: Map<string, Set<string>> = new Map();
 	/**
-	 * De winkels van de lopende ronde, in kleine letters — of null als er geen
-	 * ronde is en het weekplan geldt. Zie `minimumOf`.
+	 * De winkels waar deze index voor rekent, in kleine letters — of null als
+	 * hij voor het hele plan rekent en elk minimum telt. Zie `minimumOf`.
 	 */
-	private roundShops: Set<string> | null = null;
+	private scopeShops: Set<string> | null = null;
 
 	constructor(plugin: PantryPlugin) {
 		this.plugin = plugin;
@@ -206,18 +206,18 @@ export class NeedIndex {
 	/**
 	 * Hoeveel je hiervan altijd in huis wilt hebben — déze keer.
 	 *
-	 * Zonder ronde is dat gewoon het minimum van het product. Mét een ronde
-	 * telt het minimum alleen voor een product uit een winkel die meedoet: dat
-	 * is wat "de standaard boodschappen van de Lidl" betekent. Al het andere
-	 * heeft even geen minimum, dus het verdwijnt uit Voorraad en van de lijst
-	 * tot de ronde weer weg is.
+	 * Voor het hele plan (All stock, de planner) is dat gewoon het minimum van
+	 * het product. Voor een boodschappenlijst telt het minimum alleen voor een
+	 * product uit een winkel die op de lijst staat: dat is wat "de standaard
+	 * boodschappen van de Lidl" betekent. Een lijst zonder winkels heeft dus
+	 * geen minimums — alleen wat de gekozen maaltijden vragen.
 	 */
 	minimumOf(product: Product): number {
-		if (this.roundShops === null) return product.minimum;
-		const inRound = product.shops.some((shop) =>
-			this.roundShops?.has(shop.trim().toLowerCase())
+		if (this.scopeShops === null) return product.minimum;
+		const inScope = product.shops.some((shop) =>
+			this.scopeShops?.has(shop.trim().toLowerCase())
 		);
-		return inRound ? product.minimum : 0;
+		return inScope ? product.minimum : 0;
 	}
 
 	get(product: Product): number {
@@ -277,56 +277,56 @@ export class NeedIndex {
 		const raw = new Map<string, number>();
 		const stops: DatedStop[] = [];
 
-		// Een ronde vervangt het weekplan: dan lezen we geen enkele weeknotitie
-		// en tellen alleen de gekozen recepten mee. Bewust geen mengvorm — een
-		// lijst die "alleen recept B" heet en toch het halve weekplan bevat is
-		// precies waar de ronde tegen bedoeld is.
-		const round = this.plugin.list.round;
-		if (isActiveRound(round)) {
-			this.roundShops = new Set(
-				round.shops.map((shop) => shop.trim().toLowerCase())
-			);
-			await this.collectRound(round, first, raw);
-		} else {
-			this.roundShops = null;
-			for (const plan of await this.plansCovering(start, span)) {
-				await this.collect(plan, first, last, raw, stops);
-			}
+		this.scopeShops = null;
+		for (const plan of await this.plugin.plans.covering(start, span)) {
+			await this.collect(plan, first, last, raw, stops, null);
 		}
 
 		this.shopArrivals = arrivalsByShop(stops, this.plugin.settings.meals);
-
-		const rounded = new Map<string, number>();
-		raw.forEach((amount, path) => {
-			const whole = Math.ceil(amount - 1e-9);
-			if (whole > 0) rounded.set(path, whole);
-		});
-		this.amounts = rounded;
+		this.amounts = roundUp(raw);
 	}
 
-	/** Elke weeknotitie die de horizon raakt, van vroeg naar laat. */
-	private async plansCovering(start: Date, span: number): Promise<WeekPlan[]> {
-		const { weekStartDay } = this.plugin.settings;
-		const seen = new Set<string>();
-		const plans: WeekPlan[] = [];
+	/**
+	 * Rekent voor één boodschappenlijst: alleen de maaltijden die erop staan,
+	 * en alleen de minimums van de winkels die erop staan.
+	 *
+	 * Geen boodschappenmomenten: de lijst ís het moment, en binnen één lijst
+	 * is elke winkel op tijd. Welke winkel een product krijgt beslist de lijst
+	 * zelf (zie `ShoppingLists.shopFor`).
+	 */
+	async rebuildFor(list: ShoppingList): Promise<void> {
+		this.origins = new Map();
+		this.moments = new Map();
+		this.slots = new Map();
+		this.shopArrivals = new Map();
+		this.scopeShops = new Set(list.shops.map((shop) => shop.trim().toLowerCase()));
 
-		for (let offset = 0; offset < span; offset += 1) {
-			const weekStart = startOfWeek(addDays(start, offset), weekStartDay);
-			const key = toISODate(weekStart);
-			if (seen.has(key)) continue;
-			seen.add(key);
-			plans.push(await this.plugin.plans.load(weekStart));
+		const raw = new Map<string, number>();
+		const wanted = new Set(list.meals.map(mealKey));
+		if (wanted.size > 0) {
+			const dates = list.meals.map((ref) => ref.date).sort();
+			const first = fromISODate(dates[0] ?? "") ?? atMidnight(new Date());
+			const last = fromISODate(dates[dates.length - 1] ?? "") ?? first;
+			const span = Math.max(1, Math.round((last.getTime() - first.getTime()) / 86_400_000) + 1);
+			for (const plan of await this.plugin.plans.covering(first, span)) {
+				await this.collect(plan, toISODate(first), toISODate(last), raw, [], wanted);
+			}
 		}
 
-		return plans;
+		this.amounts = roundUp(raw);
 	}
 
+	/**
+	 * Telt de maaltijden van een weeknotitie op. `only` beperkt dat tot de
+	 * maaltijden van een lijst (sleutels uit `mealKey`); null telt alles.
+	 */
 	private async collect(
 		plan: WeekPlan,
 		first: string,
 		last: string,
 		raw: Map<string, number>,
-		stops: DatedStop[]
+		stops: DatedStop[],
+		only: Set<string> | null
 	): Promise<void> {
 		const meals = this.plugin.settings.meals;
 
@@ -353,6 +353,9 @@ export class NeedIndex {
 					// Ticked off, either way: an eaten meal already took its
 					// ingredients out of the house and a skipped one never will.
 					if (entry.status) continue;
+					if (only && !only.has(mealKey(refOf(day.date, meal.meal, entry.recipe)))) {
+						continue;
+					}
 					// The plan stores the link as written, brackets and all.
 					const file = this.plugin.cook.file(linkTarget(entry.recipe));
 					if (!file) continue;
@@ -365,26 +368,6 @@ export class NeedIndex {
 					);
 				}
 			}
-		}
-	}
-
-	/**
-	 * De recepten van een ronde, alsof ze vandaag bij de eerste maaltijd op
-	 * tafel moeten. Er is geen boodschappenmoment, dus elke winkel is op tijd
-	 * en de voorkeurswinkel van het product wint gewoon.
-	 */
-	private async collectRound(
-		round: Round,
-		today: string,
-		raw: Map<string, number>
-	): Promise<void> {
-		const moment: Moment = { date: today, meal: 0 };
-		for (const entry of round.recipes) {
-			const file = this.plugin.app.vault.getFileByPath(entry.path);
-			if (!file) continue;
-			const base = this.plugin.cook.baseServings(file);
-			const factor = base && base > 0 ? entry.servings / base : 1;
-			await this.addRecipe(raw, file, factor, moment, `${today}|0`);
 		}
 	}
 
@@ -420,4 +403,19 @@ export class NeedIndex {
 			this.slots.set(slot, here);
 		}
 	}
+}
+
+/** Een geplande maaltijd als verwijzing, zoals een boodschappenlijst hem bewaart. */
+export function refOf(date: string, meal: string, recipe: string): MealRef {
+	return { date, meal, recipe: linkTarget(recipe) };
+}
+
+/** Naar hele eenheden omhoog: een halve blik kun je niet kopen. */
+function roundUp(raw: Map<string, number>): Map<string, number> {
+	const rounded = new Map<string, number>();
+	raw.forEach((amount, path) => {
+		const whole = Math.ceil(amount - 1e-9);
+		if (whole > 0) rounded.set(path, whole);
+	});
+	return rounded;
 }

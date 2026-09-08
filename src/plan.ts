@@ -6,7 +6,7 @@ import {
 	stringifyYaml,
 } from "obsidian";
 import type PantryPlugin from "./main";
-import { addDays, toISODate, weekId } from "./date";
+import { addDays, startOfWeek, toISODate, weekId } from "./date";
 import { markdownIn } from "./folder";
 import { capturePreviewScroll, viewsFor, writeThroughEditor } from "./plan-note-write";
 import { ensureFolder, linkTarget, toLink } from "./notes";
@@ -101,6 +101,27 @@ export class PlanStore {
 
 	noteFile(weekStart: Date): TFile | null {
 		return this.plugin.app.vault.getFileByPath(this.notePath(weekStart));
+	}
+
+	/**
+	 * Elke weeknotitie die `span` dagen vanaf `start` raakt, van vroeg naar
+	 * laat. Boodschappen doen loopt niet met de weekgrens mee, dus wie over
+	 * een periode rekent leest zoveel notities als die periode raakt.
+	 */
+	async covering(start: Date, span: number): Promise<WeekPlan[]> {
+		const { weekStartDay } = this.plugin.settings;
+		const seen = new Set<string>();
+		const plans: WeekPlan[] = [];
+
+		for (let offset = 0; offset < Math.max(1, span); offset += 1) {
+			const weekStart = startOfWeek(addDays(start, offset), weekStartDay);
+			const key = toISODate(weekStart);
+			if (seen.has(key)) continue;
+			seen.add(key);
+			plans.push(await this.load(weekStart));
+		}
+
+		return plans;
 	}
 
 	static emptyPlan(weekStart: Date): WeekPlan {

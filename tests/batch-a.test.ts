@@ -27,14 +27,14 @@ async function run() {
 		meals: [{ id: "dinner", name: "Dinner" }],
 	});
 	await harness.rebuild(WEEK);
-	await harness.plugin.list.write();
-	return harness;
+	const list = await harness.list(WEEK);
+	return { ...harness, list };
 }
 
 test("batch A: wat de boodschappenlijst van deze week zegt", async () => {
 	const h = await run();
 	const buy = (name: string) =>
-		h.plugin.list.amount(h.plugin.products.byPath(`Products/ZZ Test ${name}.md`)!);
+		h.plugin.lists.amount(h.list, h.plugin.products.byPath(`Products/ZZ Test ${name}.md`)!);
 
 	// H4 — zes eieren uit een doos van zes is één doos. De tak zonder
 	// maateenheid stond vóór de verpakkingsgrootte, dus dit werd 6.

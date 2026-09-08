@@ -39,7 +39,7 @@ import {
 	takeFromStock,
 	type StockChange,
 } from "../consume";
-import { lateProducts } from "../list";
+import { lateProducts } from "../warnings";
 import type { Product } from "../products";
 import { ProductSheet } from "./product-sheet";
 import { AddRecipeModal } from "./add-recipe-modal";
@@ -1045,7 +1045,7 @@ export class PlannerGrid {
 			this.booking.delete(entry);
 			this.plugin.refreshStockViews();
 			guarded("could not refresh your grocery list", () =>
-				this.plugin.list.refresh()
+				this.plugin.lists.refreshAll()
 			);
 		}
 

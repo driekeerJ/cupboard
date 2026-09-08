@@ -572,7 +572,7 @@ export class CleanupView extends ItemView {
 	/** One place to rebuild everything a written answer changes. */
 	private async after(): Promise<void> {
 		await this.reload();
-		await this.plugin.list.refresh();
+		await this.plugin.lists.refreshAll();
 		this.plugin.refreshViews();
 	}
 }

@@ -11,7 +11,7 @@ import { test } from "node:test";
 import { atMidnight } from "../src/date";
 import { loadFixture } from "./harness/fixtures";
 import { makeHarness } from "./harness/plugin";
-import { assignmentFor, lateProducts } from "../src/list";
+import { assignmentFor, lateProducts } from "../src/warnings";
 
 const HOUSEHOLD = [{ id: "jeroen", name: "Jeroen", portionFactor: 1 }];
 /** Woensdag 2 september 2026: de dag waarop hij bestelt. */
@@ -25,7 +25,6 @@ async function run(days = 7) {
 	harness.plugin.products.build();
 	await harness.plugin.shops.build();
 	await harness.plugin.needs.rebuild(VANDAAG, days);
-	await harness.plugin.list.write();
 	return harness;
 }
 
@@ -81,18 +80,25 @@ test("linzen voor volgende week dinsdag blijven bij de AH", async () => {
 	assert.equal(stay.movedFrom, undefined);
 });
 
-test("de boodschappennotitie zet ze onder de juiste kop, met de reden erbij", async () => {
+test("een Lidl-lijst voor woensdag: rijst erop, tahini als waarschuwing", async () => {
+	// De lijst kiest tussen háár winkels. Rijst ligt ook bij de Lidl, dus die
+	// komt gewoon op de lijst; tahini ligt alleen bij de AH en wordt geen
+	// stille regel maar een waarschuwing — jij kiest wat je ermee doet.
 	const h = await run();
-	const note = h.groceries();
+	const list = await h.plugin.lists.create({
+		date: "2026-09-02",
+		arrival: null,
+		shops: ["Lidl"],
+		meals: [{ date: "2026-09-02", meal: "Dinner", recipe: "Rijstschotel" }],
+	});
+	assert.ok(list);
+	const note = h.note(list);
 	const lidl = note.indexOf("## Lidl");
-	const ah = note.indexOf("## AH");
-	assert.ok(lidl >= 0 && ah >= 0, note);
-	// De winkel waar je het eerst bent, staat bovenaan.
-	assert.ok(lidl < ah, note);
-	assert.ok(note.indexOf("[[Rijst]]") > lidl && note.indexOf("[[Rijst]]") < ah, note);
-	assert.ok(note.indexOf("[[Linzen]]") > ah, note);
-	assert.match(note, /\[\[Rijst\]\].*needed before AH arrives/);
-	assert.match(note, /\[\[Tahini\]\].*AH arrives too late/);
+	const notHere = note.indexOf("## Not at these shops");
+	assert.ok(lidl >= 0 && notHere >= 0, note);
+	assert.ok(note.indexOf("[[Rijst]]") > lidl && note.indexOf("[[Rijst]]") < notHere, note);
+	assert.match(note, /^- \[\[Tahini\]\] · .* — AH$/m);
+	assert.doesNotMatch(note, /\[\[Linzen\]\]/, "volgende week staat niet op deze lijst");
 });
 
 test("zonder boodschappenmomenten blijft alles bij zijn eigen winkel", async () => {

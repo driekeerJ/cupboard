@@ -8,7 +8,7 @@ import {
 import type PantryPlugin from "./main";
 import { WEEKDAY_NAMES } from "./date";
 import { guarded } from "./guard";
-import { DEFAULT_STATE_PATH } from "./list";
+import { DEFAULT_SHOPPING_FOLDER } from "./shopping-lists";
 import { parseNumber } from "./number";
 import { formatServings } from "./plan";
 import type {
@@ -22,8 +22,7 @@ export const DEFAULT_SETTINGS: PantrySettings = {
 	recipeFolder: "Recipes",
 	planFolder: "Meal plans",
 	productFolder: "Products",
-	listNote: "Groceries.md",
-	shoppingState: "Pantry/shopping.json",
+	shoppingFolder: DEFAULT_SHOPPING_FOLDER,
 	shopFolder: "Shops",
 	weekStartDay: 1,
 	horizonDays: 14,
@@ -100,8 +99,7 @@ export function normaliseSettings(raw: unknown): PantrySettings {
 		recipeFolder: text("recipeFolder"),
 		planFolder: text("planFolder"),
 		productFolder: text("productFolder"),
-		listNote: text("listNote"),
-		shoppingState: text("shoppingState"),
+		shoppingFolder: text("shoppingFolder") || DEFAULT_SHOPPING_FOLDER,
 		shopFolder: text("shopFolder"),
 		servingsField: text("servingsField"),
 		cookFolder: text("cookFolder"),
@@ -314,33 +312,18 @@ export class PantrySettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("Grocery list note")
+			.setName("Shopping lists folder")
 			.setDesc(
-				"Pantry keeps this note in step with your stock. It is a mirror: tick a box here or in the view, either works."
+				"One note per shopping list: what it is for, what is in the basket, and the list itself. Tick a box in the note or in the view, either works."
 			)
 			.addText((text) => {
 				text
-					.setPlaceholder("Groceries.md")
-					.setValue(this.plugin.settings.listNote);
+					.setPlaceholder(DEFAULT_SHOPPING_FOLDER)
+					.setValue(this.plugin.settings.shoppingFolder);
 				onCommit(text, async (value) => {
-					this.plugin.settings.listNote = value.trim();
+					this.plugin.settings.shoppingFolder = value.trim() || DEFAULT_SHOPPING_FOLDER;
 					await this.save();
-				});
-			});
-
-		new Setting(containerEl)
-			.setName("Shopping round file")
-			.setDesc(
-				"Where Pantry keeps what is already in your basket, so a restart — or picking up your phone — does not lose the round."
-			)
-			.addText((text) => {
-				text
-					.setPlaceholder(DEFAULT_STATE_PATH)
-					.setValue(this.plugin.settings.shoppingState);
-				onCommit(text, async (value) => {
-					this.plugin.settings.shoppingState = value.trim() || DEFAULT_STATE_PATH;
-					await this.save();
-					await this.plugin.list.loadState();
+					await this.plugin.lists.refreshAll();
 					this.plugin.refreshViews();
 				});
 			});

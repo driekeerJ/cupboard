@@ -27,13 +27,44 @@ export interface ShoppingMemory {
 	scroll: number;
 }
 
-export class ViewMemory {
-	stock: StockMemory = {
-		filter: "all",
-		query: "",
-		collapsed: new Set<string>(),
-		scroll: 0,
-	};
+export type ListStep = "setup" | "stock" | "shop";
 
-	shopping: ShoppingMemory = { shop: "", scroll: 0 };
+/** Waar je was in één boodschappenlijst: de stap, en per stap de plek. */
+export interface ListMemory {
+	step: ListStep;
+	stock: StockMemory;
+	shop: ShoppingMemory;
+}
+
+function freshStock(): StockMemory {
+	return { filter: "all", query: "", collapsed: new Set<string>(), scroll: 0 };
+}
+
+export class ViewMemory {
+	/** Het All stock-scherm. */
+	stock: StockMemory = freshStock();
+
+	/** Per lijst, op pad. Een lijst die weg is neemt haar geheugen mee. */
+	private lists: Map<string, ListMemory> = new Map();
+
+	list(path: string): ListMemory {
+		let memory = this.lists.get(path);
+		if (!memory) {
+			memory = { step: "shop", stock: freshStock(), shop: { shop: "", scroll: 0 } };
+			this.lists.set(path, memory);
+		}
+		return memory;
+	}
+
+	/** Een lijst die van naam veranderde neemt haar plek mee. */
+	moveList(from: string, to: string): void {
+		const memory = this.lists.get(from);
+		if (!memory) return;
+		this.lists.delete(from);
+		this.lists.set(to, memory);
+	}
+
+	forgetList(path: string): void {
+		this.lists.delete(path);
+	}
 }

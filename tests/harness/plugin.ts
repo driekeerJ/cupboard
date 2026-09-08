@@ -9,7 +9,11 @@
  */
 import { CleanupIndex } from "../../src/cleanup";
 import { CookStore } from "../../src/cook";
-import { GroceryList } from "../../src/list";
+import { ShoppingLists } from "../../src/shopping-lists";
+import type { ListDraft, MealRef, ShoppingList } from "../../src/shopping-list";
+import { linkTarget } from "../../src/links";
+import { toISODate } from "../../src/date";
+import { dedupe } from "../../src/text";
 import type PantryPlugin from "../../src/main";
 import { NeedIndex } from "../../src/needs";
 import { HouseholdIndex } from "../../src/people";
@@ -26,8 +30,14 @@ export interface Harness {
 	plugin: PantryPlugin;
 	/** Leest de index opnieuw uit de vault, zoals de plugin na een wijziging doet. */
 	rebuild(weekStart: Date): Promise<void>;
-	/** De boodschappennotitie zoals hij nu op schijf staat. */
-	groceries(): string;
+	/**
+	 * Een boodschappenlijst voor deze week: gedateerd op `weekStart`, met alle
+	 * nog niet gegeten maaltijden van die week en — tenzij anders gezegd — alle
+	 * winkels. Dat is de lijst die het oude "hele weekplan"-gedrag nabootst.
+	 */
+	list(weekStart: Date, options?: Partial<ListDraft>): Promise<ShoppingList>;
+	/** De notitie van een lijst zoals hij nu op schijf staat. */
+	note(list: ShoppingList): string;
 }
 
 export function makeHarness(
@@ -46,7 +56,7 @@ export function makeHarness(
 
 	plugin.products = new ProductIndex(plugin);
 	plugin.needs = new NeedIndex(plugin);
-	plugin.list = new GroceryList(plugin);
+	plugin.lists = new ShoppingLists(plugin);
 	plugin.plans = new PlanStore(plugin);
 	plugin.cook = new CookStore(plugin);
 	plugin.shops = new ShopIndex(plugin);
@@ -75,8 +85,30 @@ export function makeHarness(
 			await plugin.shops.build();
 			await plugin.needs.rebuild(weekStart);
 		},
-		groceries(): string {
-			return vault.read(plugin.list.path());
+		async list(weekStart: Date, options: Partial<ListDraft> = {}): Promise<ShoppingList> {
+			const plan = await plugin.plans.load(weekStart);
+			const meals: MealRef[] = [];
+			for (const day of plan.days) {
+				for (const meal of day.meals) {
+					for (const entry of meal.recipes) {
+						if (entry.status) continue;
+						meals.push({ date: day.date, meal: meal.meal, recipe: linkTarget(entry.recipe) });
+					}
+				}
+			}
+			const shops = dedupe([...plugin.shops.names(), ...plugin.products.values("shop")]);
+			const created = await plugin.lists.create({
+				date: toISODate(weekStart),
+				arrival: null,
+				shops,
+				meals,
+				...options,
+			});
+			if (!created) throw new Error("the list was not created");
+			return created;
+		},
+		note(list: ShoppingList): string {
+			return vault.read(list.path);
 		},
 	};
 }

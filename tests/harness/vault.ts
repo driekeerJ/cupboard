@@ -174,6 +174,20 @@ export class FakeVault {
 	};
 
 	readonly fileManager = {
+		/** Verplaatst een bestand, zoals Obsidian dat doet; links bijwerken doen we hier niet. */
+		renameFile: (file: TFile, to: string): Promise<void> => {
+			const content = this.files.get(file.path);
+			if (content === undefined) return Promise.reject(new Error(`missing: ${file.path}`));
+			this.files.delete(file.path);
+			this.write(to, content);
+			return Promise.resolve();
+		},
+
+		trashFile: (file: TFile): Promise<void> => {
+			this.files.delete(file.path);
+			return Promise.resolve();
+		},
+
 		/**
 		 * Schrijft de frontmatter echt terug. `delete frontmatter.x` moet de
 		 * sleutel uit het bestand halen, anders leest de volgende ronde een

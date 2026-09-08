@@ -19,6 +19,10 @@ ingredient matching and grocery lists follow.
   `meal-plan` code block in the body of the note, which renders as the planner.
 - **Household members** each have a portion factor, so a child can count as half
   an adult portion. Tick who eats what and Pantry works out the servings.
+- **Shopping lists** are one note each, for one trip: pick the day, the shops
+  and the planned meals it covers, check what is in the house, and shop. Several
+  lists can be open at once — Lidl tomorrow, a delivery the day after — and a
+  meal belongs to at most one of them.
 
 ## Development
 

@@ -79,14 +79,10 @@ test("een genegeerd product vraagt nergens om", async () => {
 	assert.deepEqual(missingFields(water), []);
 
 	// Ook niet op de boodschappenlijst, wat er ook in `minimum` staat.
-	assert.equal(
-		h.plugin.list.buckets().buy.some((p) => p.name === "Water"),
-		false
-	);
-	assert.equal(
-		h.plugin.list.buckets().unsure.some((p) => p.name === "Water"),
-		false
-	);
+	const list = await h.list(WEEK);
+	const buckets = h.plugin.lists.buckets(list);
+	assert.equal(buckets.buy.some((p) => p.name === "Water"), false);
+	assert.equal(buckets.unsure.some((p) => p.name === "Water"), false);
 });
 
 test("de regels ervoor gelden niet als onopgelost", async () => {

@@ -44,7 +44,9 @@ schrijft continu naar de vault; stil falen betekent dat iemand denkt dat zijn
 voorraad geboekt is terwijl er niets gebeurd is.
 
 **Notities zijn de waarheid.** `data.json` is alleen voor wat geen notitie kan
-zijn. De boodschappenlijst is een spiegel van de productnotities, geen bron.
+zijn. Een boodschappenlijst is één notitie in `Pantry/Shopping/`: de keuzes en
+het mandje in de frontmatter, de afvinklijst in de body als spiegel van de
+productnotities. De voorraad zelf staat alleen in de productnotitie.
 
 **Een schrijver die op een cache-event reageert, moet zijn eigen echo negeren** —
 stempel de tijd (`lastWrite`) en sla de schrijfactie over als de gerenderde

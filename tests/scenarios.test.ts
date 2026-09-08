@@ -4,13 +4,13 @@
  * De vorm is steeds dezelfde:
  *
  *     gegeven deze productnotities, receptnotities en dit weekplan
- *     → draai de echte keten
- *     → dit is Groceries.md
+ *     → maak een boodschappenlijst voor die week
+ *     → dit is de notitie van die lijst
  *
- * De boodschappennotitie gaat er in zijn geheel in, want die wil je kunnen
- * zien. Maar de getallen worden daarnáást expliciet geassert — anders wordt
- * een rode snapshot blind opnieuw goedgekeurd en verdwijnt precies de fout
- * die je wilde vangen.
+ * De lijstnotitie gaat er in zijn geheel in, want die wil je kunnen zien.
+ * Maar de getallen worden daarnáást expliciet geassert — anders wordt een
+ * rode snapshot blind opnieuw goedgekeurd en verdwijnt precies de fout die je
+ * wilde vangen.
  */
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
@@ -29,16 +29,16 @@ const WEEK = startOfWeek(new Date(2026, 7, 26), 1);
 async function run(scenario: string) {
 	const harness = makeHarness(loadFixture(scenario), { household: HOUSEHOLD });
 	await harness.rebuild(WEEK);
-	await harness.plugin.list.write();
-	return harness;
+	const list = await harness.list(WEEK);
+	return { ...harness, list };
 }
 
 test("week-basis: één gepland recept vult de boodschappenlijst", async () => {
 	const h = await run("week-basis");
 	const need = (name: string) =>
-		h.plugin.needs.get(h.plugin.products.byPath(`Products/${name}.md`)!);
+		h.plugin.lists.needsOf(h.list).get(h.plugin.products.byPath(`Products/${name}.md`)!);
 	const buy = (name: string) =>
-		h.plugin.list.amount(h.plugin.products.byPath(`Products/${name}.md`)!);
+		h.plugin.lists.amount(h.list, h.plugin.products.byPath(`Products/${name}.md`)!);
 
 	// Recept voor 4, gegeten door 1 + 0,5 persoon → factor 0,375.
 	// 500 g rijst wordt 187,5 g, en een pak is 500 g: 0,375 pak, omhoog naar 1.
@@ -60,20 +60,31 @@ test("week-basis: één gepland recept vult de boodschappenlijst", async () => {
 	assert.equal(need("Zout"), 0);
 	assert.equal(buy("Zout"), null, "nooit geteld, dus onbeantwoordbaar");
 
-	// En zo ziet de notitie er dan uit. Schappen in looproutevolgorde:
-	// Groente vóór Droogwaren, want zo staat het in Shops/Lidl.md.
+	// De notitie: de keuzes in de frontmatter, de lijst eronder. Schappen in
+	// looproutevolgorde: Groente vóór Droogwaren, want zo staat het in
+	// Shops/Lidl.md. Olijfolie ligt bij Albert Heijn, dus die winkel staat
+	// ook op de lijst — en krijgt geen kopje, want er valt daar niets te halen.
+	assert.equal(h.list.path, "Pantry/Shopping/2026-08-24 Lidl · Albert Heijn.md");
+	// De aanhalingstekens om de datums komen van js-yaml in het harnas;
+	// Obsidian schrijft ze kaal. Lezen kan allebei.
 	assert.equal(
-		h.groceries(),
+		h.note(h.list),
 		[
 			"---",
-			"pantry: groceries",
+			"pantry: shopping",
+			"date: '2026-08-24'",
+			"shops:",
+			"  - '[[Lidl]]'",
+			"  - '[[Albert Heijn]]'",
+			"meals:",
+			"  - date: '2026-08-26'",
+			"    meal: Dinner",
+			"    recipe: '[[Rijst met ui]]'",
 			"---",
 			"",
-			"# Groceries",
+			"# Lidl · Albert Heijn · Mon 24 Aug",
 			"",
-			"*Anything you write outside the block below stays where it is.*",
-			"",
-			"<!-- pantry:groceries -->",
+			"<!-- pantry:shopping -->",
 			"*Kept up to date by Pantry. Tick a box and that product counts as full again.*",
 			"",
 			"## Lidl",
@@ -90,39 +101,67 @@ test("week-basis: één gepland recept vult de boodschappenlijst", async () => {
 			"## Check first",
 			"",
 			"- [ ] [[Zout]] · ?",
-			"<!-- /pantry:groceries -->",
+			"<!-- /pantry:shopping -->",
 			"",
 		].join("\n")
 	);
 });
 
-test("wat je zelf in de boodschappennotitie zet blijft staan", async () => {
+test("de lijst zet haar boodschappenmoment in het weekplan", async () => {
+	// Eén begrip: de datum van de lijst is het moment waarop het spul van die
+	// winkel in huis is. De planner rekent daarmee, zonder dat je het apart
+	// hoeft in te vullen.
+	const h = await run("week-basis");
+	const plan = await h.plugin.plans.load(WEEK);
+	const day = plan.days.find((entry) => entry.date === "2026-08-24");
+	assert.deepEqual(day?.shopping, [{ shop: "Lidl" }, { shop: "Albert Heijn" }]);
+
+	// Weggooien haalt het weer weg; klaar laat het staan.
+	await h.plugin.lists.discard(h.list);
+	const after = await h.plugin.plans.load(WEEK);
+	assert.equal(after.days.find((entry) => entry.date === "2026-08-24")?.shopping, undefined);
+	assert.equal(h.vault.files.has(h.list.path), false, "de notitie is weg");
+});
+
+test("wat je zelf onder de lijst zet blijft staan", async () => {
 	// H5. De notitie werd volledig geregenereerd: een handgeschreven regel, een
 	// Dataview-blok of een briefje aan de slager was bij de eerstvolgende
 	// verversing weg — en die verversing draait bij elke vaultwijziging.
 	const h = await run("week-basis");
 
-	const eigen = `${h.groceries().trimEnd()}\n\n## Niet vergeten\n\n- [ ] batterijen\n- vraag bij de slager naar de tijm\n`;
-	h.vault.write(h.plugin.list.path(), eigen);
+	const eigen = `${h.note(h.list).trimEnd()}\n\n## Niet vergeten\n\n- [ ] batterijen\n- vraag bij de slager naar de tijm\n`;
+	h.vault.write(h.list.path, eigen);
 
 	// Iets verandert, dus de lijst wordt opnieuw geschreven.
-	await h.plugin.list.markBought(h.plugin.products.byPath("Products/Ui.md")!);
+	await h.plugin.lists.markBought(h.list, h.plugin.products.byPath("Products/Ui.md")!);
 
-	const after = h.groceries();
+	const after = h.note(h.list);
 	assert.match(after, /## Niet vergeten/);
 	assert.match(after, /- \[ \] batterijen/);
 	assert.match(after, /vraag bij de slager naar de tijm/);
 	assert.match(after, /## In the basket/, "en de lijst zelf is wel bijgewerkt");
+	assert.match(after, /basket:\n {2}- product: '\[\[Ui\]\]'\n {4}count: 0/, "het mandje staat in de frontmatter");
 });
 
-test("een notitie die niet van Pantry is blijft ongemoeid", async () => {
+test("een eigen frontmatter-veld blijft staan", async () => {
+	const h = await run("week-basis");
+	const note = h.note(h.list).replace("pantry: shopping\n", "pantry: shopping\ntags:\n  - boodschappen\n");
+	h.vault.write(h.list.path, note);
+
+	await h.plugin.lists.markBought(h.list, h.plugin.products.byPath("Products/Ui.md")!);
+
+	assert.match(h.note(h.list), /^tags:\n {2}- boodschappen$/m);
+});
+
+test("een notitie in de lijstmap die geen lijst is blijft ongemoeid", async () => {
 	const h = await run("week-basis");
 
 	const vanJeroen = "# Mijn eigen lijstje\n\n- [ ] kaarsen\n";
-	h.vault.write(h.plugin.list.path(), vanJeroen);
-	await h.plugin.list.write();
+	h.vault.write("Pantry/Shopping/Eigen.md", vanJeroen);
+	await h.plugin.lists.refreshAll();
 
-	assert.equal(h.groceries(), vanJeroen, "geen frontmatter, geen markers, niet aankomen");
+	assert.equal(h.vault.read("Pantry/Shopping/Eigen.md"), vanJeroen, "geen frontmatter, geen markers, niet aankomen");
+	assert.equal(h.plugin.lists.all().length, 1, "en het is geen lijst geworden");
 });
 
 test("een lege productindex wist de lijst niet", async () => {
@@ -130,13 +169,13 @@ test("een lege productindex wist de lijst niet", async () => {
 	// iets anders dan "niets nodig". Het mandje mag niet verdwijnen terwijl je
 	// in de winkel staat.
 	const h = await run("week-basis");
-	const before = h.groceries();
+	const before = h.note(h.list);
 
 	h.plugin.settings.productFolder = "Bestaat niet";
 	h.plugin.products.build();
-	await h.plugin.list.write();
+	await h.plugin.lists.write(h.list);
 
-	assert.equal(h.groceries(), before);
+	assert.equal(h.note(h.list), before);
 });
 
 test("uitvinken zet de check-vlag terug", async () => {
@@ -146,10 +185,10 @@ test("uitvinken zet de check-vlag terug", async () => {
 	const zout = h.plugin.products.byPath("Products/Zout.md")!;
 	await h.plugin.products.update(zout, { count: 2, check: true });
 
-	await h.plugin.list.markBought(zout);
+	await h.plugin.lists.markBought(h.list, zout);
 	assert.equal(zout.check, false, "afvinken haalt hem uit Check first");
 
-	await h.plugin.list.undoBought(zout);
+	await h.plugin.lists.undoBought(h.list, zout);
 	assert.equal(zout.check, true, "en uitvinken zet hem terug");
 	assert.equal(zout.count, 2, "net als de telling van ervoor");
 });
@@ -161,127 +200,35 @@ test("een reeks tikken in de notitie wordt in één keer weggeschreven", async (
 	const h = await run("week-basis");
 
 	const getikt = h
-		.groceries()
+		.note(h.list)
 		.split("\n")
 		.map((line) => (line.startsWith("- [ ] [[") ? line.replace("- [ ]", "- [x]") : line))
 		.join("\n");
-	h.vault.write(h.plugin.list.path(), getikt);
+	h.vault.write(h.list.path, getikt);
 
-	await h.plugin.list.syncFromNote();
+	await h.plugin.lists.syncFromNote(h.vault.vault.getFileByPath(h.list.path)!);
 
 	for (const name of ["Ui", "Passata", "Rijst", "Zout"]) {
-		assert.equal(
-			h.plugin.list.bought.has(`Products/${name}.md`),
-			true,
-			`${name} staat in het mandje`
-		);
+		assert.equal(h.list.basket.has(`Products/${name}.md`), true, `${name} staat in het mandje`);
 	}
-	assert.match(h.groceries(), /## In the basket/);
+	assert.match(h.note(h.list), /## In the basket/);
+	assert.equal(h.plugin.products.byPath("Products/Ui.md")!.count, "plus");
 });
 
-test("een lijst van vóór de markers wordt vervangen, niet verdubbeld", async () => {
-	// Gevonden door Jeroen bij het testen: de bestaande Groceries.md had nog
-	// geen markers, dus het nieuwe blok kwam eronder te staan en had hij de
-	// lijst twee keer.
+test("het mandje overleeft een herstart, met de telling van ervoor", async () => {
+	// Je begint op je laptop en staat met je telefoon in de winkel; de notitie
+	// is het enige wat mee reist.
 	const h = await run("week-basis");
+	await h.plugin.lists.markBought(h.list, h.plugin.products.byPath("Products/Ui.md")!);
 
-	// De oude vorm: frontmatter, kop, handtekeningregel, en dan de secties —
-	// zonder markers eromheen.
-	const oud = [
-		"---",
-		"pantry: groceries",
-		"---",
-		"",
-		"# Groceries",
-		"",
-		"*Kept up to date by Pantry. Tick a box and that product counts as full again.*",
-		"",
-		"## Lidl",
-		"",
-		"- [ ] [[Ui]] · 3 stuk",
-		"",
-	].join("\n");
-	h.vault.write(h.plugin.list.path(), oud);
+	const later = makeHarness(h.vault.snapshot(), { household: HOUSEHOLD });
+	await later.rebuild(WEEK);
+	await later.plugin.lists.refreshAll();
+	const list = later.plugin.lists.byPath(h.list.path);
+	assert.ok(list);
+	assert.deepEqual(list.basket.get("Products/Ui.md"), { count: 0, check: false });
+	assert.deepEqual(list.meals, [{ date: "2026-08-26", meal: "Dinner", recipe: "Rijst met ui" }]);
 
-	await h.plugin.list.write();
-
-	const after = h.groceries();
-	assert.equal(after.split("## Lidl").length - 1, 1, "één keer Lidl, niet twee");
-	assert.equal(
-		after.split("<!-- pantry:groceries -->").length - 1,
-		1,
-		"en één blok"
-	);
-	assert.match(after, /- \[ \] \[\[Ui\]\] · 3 stuk/);
-});
-
-test("een eigen notitie met alleen de frontmatter houdt zijn tekst", async () => {
-	// Wie zelf `pantry: groceries` toevoegt om toestemming te geven, hoort zijn
-	// notitie te houden met het blok eronder — niet vervangen te worden.
-	const h = await run("week-basis");
-
-	const eigen = "---\npantry: groceries\n---\n\n# Mijn lijst\n\n- [ ] kaarsen\n";
-	h.vault.write(h.plugin.list.path(), eigen);
-	await h.plugin.list.write();
-
-	const after = h.groceries();
-	assert.match(after, /# Mijn lijst/);
-	assert.match(after, /- \[ \] kaarsen/);
-	assert.match(after, /<!-- pantry:groceries -->/);
-});
-
-test("een al verdubbelde lijst wordt weer één lijst", async () => {
-	// Precies wat er bij Jeroen op schijf stond: de eerste migratiepoging had
-	// het blok onderaan geplakt, en keek daarna alleen nog of er een blok wás.
-	// Daardoor gold de notitie als in orde en bleef de oude lijst erboven.
-	const h = await run("week-basis");
-
-	const kop = [
-		"---",
-		"pantry: groceries",
-		"---",
-		"",
-		"# Groceries",
-		"",
-		"*Kept up to date by Pantry. Tick a box and that product counts as full again.*",
-		"",
-		"## Lidl",
-		"",
-		"- [ ] [[Ui]] · 3 stuk",
-		"",
-	].join("\n");
-	const blok = [
-		"<!-- pantry:groceries -->",
-		"*Kept up to date by Pantry. Tick a box and that product counts as full again.*",
-		"",
-		"## Lidl",
-		"",
-		"- [ ] [[Ui]] · 3 stuk",
-		"<!-- /pantry:groceries -->",
-		"",
-	].join("\n");
-	h.vault.write(h.plugin.list.path(), `${kop}\n${blok}`);
-
-	await h.plugin.list.write();
-
-	const after = h.groceries();
-	const handtekening = after.split(
-		"*Kept up to date by Pantry. Tick a box and that product counts as full again.*"
-	).length - 1;
-	assert.equal(handtekening, 1, "de lijst staat er nog één keer");
-	assert.equal(after.split("<!-- pantry:groceries -->").length - 1, 1);
-	assert.match(after, /- \[ \] \[\[Ui\]\] · 3 stuk/);
-});
-
-test("opruimen gebeurt maar één keer", async () => {
-	// Na de migratie staat de handtekening alleen nog binnen het blok, dus een
-	// tweede write mag de notitie niet opnieuw platslaan.
-	const h = await run("week-basis");
-
-	const eigen = `${h.groceries().trimEnd()}\n\n## Niet vergeten\n\n- [ ] batterijen\n`;
-	h.vault.write(h.plugin.list.path(), eigen);
-
-	await h.plugin.list.markBought(h.plugin.products.byPath("Products/Ui.md")!);
-
-	assert.match(h.groceries(), /- \[ \] batterijen/);
+	await later.plugin.lists.undoBought(list, later.plugin.products.byPath("Products/Ui.md")!);
+	assert.equal(later.plugin.products.byPath("Products/Ui.md")!.count, 0);
 });

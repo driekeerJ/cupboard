@@ -3,6 +3,7 @@ import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import { DEFAULT_EXTRA_AMOUNT, type Extra } from "../extras";
 import { dedupe } from "../text";
+import type { ShoppingList } from "../shopping-list";
 import { chipPicker } from "./kit";
 
 /** Wat het formulier vasthoudt tot je op Add drukt. */
@@ -34,6 +35,8 @@ interface Draft {
  */
 export class ExtraModal extends Modal {
 	private plugin: PantryPlugin;
+	/** De lijst waar het regeltje op komt; losse boodschappen horen bij één keer boodschappen doen. */
+	private list: ShoppingList;
 	private draft: Draft;
 	/** Het regeltje dat we bijwerken, of null als dit een nieuw regeltje is. */
 	private editing: Extra | null;
@@ -46,11 +49,13 @@ export class ExtraModal extends Modal {
 
 	constructor(
 		plugin: PantryPlugin,
+		list: ShoppingList,
 		extra: Extra | null,
 		onDone: () => void = () => undefined
 	) {
 		super(plugin.app);
 		this.plugin = plugin;
+		this.list = list;
 		this.editing = extra;
 		this.onDone = onDone;
 		this.draft = extra
@@ -60,7 +65,13 @@ export class ExtraModal extends Modal {
 					shop: extra.shop,
 					shelf: extra.shelf,
 				}
-			: { name: "", amount: DEFAULT_EXTRA_AMOUNT, shop: "", shelf: "" };
+			: {
+					name: "",
+					amount: DEFAULT_EXTRA_AMOUNT,
+					// Eén winkel op de lijst: dan is dat ook de winkel van het regeltje.
+					shop: list.shops.length === 1 ? (list.shops[0] ?? "") : "",
+					shelf: "",
+				};
 	}
 
 	onOpen(): void {
@@ -100,7 +111,13 @@ export class ExtraModal extends Modal {
 
 	// ---------------------------------------------------------------- options
 
+	/**
+	 * De winkels van de lijst, en alleen die: een regeltje voor een winkel
+	 * waar je deze keer niet komt hoort op een andere lijst. Zonder winkels
+	 * op de lijst mag alles.
+	 */
 	private shopOptions(): string[] {
+		if (this.list.shops.length > 0) return dedupe([...this.list.shops]);
 		return dedupe([
 			...this.plugin.shops.names(),
 			...this.plugin.products.values("shop"),
@@ -292,7 +309,7 @@ export class ExtraModal extends Modal {
 	private async remove(): Promise<void> {
 		const extra = this.editing;
 		if (!extra) return;
-		await this.plugin.list.removeExtra(extra.id);
+		await this.plugin.lists.removeExtra(this.list, extra.id);
 		this.onDone();
 		this.close();
 	}
@@ -305,7 +322,7 @@ export class ExtraModal extends Modal {
 		}
 
 		if (this.editing) {
-			await this.plugin.list.updateExtra(this.editing.id, {
+			await this.plugin.lists.updateExtra(this.list, this.editing.id, {
 				name,
 				amount: this.draft.amount,
 				shop: this.draft.shop,
@@ -316,7 +333,7 @@ export class ExtraModal extends Modal {
 			return;
 		}
 
-		await this.plugin.list.addExtra({
+		await this.plugin.lists.addExtra(this.list, {
 			name,
 			amount: this.draft.amount,
 			shop: this.draft.shop,

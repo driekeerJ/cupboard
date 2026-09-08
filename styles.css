@@ -2424,8 +2424,8 @@
 .workspace-leaf-content[data-type="pantry-stock"] .view-content,
 .workspace-leaf-content[data-type="pantry-cleanup"] .view-content,
 .workspace-leaf-content[data-type="pantry-home"] .view-content,
-.workspace-leaf-content[data-type="pantry-shopping"] .view-content,
-.workspace-leaf-content[data-type="pantry-round"] .view-content,
+.workspace-leaf-content[data-type="pantry-shopping-lists"] .view-content,
+.workspace-leaf-content[data-type="pantry-shopping-list"] .view-content,
 .workspace-leaf-content[data-type="pantry-products"] .view-content {
 	padding: 0;
 	overflow-x: hidden;
@@ -4404,11 +4404,11 @@
 }
 
 /* ====================================================================
- * Shopping round — tick what this round is for
+ * Shopping lists — one per trip: set up, check stock, shop
  * ==================================================================== */
 
-/* De primaire knop was alleen in Products gestyled; Groceries ("Add item")
-   en de ronde gebruiken dezelfde klasse, dus hij hoort bij .pantry-app. */
+/* De primaire knop was alleen in Products gestyled; de lijsten gebruiken
+   dezelfde klasse, dus hij hoort bij .pantry-app. */
 .pantry-app button.pantry-primary-button {
 	border-color: transparent;
 	background: var(--interactive-accent);
@@ -4421,27 +4421,161 @@
 	color: var(--text-on-accent);
 }
 
-.pantry-round-intro {
+/* --- De stappen bovenin ----------------------------------------------- */
+
+.pantry-app .pantry-steps {
+	margin-top: 8px;
+}
+
+.pantry-app .pantry-steps button.pantry-segment-item.is-disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* --- Het overzicht: één rij per lijst --------------------------------- */
+
+.pantry-list-item {
+	position: relative;
+	display: flex;
+	align-items: stretch;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.pantry-list-item:last-child {
+	border-bottom: none;
+}
+
+.pantry-lists button.pantry-list-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	height: auto;
+	min-height: 62px;
+	padding: 10px 44px 10px 2px;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-normal);
+	text-align: left;
+	cursor: pointer;
+}
+
+.pantry-lists button.pantry-list-row:hover {
+	background: var(--background-modifier-hover);
+}
+
+.pantry-list-icon {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 38px;
+	height: 38px;
+	border-radius: 11px;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+}
+
+.pantry-list-icon svg {
+	width: 18px;
+	height: 18px;
+}
+
+.pantry-list-item.is-overdue .pantry-list-icon {
+	background: hsl(var(--pantry-hue, 0) 70% 92%);
+	color: var(--text-error);
+}
+
+.theme-dark .pantry-list-item.is-overdue .pantry-list-icon {
+	background: hsl(var(--pantry-hue, 0) 40% 22%);
+}
+
+.pantry-list-main {
+	flex: 1;
+	min-width: 0;
+}
+
+.pantry-list-name {
+	font-size: var(--font-ui-medium);
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.pantry-list-meta {
+	margin-top: 2px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.pantry-list-item.is-overdue .pantry-list-meta {
+	color: var(--text-error);
+}
+
+.pantry-list-chevron {
+	flex: none;
+	display: inline-flex;
+	color: var(--text-faint);
+}
+
+.pantry-list-chevron svg {
+	width: 18px;
+	height: 18px;
+}
+
+.pantry-app button.pantry-list-note {
+	position: absolute;
+	top: 50%;
+	right: 4px;
+	width: 32px;
+	height: 32px;
+	margin-top: -16px;
+	padding: 0;
+}
+
+/* --- Set up: wanneer, winkels, maaltijden ------------------------------ */
+
+.pantry-setup-when {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 6px 2px 12px;
+}
+
+.pantry-setup-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 14px;
+}
+
+.pantry-setup-label {
+	flex: 0 0 150px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+.pantry-app input.pantry-date-input {
+	height: 34px;
+	padding: 0 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+}
+
+.pantry-pick-intro {
 	margin: 8px 2px 4px;
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
 	line-height: 1.45;
 }
 
-.pantry-round input.pantry-field-search {
-	margin: 0 0 6px;
-}
-
-.pantry-round-item {
-	border-bottom: 1px solid var(--background-modifier-border);
-}
-
-.pantry-round-item:last-child {
-	border-bottom: none;
-}
-
 /* Een rij is een knop: de hele breedte tikt. Zie de theme guard bovenin. */
-.pantry-round button.pantry-round-row {
+.pantry-list button.pantry-pick-row {
 	display: flex;
 	align-items: center;
 	gap: 12px;
@@ -4461,21 +4595,39 @@
 	cursor: pointer;
 }
 
-.pantry-round-item button.pantry-round-row,
-.pantry-round button.pantry-round-row:last-child {
+.pantry-list button.pantry-pick-row:last-child {
 	border-bottom: none;
 }
 
-.pantry-round button.pantry-round-row:hover {
+.pantry-list button.pantry-pick-row:hover {
 	background: var(--background-modifier-hover);
 }
 
-.pantry-round-main {
+.pantry-list button.pantry-pick-row:disabled,
+.pantry-list button.pantry-pick-row.is-taken {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* De dag als kop, de maaltijden ingesprongen eronder. */
+.pantry-list button.pantry-pick-day {
+	margin-top: 6px;
+	background: var(--background-secondary);
+	border-radius: 10px;
+	border-bottom: none;
+	padding: 6px 10px;
+}
+
+.pantry-list button.pantry-pick-meal {
+	padding-left: 24px;
+}
+
+.pantry-pick-main {
 	flex: 1;
 	min-width: 0;
 }
 
-.pantry-round-name {
+.pantry-pick-name {
 	font-size: var(--font-ui-medium);
 	font-weight: 500;
 	white-space: nowrap;
@@ -4483,13 +4635,13 @@
 	text-overflow: ellipsis;
 }
 
-.pantry-round-meta {
+.pantry-pick-meta {
 	color: var(--text-faint);
 	font-size: var(--font-ui-smaller);
 }
 
-/* Dezelfde ronde tik als in Groceries, maar als span in een rij-knop. */
-.pantry-round span.pantry-tick {
+/* Dezelfde ronde tik als in de lijst, maar als span in een rij-knop. */
+.pantry-list span.pantry-tick {
 	position: relative;
 	flex: none;
 	width: 26px;
@@ -4502,54 +4654,41 @@
 	transition: background 140ms ease, border-color 140ms ease;
 }
 
-.pantry-round span.pantry-tick .pantry-tick-glyph {
+.pantry-list span.pantry-tick .pantry-tick-glyph {
 	display: grid;
 	place-items: center;
 	opacity: 0;
 	color: var(--text-on-accent);
 }
 
-.pantry-round span.pantry-tick .pantry-tick-glyph svg {
+.pantry-list span.pantry-tick .pantry-tick-glyph svg {
 	width: 15px;
 	height: 15px;
 	stroke-width: 3.2;
 }
 
-.pantry-round span.pantry-tick.is-on {
+.pantry-list span.pantry-tick.is-on {
 	background: var(--interactive-accent);
 	border-color: var(--interactive-accent);
 }
 
-.pantry-round span.pantry-tick.is-on .pantry-tick-glyph {
+.pantry-list span.pantry-tick.is-on .pantry-tick-glyph {
 	opacity: 1;
 }
 
-/* De portie-stepper onder het aangevinkte recept, ingesprongen tot de naam. */
-.pantry-round-servings {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding: 0 2px 10px 40px;
-}
-
-.pantry-round-divider {
-	height: 10px;
-	border-bottom: 1px solid var(--background-modifier-border);
-	margin-bottom: 4px;
-}
-
-/* De knoppen onderaan, altijd in beeld — ook op een telefoon met een lange
-   receptenlijst. */
-.pantry-round .pantry-round-foot {
+/* De knoppen onderaan, altijd in beeld — ook op een telefoon met een lang
+   weekplan. */
+.pantry-list .pantry-pick-foot {
 	position: sticky;
 	bottom: 0;
 	z-index: 10;
-	padding: 10px var(--pantry-gutter) 14px;
+	margin: 12px 0 0;
+	padding: 10px 0 14px;
 	background: var(--background-primary);
 	border-top: 1px solid var(--background-modifier-border);
 }
 
-.pantry-round-foot-inner {
+.pantry-pick-foot-inner {
 	max-width: var(--pantry-measure);
 	margin: 0 auto;
 	display: flex;
@@ -4557,7 +4696,7 @@
 	gap: 8px;
 }
 
-.pantry-round button.pantry-text-button {
+.pantry-list .pantry-pick-foot button.pantry-text-button {
 	height: auto;
 	min-height: 0;
 	padding: 9px 16px;
@@ -4569,82 +4708,71 @@
 	box-shadow: none;
 }
 
-.pantry-round button.pantry-primary-button {
+.pantry-list .pantry-pick-foot button.pantry-primary-button {
 	border-color: transparent;
 	background: var(--interactive-accent);
 	color: var(--text-on-accent);
 	font-weight: 600;
 }
 
-/* De strook in Voorraad en Boodschappen zolang er een ronde staat. */
-.pantry-round-banner {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	margin: 0 0 10px;
-	padding: 8px 12px;
-	border-radius: 10px;
-	background: var(--background-modifier-hover);
-	border-left: 3px solid var(--interactive-accent);
+.pantry-list .pantry-pick-foot button.pantry-danger-button {
+	color: var(--text-error);
 }
 
-.pantry-round-banner-icon {
+/* --- Shop: klaar, en de rijen zonder tik ------------------------------ */
+
+.pantry-app button.pantry-done-button {
 	display: inline-flex;
-	flex: none;
-	color: var(--text-accent);
-}
-
-.pantry-round-banner-icon svg {
-	width: 18px;
-	height: 18px;
-}
-
-.pantry-round-banner-text {
-	flex: 1;
-	min-width: 0;
-}
-
-.pantry-round-banner-title {
-	font-size: 0.72em;
-	font-weight: 700;
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-	color: var(--text-faint);
-}
-
-.pantry-round-banner-label {
-	font-size: var(--font-ui-small);
-	font-weight: 500;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.pantry-round-banner-actions {
-	display: flex;
-	flex: none;
+	align-items: center;
 	gap: 6px;
 }
 
-.pantry-app .pantry-round-banner button.pantry-text-button {
-	height: auto;
-	min-height: 0;
-	padding: 5px 10px;
-	font-size: var(--font-ui-smaller);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 8px;
-	background: var(--background-primary);
-	color: var(--text-normal);
-	box-shadow: none;
+.pantry-done-icon {
+	display: inline-flex;
 }
 
-@media (max-width: 480px) {
-	.pantry-round-banner {
-		flex-wrap: wrap;
-	}
+.pantry-done-icon svg {
+	width: 15px;
+	height: 15px;
+}
 
-	.pantry-round-banner-actions {
-		width: 100%;
-		justify-content: flex-end;
-	}
+/* Iets om te weten, niet om te kopen: geen tik, ingesprongen tot de naam. */
+.pantry-buy-row.is-quiet {
+	padding-left: 38px;
+	opacity: 0.75;
+}
+
+/* --- De tegel voor All stock: kleiner, want zelden nodig --------------- */
+
+.pantry-app button.pantry-tile.is-minor {
+	min-height: 56px;
+	padding: 8px 14px;
+	background: transparent;
+	border-style: dashed;
+}
+
+.pantry-app .pantry-tile.is-minor .pantry-tile-icon {
+	width: 32px;
+	height: 32px;
+	border-radius: 9px;
+}
+
+.pantry-app .pantry-tile.is-minor .pantry-tile-icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+.pantry-app .pantry-tile.is-minor .pantry-tile-title {
+	font-size: var(--font-ui-small);
+}
+
+/* Een lijst met een verstreken datum: rood, niet accent. */
+.pantry-app .pantry-tile.is-alarm .pantry-tile-icon {
+	background: var(--text-error);
+	color: var(--text-on-accent);
+}
+
+.pantry-app .pantry-tile.is-alarm .pantry-tile-state {
+	color: var(--text-error);
+	font-weight: 600;
 }

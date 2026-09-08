@@ -17,18 +17,18 @@ import { COOK_VIEW_TYPE, CookView } from "./ui/cook-view";
 import { CookStore, parseRecipeBody } from "./cook";
 import { ProductIndex } from "./products";
 import { NeedIndex } from "./needs";
-import { GroceryList } from "./list";
+import { ShoppingLists } from "./shopping-lists";
 import { HouseholdIndex } from "./people";
 import { ShopIndex } from "./shops";
 import { SHELVES_VIEW_TYPE, ShelvesView } from "./ui/shelves-view";
 import { PRODUCTS_VIEW_TYPE, ProductsView } from "./ui/products-view";
 import { NewProductModal } from "./ui/new-product-modal";
 import { STOCK_VIEW_TYPE, StockView } from "./ui/stock-view";
-import { SHOPPING_VIEW_TYPE, ShoppingView } from "./ui/shopping-view";
+import { LISTS_VIEW_TYPE, ListsView } from "./ui/lists-view";
+import { LIST_VIEW_TYPE, ListView } from "./ui/list-view";
 import { CLEANUP_VIEW_TYPE, CleanupView } from "./ui/cleanup-view";
 import { CleanupIndex } from "./cleanup";
 import { HOME_VIEW_TYPE, HomeView } from "./ui/home-view";
-import { ROUND_VIEW_TYPE, RoundView } from "./ui/round-view";
 import { PlanStore } from "./plan";
 import { ViewMemory } from "./ui/view-memory";
 import { fromISODate, startOfWeek, toISODate } from "./date";
@@ -51,12 +51,14 @@ import type { PantrySettings } from "./types";
  * Een scherm toevoegen is nu één regel hier, plus zijn tegel in `home-view.ts`
  * en de `.view-content`-selector boven in `styles.css`.
  */
-const SCREENS: { type: string; command: string; name: string }[] = [
+const SCREENS: { type: string; command?: string; name: string }[] = [
 	{ type: HOME_VIEW_TYPE, command: "open-home", name: "Open home" },
 	{ type: PLANNER_VIEW_TYPE, command: "open-planner", name: "Open meal planner" },
-	{ type: STOCK_VIEW_TYPE, command: "open-stock", name: "Open stock" },
-	{ type: SHOPPING_VIEW_TYPE, command: "open-groceries", name: "Open groceries" },
-	{ type: ROUND_VIEW_TYPE, command: "open-round", name: "Open shopping round" },
+	{ type: LISTS_VIEW_TYPE, command: "open-shopping-lists", name: "Open shopping lists" },
+	// Eén lijst heeft een pad nodig; het palet kan die niet kiezen. Het
+	// scherm staat hier voor registerView en refreshViews, zonder commando.
+	{ type: LIST_VIEW_TYPE, name: "Open shopping list" },
+	{ type: STOCK_VIEW_TYPE, command: "open-stock", name: "Open all stock" },
 	{ type: SHELVES_VIEW_TYPE, command: "open-shelves", name: "Open shop shelves" },
 	{ type: CLEANUP_VIEW_TYPE, command: "open-cleanup", name: "Open cleanup" },
 	{ type: PRODUCTS_VIEW_TYPE, command: "open-products", name: "Open products" },
@@ -84,8 +86,8 @@ export default class PantryPlugin extends Plugin {
 	products: ProductIndex = new ProductIndex(this);
 	/** What this week's planned meals ask for, per product. */
 	needs: NeedIndex = new NeedIndex(this);
-	/** The grocery list, mirrored into a note in the vault. */
-	list: GroceryList = new GroceryList(this);
+	/** De boodschappenlijsten: één notitie per keer boodschappen doen. */
+	lists: ShoppingLists = new ShoppingLists(this);
 	/** One note per shop, holding its shelves in walking order. */
 	shops: ShopIndex = new ShopIndex(this);
 	/** Wie er meeëet: notities zodra je een map instelt, anders `data.json`. */
@@ -117,12 +119,21 @@ export default class PantryPlugin extends Plugin {
 
 		this.products.build();
 		this.people.build();
-		// De planner alleen als er iets veranderd is wat hij toont. `render()`
-		// laadt de hele week opnieuw en gooit je scrollpositie weg, en dit pad
-		// loopt bij élke metadata-wijziging, create, delete of rename — precies
-		// wat het commentaar bij refreshStockViews zegt te willen vermijden.
-		this.refreshViews(...(planner ? [] : [PLANNER_VIEW_TYPE]));
-		guarded("could not refresh your grocery list", () => this.list.refresh());
+		// Eerst de lijsten doorrekenen, dan pas de schermen: een tegel die
+		// "12 to buy" zegt leest de index van die lijst, en die moet dan al
+		// bij zijn. Gaat het doorrekenen mis, dan tekenen de schermen alsnog —
+		// met de vorige stand, en de melding zegt waarom.
+		guarded("could not refresh your shopping lists", async () => {
+			try {
+				await this.lists.refreshAll();
+			} finally {
+				// De planner alleen als er iets veranderd is wat hij toont.
+				// `render()` laadt de hele week opnieuw en gooit je
+				// scrollpositie weg, en dit pad loopt bij élke
+				// metadata-wijziging, create, delete of rename.
+				this.refreshViews(...(planner ? [] : [PLANNER_VIEW_TYPE]));
+			}
+		});
 	}, 250, true);
 
 	/** Of er sinds de vorige ronde iets veranderde dat de planner toont. */
@@ -136,11 +147,7 @@ export default class PantryPlugin extends Plugin {
 			this.people.build();
 			guarded("could not read your shops", async () => {
 				await this.shops.build();
-				// De lopende boodschappenronde vóór de lijst: anders schrijft
-				// refresh() een lijst zonder mandje, en ben je kwijt wat er al
-				// in het karretje ligt.
-				await this.list.loadState();
-				await this.list.refresh();
+				await this.lists.refreshAll();
 				// En dan pas de schermen die op die index leunen. Een planner
 				// die Obsidian bij het opstarten terugzet, tekent zichzelf
 				// vóór dit blok: producten en winkels waren er dan nog niet,
@@ -181,8 +188,13 @@ export default class PantryPlugin extends Plugin {
 		);
 
 		this.registerView(
-			SHOPPING_VIEW_TYPE,
-			(leaf: WorkspaceLeaf) => new ShoppingView(leaf, this)
+			LISTS_VIEW_TYPE,
+			(leaf: WorkspaceLeaf) => new ListsView(leaf, this)
+		);
+
+		this.registerView(
+			LIST_VIEW_TYPE,
+			(leaf: WorkspaceLeaf) => new ListView(leaf, this)
 		);
 
 		this.registerView(
@@ -193,11 +205,6 @@ export default class PantryPlugin extends Plugin {
 		this.registerView(
 			HOME_VIEW_TYPE,
 			(leaf: WorkspaceLeaf) => new HomeView(leaf, this)
-		);
-
-		this.registerView(
-			ROUND_VIEW_TYPE,
-			(leaf: WorkspaceLeaf) => new RoundView(leaf, this)
 		);
 
 		// One door into the plugin; the screens behind it navigate to each other.
@@ -216,13 +223,22 @@ export default class PantryPlugin extends Plugin {
 		// palet dat alles bereikt is in Obsidian geen stijlvoorkeur maar het
 		// contract waar elk ander automatiseringsoppervlak op leunt.
 		for (const screen of SCREENS) {
+			const command = screen.command;
+			if (!command) continue;
 			this.addCommand({
-				id: screen.command,
+				id: command,
 				name: screen.name,
 				callback: () =>
 					guarded(`could not open ${screen.name}`, () => this.activate(screen.type)),
 			});
 		}
+
+		this.addCommand({
+			id: "new-shopping-list",
+			name: "New shopping list",
+			callback: () =>
+				guarded("could not start a shopping list", () => this.openList(null)),
+		});
 
 		this.addCommand({
 			id: "run-setup",
@@ -365,20 +381,6 @@ export default class PantryPlugin extends Plugin {
 
 		this.addSettingTab(new PantrySettingTab(this.app, this));
 
-		// Het statebestand is JSON, geen notitie, dus het komt niet langs de
-		// metadata-cache. Zo pikt de telefoon op wat de laptop in de winkel deed.
-		this.registerEvent(
-			this.app.vault.on("modify", (file: TAbstractFile) => {
-				if (!(file instanceof TFile) || !this.list.isStateFile(file.path)) return;
-				guarded("could not read your shopping round", async () => {
-					const content = await this.app.vault.cachedRead(file);
-					if (this.list.wroteStateExactly(content)) return;
-					await this.list.loadState();
-					this.refreshStockViews();
-				});
-			})
-		);
-
 		this.registerEvent(
 			this.app.metadataCache.on("changed", (file: TFile, data: string) => {
 				if (this.shops.isShopNote(file.path)) {
@@ -386,17 +388,18 @@ export default class PantryPlugin extends Plugin {
 					// schermen de winkels zoals ze vóór de wijziging waren.
 					guarded("could not read your shops", async () => {
 						await this.shops.build();
-						await this.list.refresh();
+						await this.lists.refreshAll();
 						this.refreshViews();
 					});
 					return;
 				}
-				if (this.list.isListNote(file.path)) {
+				if (this.lists.isListNote(file.path)) {
 					// Someone ticked a box in the note itself; skip our own echo.
-					if (!this.list.wroteExactly(data)) {
-						guarded("could not read your grocery note", () =>
-							this.list.syncFromNote()
-						);
+					if (!this.lists.wroteExactly(file.path, data)) {
+						guarded("could not read your shopping list", async () => {
+							await this.lists.syncFromNote(file);
+							this.refreshStockViews();
+						});
 					}
 					return;
 				}
@@ -533,6 +536,28 @@ export default class PantryPlugin extends Plugin {
 		await this.activate(STOCK_VIEW_TYPE);
 	}
 
+	/**
+	 * Opent één boodschappenlijst, of het setup-scherm voor een nieuwe als
+	 * `path` null is. Hergebruikt een tabblad dat al op die lijst staat.
+	 */
+	async openList(path: string | null, step = "setup"): Promise<void> {
+		const state = { path, step };
+		for (const leaf of this.app.workspace.getLeavesOfType(LIST_VIEW_TYPE)) {
+			const view = leaf.view as { getState?: () => { path?: unknown } };
+			if (path !== null && view.getState?.().path === path) {
+				await leaf.setViewState({ type: LIST_VIEW_TYPE, active: true, state });
+				await this.app.workspace.revealLeaf(leaf);
+				return;
+			}
+		}
+		const sibling = Platform.isPhone
+			? PANTRY_VIEW_TYPES.flatMap((other) => this.app.workspace.getLeavesOfType(other))[0]
+			: undefined;
+		const leaf = sibling ?? this.app.workspace.getLeaf("tab");
+		await leaf.setViewState({ type: LIST_VIEW_TYPE, active: true, state });
+		await this.app.workspace.revealLeaf(leaf);
+	}
+
 	async activateShelves(): Promise<void> {
 		await this.shops.build();
 		await this.activate(SHELVES_VIEW_TYPE);
@@ -553,8 +578,8 @@ export default class PantryPlugin extends Plugin {
 		await this.activate(CLEANUP_VIEW_TYPE);
 	}
 
-	async activateShopping(): Promise<void> {
-		await this.activate(SHOPPING_VIEW_TYPE);
+	async activateLists(): Promise<void> {
+		await this.activate(LISTS_VIEW_TYPE);
 	}
 
 	/**
@@ -665,9 +690,6 @@ export default class PantryPlugin extends Plugin {
 		// zonder dit blijven ze staan als de plugin wordt uitgezet.
 		EatersPopover.closeAny();
 		this.scheduleRefresh.cancel();
-		// Een ronde die nog in de debounce hing hoort niet verloren te gaan
-		// omdat je de plugin uitzet terwijl je in de winkel staat.
-		guarded("could not save your shopping round", () => this.list.flushState());
 	}
 
 	async activatePlanner(): Promise<void> {

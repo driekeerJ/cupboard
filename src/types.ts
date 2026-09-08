@@ -18,14 +18,12 @@ export interface PantrySettings {
 	planFolder: string;
 	/** Folder that holds the product notes: the base list of what you stock. */
 	productFolder: string;
-	/** Note the grocery list is mirrored into. */
-	listNote: string;
 	/**
-	 * JSON in de vault met de lopende boodschappenronde: wat er in het mandje
-	 * ligt en wat de telling ervóór was. In de vault en niet in `data.json`,
-	 * zodat Obsidian Sync hem meeneemt van laptop naar telefoon.
+	 * Map met één notitie per boodschappenlijst: de keuzes en het mandje in
+	 * de frontmatter, de afvinklijst in de body. In de vault en niet in
+	 * `data.json`, zodat Obsidian Sync alles meeneemt naar je telefoon.
 	 */
-	shoppingState: string;
+	shoppingFolder: string;
 	/** Folder holding one note per shop, each listing its shelves in order. */
 	shopFolder: string;
 	/** 0 = Sunday, 1 = Monday, ... 6 = Saturday. */

@@ -157,7 +157,7 @@ export class SetupWizard extends Modal {
 				planFolder: this.draft.planFolder,
 				productFolder: this.draft.productFolder,
 				shopFolder: this.draft.shopFolder,
-				listNote: this.draft.listNote,
+				shoppingFolder: this.draft.shoppingFolder,
 				weekStartDay: this.draft.weekStartDay,
 				meals: this.draft.meals,
 				household: this.draft.household,

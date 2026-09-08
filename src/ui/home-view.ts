@@ -6,11 +6,11 @@ import { guarded } from "../guard";
 import { HOME_VIEW_TYPE, openHere } from "./nav";
 import { PLANNER_VIEW_TYPE } from "../view/planner-view";
 import { STOCK_VIEW_TYPE } from "./stock-view";
-import { SHOPPING_VIEW_TYPE } from "./shopping-view";
+import { LISTS_VIEW_TYPE } from "./lists-view";
+import { isOverdue, listLabel } from "../shopping-list";
 import { SHELVES_VIEW_TYPE } from "./shelves-view";
 import { CLEANUP_VIEW_TYPE } from "./cleanup-view";
 import { PRODUCTS_VIEW_TYPE } from "./products-view";
-import { ROUND_VIEW_TYPE } from "./round-view";
 
 export { HOME_VIEW_TYPE };
 
@@ -32,6 +32,14 @@ interface Tile {
 	 * de plugin vanaf.
 	 */
 	note?: () => string | null;
+	/**
+	 * Kleiner getekend: een scherm dat er is voor de volledigheid, niet voor
+	 * elke dag. All stock hoort erbij — wie buiten een lijst om wil tellen
+	 * moet ergens heen — maar het is niet de weg die je meestal neemt.
+	 */
+	minor?: boolean;
+	/** Rood in plaats van accent: er is iets dat niet had mogen blijven liggen. */
+	alarm?: () => boolean;
 }
 
 /**
@@ -153,54 +161,34 @@ export class HomeView extends ItemView {
 					),
 			},
 			{
-				type: STOCK_VIEW_TYPE,
-				title: "Stock",
-				icon: "layout-list",
-				hint: "How much of everything is in the house",
-				state: () => {
-					const open = products.filter(
-						(product) => product.count === null || product.check
-					).length;
-					return {
-						text: open === 0 ? "all counted" : `${open} to count`,
-						count: open,
-					};
-				},
-			},
-			{
-				type: SHOPPING_VIEW_TYPE,
-				title: "Groceries",
+				type: LISTS_VIEW_TYPE,
+				title: "Shopping lists",
 				icon: "shopping-cart",
-				hint: "What to buy, in walking order",
+				hint: "Check stock and shop, per trip",
 				state: () => {
-					const { buy, unsure } = this.plugin.list.buckets();
-					// Losse boodschappen staan op dezelfde lijst, dus ze horen
-					// ook in het getal op de tegel.
-					const total =
-						buy.length + unsure.length + this.plugin.list.extras.length;
+					const lists = this.plugin.lists.all();
+					// Een lijst met een verstreken datum is de ene melding die de
+					// voordeur moet doen: gedaan en niet afgesloten, of toch niet
+					// gegaan — allebei laten de voorraad kloppen op iets wat er
+					// niet is.
+					const late = lists.filter((list) => isOverdue(list));
+					if (late.length > 0) {
+						return {
+							text:
+								late.length === 1
+									? `${late[0] ? listLabel(late[0]) : "a list"} is past its date`
+									: `${late.length} lists past their date`,
+							count: late.length,
+						};
+					}
+					if (lists.length === 0) return { text: "no lists yet", count: 0 };
+					const next = lists[0];
 					return {
-						text: total === 0 ? "nothing to buy" : `${total} on the list`,
-						count: total,
+						text: `${lists.length} open · next ${next ? listLabel(next) : ""}`,
+						count: 0,
 					};
 				},
-				note: () => this.plugin.list.path(),
-			},
-			{
-				type: ROUND_VIEW_TYPE,
-				title: "Shopping round",
-				icon: "list-checks",
-				hint: "Shop for a recipe or one shop only",
-				state: () => {
-					// Een lopende ronde vraagt aandacht: zolang hij staat, volgt
-					// niets het weekplan, en dat hoort op de voordeur te staan.
-					const active = this.plugin.list.hasRound();
-					return {
-						text: active
-							? this.plugin.list.roundLabel()
-							: "following the meal plan",
-						count: active ? 1 : 0,
-					};
-				},
+				alarm: () => this.plugin.lists.all().some((list) => isOverdue(list)),
 			},
 			{
 				type: PRODUCTS_VIEW_TYPE,
@@ -255,6 +243,22 @@ export class HomeView extends ItemView {
 					};
 				},
 			},
+			{
+				type: STOCK_VIEW_TYPE,
+				title: "All stock",
+				icon: "layout-list",
+				hint: "Count anything, without a list",
+				minor: true,
+				state: () => {
+					const open = products.filter(
+						(product) => !product.ignored && (product.count === null || product.check)
+					).length;
+					return {
+						text: open === 0 ? "all counted" : `${open} never counted or to check`,
+						count: 0,
+					};
+				},
+			},
 		];
 	}
 
@@ -289,6 +293,8 @@ export class HomeView extends ItemView {
 			const row = grid.createDiv({ cls: "pantry-tile-row" });
 			const button = row.createEl("button", { cls: "pantry-tile" });
 			button.toggleClass("is-waiting", state.count > 0);
+			button.toggleClass("is-minor", tile.minor === true);
+			button.toggleClass("is-alarm", tile.alarm?.() === true);
 
 			const icon = button.createDiv({ cls: "pantry-tile-icon" });
 			setIcon(icon, tile.icon);

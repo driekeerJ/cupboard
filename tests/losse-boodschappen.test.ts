@@ -5,7 +5,8 @@
  *
  * - een los regeltje staat in de winkel en op het schap die jij kiest, tussen
  *   je gewone boodschappen, en niet in een apart hoekje onderaan;
- * - het overleeft een herstart, want het staat in `Pantry/shopping.json`;
+ * - het hoort bij één lijst en overleeft een herstart, want het staat in de
+ *   frontmatter van die lijst;
  * - afvinken is wissen — er is geen voorraad om naar terug te vallen, dus er
  *   blijft ook niets achter om op te ruimen;
  * - de notitie is nog steeds een spiegel: een vinkje dat je dáár zet doet
@@ -14,7 +15,6 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { startOfWeek } from "../src/date";
-import { groupForShopping } from "../src/list";
 import { loadFixture } from "./harness/fixtures";
 import { makeHarness } from "./harness/plugin";
 
@@ -23,20 +23,20 @@ const WEEK = startOfWeek(new Date(2026, 7, 26), 1);
 async function run(files?: Record<string, string>) {
 	const harness = makeHarness({ ...loadFixture("week-basis"), ...files });
 	await harness.rebuild(WEEK);
-	await harness.plugin.list.write();
-	return harness;
+	const list = await harness.list(WEEK, { shops: ["Lidl"] });
+	return { ...harness, list };
 }
 
 test("een los regeltje komt in de gekozen winkel en op het gekozen schap", async () => {
 	const h = await run();
-	await h.plugin.list.addExtra({
+	await h.plugin.lists.addExtra(h.list, {
 		name: "Batterijen",
 		amount: 2,
 		shop: "Lidl",
 		shelf: "Droogwaren",
 	});
 
-	const note = h.groceries();
+	const note = h.note(h.list);
 	assert.match(note, /## Lidl/);
 	assert.match(note, /- \[ \] Batterijen · 2/);
 
@@ -49,47 +49,35 @@ test("een los regeltje komt in de gekozen winkel en op het gekozen schap", async
 
 test("zonder winkel valt het regeltje in de restcategorie, niet weg", async () => {
 	const h = await run();
-	await h.plugin.list.addExtra({ name: "Bloemen", amount: 1, shop: "", shelf: "" });
+	await h.plugin.lists.addExtra(h.list, { name: "Bloemen", amount: 1, shop: "", shelf: "" });
 
-	const note = h.groceries();
+	const note = h.note(h.list);
 	assert.match(note, /## Anywhere/);
 	assert.match(note, /- \[ \] Bloemen$/m, "één stuk krijgt geen · 1 achter zich");
 });
 
 test("een winkel waar alleen een los regeltje voor is, krijgt toch een kopje", async () => {
 	const h = await run();
-	await h.plugin.list.addExtra({
-		name: "Kaartje",
-		amount: 1,
-		shop: "Bruna",
-		shelf: "",
-	});
+	await h.plugin.lists.addExtra(h.list, { name: "Kaartje", amount: 1, shop: "Bruna", shelf: "" });
 
-	const groups = groupForShopping(
-		h.plugin,
-		h.plugin.list.buckets().buy,
-		h.plugin.list.extras
-	);
+	const groups = h.plugin.lists.groups(h.list, h.plugin.lists.buckets(h.list).buy);
 	const bruna = groups.find((group) => group.shop === "Bruna");
 	assert.ok(bruna, "Bruna staat op de lijst, ook zonder producten");
 	assert.equal(bruna.items.length, 0);
-	assert.deepEqual(
-		bruna.shelves.map((shelf) => shelf.shelf),
-		["Other"]
-	);
+	assert.deepEqual(bruna.shelves.map((shelf) => shelf.shelf), ["Other"]);
 	assert.equal(bruna.shelves[0]?.extras[0]?.name, "Kaartje");
 });
 
 test("hoofdletters maken er geen tweede winkel of schap van", async () => {
 	const h = await run();
-	await h.plugin.list.addExtra({
+	await h.plugin.lists.addExtra(h.list, {
 		name: "Kroepoek",
 		amount: 1,
 		shop: "lidl",
 		shelf: "droogwaren",
 	});
 
-	const note = h.groceries();
+	const note = h.note(h.list);
 	assert.equal(note.match(/^## Lidl$/gm)?.length, 1, "één Lidl-kopje");
 	assert.equal(note.match(/^### Droogwaren$/gm)?.length, 1, "één schapkopje");
 	assert.match(note, /Kroepoek/);
@@ -97,31 +85,28 @@ test("hoofdletters maken er geen tweede winkel of schap van", async () => {
 
 test("het regeltje overleeft een herstart", async () => {
 	const h = await run();
-	await h.plugin.list.addExtra({
+	await h.plugin.lists.addExtra(h.list, {
 		name: "Batterijen",
 		amount: 2,
 		shop: "Lidl",
 		shelf: "Droogwaren",
 	});
+	assert.match(h.note(h.list), /^extras:\n {2}- id: x\w+\n {4}name: Batterijen\n {4}amount: 2\n {4}shop: Lidl\n {4}shelf: Droogwaren$/m);
 
-	const state = JSON.parse(h.vault.read("Pantry/shopping.json")) as {
-		extras: { name: string; amount: number; shop: string; shelf: string }[];
-	};
-	assert.equal(state.extras.length, 1);
-	assert.equal(state.extras[0]?.name, "Batterijen");
-
-	// Een verse start op hetzelfde bestand: de telefoon, of Obsidian opnieuw.
+	// Een verse start op dezelfde vault: de telefoon, of Obsidian opnieuw.
 	const later = makeHarness(h.vault.snapshot());
 	await later.rebuild(WEEK);
-	await later.plugin.list.loadState();
+	await later.plugin.lists.refreshAll();
 
-	assert.equal(later.plugin.list.extras.length, 1);
-	assert.equal(later.plugin.list.extras[0]?.shelf, "Droogwaren");
+	const list = later.plugin.lists.byPath(h.list.path);
+	assert.ok(list);
+	assert.equal(list.extras.length, 1);
+	assert.equal(list.extras[0]?.shelf, "Droogwaren");
 });
 
 test("afvinken is wissen: er blijft niets in het mandje achter", async () => {
 	const h = await run();
-	const extra = await h.plugin.list.addExtra({
+	const extra = await h.plugin.lists.addExtra(h.list, {
 		name: "Batterijen",
 		amount: 2,
 		shop: "Lidl",
@@ -129,36 +114,33 @@ test("afvinken is wissen: er blijft niets in het mandje achter", async () => {
 	});
 	assert.ok(extra);
 
-	await h.plugin.list.removeExtra(extra.id);
+	await h.plugin.lists.removeExtra(h.list, extra.id);
 
-	assert.equal(h.plugin.list.extras.length, 0);
-	const note = h.groceries();
-	assert.equal(note.includes("Batterijen"), false, "ook niet onder In the basket");
+	assert.equal(h.list.extras.length, 0);
+	assert.equal(h.note(h.list).includes("Batterijen"), false, "ook niet onder In the basket");
 });
 
 test("een vinkje in de notitie haalt het regeltje van de lijst", async () => {
 	const h = await run();
-	await h.plugin.list.addExtra({
+	await h.plugin.lists.addExtra(h.list, {
 		name: "Batterijen",
 		amount: 2,
 		shop: "Lidl",
 		shelf: "Droogwaren",
 	});
 
-	const getikt = h
-		.groceries()
-		.replace("- [ ] Batterijen · 2", "- [x] Batterijen · 2");
-	h.vault.write(h.plugin.list.path(), getikt);
+	const getikt = h.note(h.list).replace("- [ ] Batterijen · 2", "- [x] Batterijen · 2");
+	h.vault.write(h.list.path, getikt);
 
-	await h.plugin.list.syncFromNote();
+	await h.plugin.lists.syncFromNote(h.vault.vault.getFileByPath(h.list.path)!);
 
-	assert.equal(h.plugin.list.extras.length, 0);
-	assert.equal(h.groceries().includes("Batterijen"), false);
+	assert.equal(h.list.extras.length, 0);
+	assert.equal(h.note(h.list).includes("Batterijen"), false);
 });
 
 test("een handgeschreven regel die niets van ons is blijft met rust", async () => {
 	const h = await run();
-	await h.plugin.list.addExtra({
+	await h.plugin.lists.addExtra(h.list, {
 		name: "Batterijen",
 		amount: 2,
 		shop: "Lidl",
@@ -166,30 +148,41 @@ test("een handgeschreven regel die niets van ons is blijft met rust", async () =
 	});
 
 	// Een afgevinkt regeltje buiten het blok, over iets dat wij niet kennen.
-	const note = `${h.groceries()}\n- [x] briefje voor de slager\n`;
-	h.vault.write(h.plugin.list.path(), note);
+	const note = `${h.note(h.list)}\n- [x] briefje voor de slager\n`;
+	h.vault.write(h.list.path, note);
 
-	await h.plugin.list.syncFromNote();
+	await h.plugin.lists.syncFromNote(h.vault.vault.getFileByPath(h.list.path)!);
 
-	assert.equal(h.plugin.list.extras.length, 1, "onze eigen regel blijft staan");
-	assert.match(h.groceries(), /briefje voor de slager/);
+	assert.equal(h.list.extras.length, 1, "onze eigen regel blijft staan");
+	assert.match(h.note(h.list), /briefje voor de slager/);
 });
 
-test("onzin in het rondebestand wordt overgeslagen, de rest niet", async () => {
+test("onzin in de frontmatter wordt overgeslagen, de rest niet", async () => {
 	const h = await run({
-		"Pantry/shopping.json": JSON.stringify({
-			version: 1,
-			extras: [
-				{ id: "a", name: "  ", amount: 2, shop: "Lidl", shelf: "" },
-				{ id: "b", name: "Bloemen", amount: -4, shop: 7, shelf: null },
-				"dit is geen regel",
-				{ name: "Kaartje", amount: 1.6, shop: "Bruna", shelf: "Papier" },
-			],
-		}),
+		"Pantry/Shopping/2026-08-24 Lidl.md": [
+			"---",
+			"pantry: shopping",
+			"date: 2026-08-24",
+			"shops:",
+			"  - '[[Lidl]]'",
+			"extras:",
+			"  - { id: a, name: '  ', amount: 2, shop: Lidl, shelf: '' }",
+			"  - { id: b, name: Bloemen, amount: -4, shop: 7, shelf: null }",
+			"  - dit is geen regel",
+			"  - { name: Kaartje, amount: 1.6, shop: Bruna, shelf: Papier }",
+			"---",
+			"",
+			"# Lidl · Mon 24 Aug",
+			"",
+		].join("\n"),
 	});
-	await h.plugin.list.loadState();
+	// `run` maakte zelf ook een lijst; die kreeg een volgnummer omdat het pad bezet was.
+	assert.equal(h.list.path, "Pantry/Shopping/2026-08-24 Lidl 2.md");
+	await h.plugin.lists.refreshAll();
+	const list = h.plugin.lists.byPath("Pantry/Shopping/2026-08-24 Lidl.md");
+	assert.ok(list);
 
-	const extras = h.plugin.list.extras;
+	const extras = list.extras;
 	assert.equal(extras.length, 2, "de naamloze en de niet-objecten vallen af");
 	assert.equal(extras[0]?.name, "Bloemen");
 	assert.equal(extras[0]?.amount, 1, "een onmogelijk aantal wordt er één");
@@ -198,7 +191,7 @@ test("onzin in het rondebestand wordt overgeslagen, de rest niet", async () => {
 	assert.equal(extras[1]?.amount, 2, "1,6 wordt afgerond");
 });
 
-test("een lege lijst met alleen een los regeltje is geen lege lijst", async () => {
+test("een lijst met alleen een los regeltje is geen lege lijst", async () => {
 	const h = makeHarness({
 		"Shops/Lidl.md": ["# Lidl", "", "## Looproute", "", "- Groente", ""].join("\n"),
 		"Products/Ui.md": [
@@ -213,12 +206,11 @@ test("een lege lijst met alleen een los regeltje is geen lege lijst", async () =
 		].join("\n"),
 	});
 	await h.rebuild(WEEK);
-	await h.plugin.list.write();
-	// Niets nodig, dus er wordt niet eens een notitie aangemaakt.
-	assert.equal(h.vault.files.has(h.plugin.list.path()), false);
+	const list = await h.list(WEEK);
+	assert.match(h.note(list), /Nothing needed\./);
 
-	await h.plugin.list.addExtra({ name: "Bloemen", amount: 1, shop: "", shelf: "" });
-	const note = h.groceries();
+	await h.plugin.lists.addExtra(list, { name: "Bloemen", amount: 1, shop: "", shelf: "" });
+	const note = h.note(list);
 	assert.equal(note.includes("Nothing needed."), false);
 	assert.match(note, /- \[ \] Bloemen/);
 });
