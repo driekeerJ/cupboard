@@ -3,14 +3,13 @@ import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import { formatListDate, listLabel, type ShoppingList } from "../shopping-list";
 import { segment } from "./kit";
-import { drawBackLink, openHere } from "./nav";
-import { LISTS_VIEW_TYPE } from "./lists-view";
+import { LISTS_VIEW_TYPE, LIST_VIEW_TYPE, drawBackLink, openHere } from "./nav";
 import { SetupStep } from "./list-setup";
 import { ShopStep } from "./list-shop";
 import { StockPanel } from "./stock-panel";
 import type { ListStep } from "./view-memory";
 
-export const LIST_VIEW_TYPE = "pantry-shopping-list";
+export { LIST_VIEW_TYPE };
 
 interface ListViewState {
 	/** Vaultpad van de lijstnotitie; null is een lijst die nog gemaakt wordt. */

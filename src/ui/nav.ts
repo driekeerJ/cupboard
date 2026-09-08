@@ -2,6 +2,13 @@ import { ItemView, setIcon } from "obsidian";
 import { guarded } from "../guard";
 
 export const HOME_VIEW_TYPE = "pantry-home";
+/**
+ * Het overzicht van boodschappenlijsten en één lijst wijzen naar elkaar:
+ * de rij opent de lijst, de terugknop opent het overzicht. Hun namen staan
+ * daarom hier, om dezelfde reden als HOME_VIEW_TYPE.
+ */
+export const LISTS_VIEW_TYPE = "pantry-shopping-lists";
+export const LIST_VIEW_TYPE = "pantry-shopping-list";
 
 /**
  * Pantry is seven screens, and moving between them should feel like one app

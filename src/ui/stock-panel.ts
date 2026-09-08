@@ -32,7 +32,7 @@ export interface StockSource {
 
 export class StockPanel {
 	private source: StockSource;
-	private headEl: HTMLElement | null = null;
+	private filtersEl: HTMLElement | null = null;
 	private bodyEl: HTMLElement | null = null;
 	private countEl: HTMLElement | null = null;
 	private hideEl: HTMLButtonElement | null = null;
@@ -57,7 +57,6 @@ export class StockPanel {
 	 * regel onder de titel; die is van het scherm, want de titel ook.
 	 */
 	mount(head: HTMLElement, actions: HTMLElement, body: HTMLElement, countEl: HTMLElement): void {
-		this.headEl = head;
 		this.bodyEl = body;
 		this.countEl = countEl;
 
@@ -77,7 +76,7 @@ export class StockPanel {
 			this.drawList();
 		});
 
-		segment<Filter>(
+		this.filtersEl = segment<Filter>(
 			head,
 			[
 				{ value: "all", label: "All" },
@@ -106,9 +105,9 @@ export class StockPanel {
 
 	/** De filterknoppen opnieuw, zonder het hele scherm om te gooien. */
 	private redrawControls(): void {
-		const head = this.headEl;
-		if (!head) return;
-		const chips = head.querySelectorAll(".pantry-segment-item");
+		const filters = this.filtersEl;
+		if (!filters) return;
+		const chips = filters.querySelectorAll(".pantry-segment-item");
 		const order: Filter[] = ["all", "check", "buy"];
 		chips.forEach((chip, at) =>
 			chip.toggleClass("is-active", order[at] === this.memory.filter)

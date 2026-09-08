@@ -20,8 +20,7 @@ import {
 } from "../shopping-list";
 import { dedupe } from "../text";
 import { emptyState, keepScroll, segment } from "./kit";
-import { openHere } from "./nav";
-import { LISTS_VIEW_TYPE } from "./lists-view";
+import { LISTS_VIEW_TYPE, openHere } from "./nav";
 import type { ListView } from "./list-view";
 
 /** Een geplande maaltijd zoals hij in de kieslijst staat. */

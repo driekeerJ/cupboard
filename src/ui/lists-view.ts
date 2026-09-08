@@ -3,10 +3,9 @@ import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import { formatListDate, isOverdue, listLabel, type ShoppingList } from "../shopping-list";
 import { emptyState } from "./kit";
-import { drawBackLink, openHere } from "./nav";
-import { LIST_VIEW_TYPE } from "./list-view";
+import { LISTS_VIEW_TYPE, LIST_VIEW_TYPE, drawBackLink, openHere } from "./nav";
 
-export const LISTS_VIEW_TYPE = "pantry-shopping-lists";
+export { LISTS_VIEW_TYPE };
 
 /**
  * Alle boodschappenlijsten die nog lopen, de eerste boodschappen bovenaan.
