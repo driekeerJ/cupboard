@@ -218,6 +218,8 @@ export class ListView extends ItemView {
 					}
 					return null;
 				},
+				// Wat je koopt is de volgende stap; hier tel je alleen.
+				filters: ["all", "check"],
 				reload: () => lists.refresh(list),
 			});
 			this.stock.mount(inner, actions, body, sub);

@@ -26,9 +26,23 @@ export interface StockSource {
 	buy(product: Product): number | null;
 	/** Iets anders dan "buy 2" rechts van de naam, als er iets bijzonders is. */
 	note?(product: Product): string | null;
+	/**
+	 * Welke filterknoppen boven de lijst staan. All stock heeft ze alle drie;
+	 * de voorraadcheck van een lijst laat "To buy" weg — wat je koopt is de
+	 * volgende stap, en die heeft zijn eigen scherm.
+	 */
+	filters?: Filter[];
 	/** Doorrekenen vóór het hertekenen. */
 	reload(): Promise<void>;
 }
+
+const LABELS: Record<Filter, string> = {
+	all: "All",
+	check: "To check",
+	buy: "To buy",
+};
+
+const ALL_FILTERS: Filter[] = ["all", "check", "buy"];
 
 export class StockPanel {
 	private source: StockSource;
@@ -52,6 +66,10 @@ export class StockPanel {
 		return this.source.memory;
 	}
 
+	private options(): Filter[] {
+		return this.source.filters ?? ALL_FILTERS;
+	}
+
 	/**
 	 * Tekent de bediening in `head` en de lijst in `body`. `countEl` is de
 	 * regel onder de titel; die is van het scherm, want de titel ook.
@@ -66,6 +84,10 @@ export class StockPanel {
 			this.drawList();
 		};
 
+		// Een filter dat dit scherm niet heeft, uit een eerdere sessie of een
+		// ander scherm: dan begin je bij All.
+		if (!this.options().includes(this.memory.filter)) this.memory.filter = "all";
+
 		const search = head.createEl("input", {
 			cls: "pantry-field-search",
 			attr: { type: "text", placeholder: "Search products", enterkeyhint: "search" },
@@ -78,11 +100,7 @@ export class StockPanel {
 
 		this.filtersEl = segment<Filter>(
 			head,
-			[
-				{ value: "all", label: "All" },
-				{ value: "check", label: "To check" },
-				{ value: "buy", label: "To buy" },
-			],
+			this.options().map((value) => ({ value, label: LABELS[value] })),
 			this.memory.filter,
 			(value) => {
 				// A different filter is a different list, so it starts at the top
@@ -108,7 +126,7 @@ export class StockPanel {
 		const filters = this.filtersEl;
 		if (!filters) return;
 		const chips = filters.querySelectorAll(".pantry-segment-item");
-		const order: Filter[] = ["all", "check", "buy"];
+		const order = this.options();
 		chips.forEach((chip, at) =>
 			chip.toggleClass("is-active", order[at] === this.memory.filter)
 		);
