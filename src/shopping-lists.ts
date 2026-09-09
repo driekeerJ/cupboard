@@ -256,13 +256,20 @@ export class ShoppingLists {
 	}
 
 	/**
-	 * Hoort dit product in de voorraadcheck van deze lijst? Alles wat de lijst
-	 * vraagt en in haar winkels ligt, plus wat je zelf hebt gemarkeerd om even
-	 * te kijken — maar ook dat alleen als het hier te koop is.
+	 * Hoort dit product in de voorraadcheck van deze lijst?
+	 *
+	 * Alles wat de lijst vraagt, plus wat je zelf hebt gemarkeerd om even te
+	 * kijken. Ook wat niet in deze winkels ligt telt mee: tellen doe je thuis,
+	 * in één ronde langs je kasten, en juist daar blijkt dat je van de hummus
+	 * nog drie bakjes hebt. Blijkt er genoeg te zijn, dan valt hij vanzelf uit
+	 * de waarschuwing "Not at these shops" — hij hoefde nooit gehaald te
+	 * worden. De met de hand gezette vlag geldt alleen voor wat hier te koop
+	 * is: die zegt "kijk ernaar vóór je gaat", en dat slaat op deze winkels.
 	 */
 	relevant(list: ShoppingList, product: Product): boolean {
-		if (product.ignored || !this.atShops(list, product)) return false;
-		return product.check || this.need(list, product) > 0;
+		if (product.ignored) return false;
+		if (this.need(list, product) > 0) return true;
+		return product.check && this.atShops(list, product);
 	}
 
 	/** De lijst die dit product al op zich heeft genomen, als die eerder valt. */

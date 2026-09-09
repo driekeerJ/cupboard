@@ -118,7 +118,7 @@ test("wat al op een eerdere lijst staat, staat op de latere als herinnering", as
 
 test("een ingrediënt dat niet in deze winkels ligt is een waarschuwing", async () => {
 	// Passata ligt alleen bij de Lidl. Op een AH-lijst met de maaltijd erop
-	// staat hij niet in de check en niet op de lijst, maar apart eronder.
+	// staat hij niet op de lijst, maar apart eronder.
 	const h = await run();
 	const ah = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["AH"], meals: [DINNER] });
 	assert.ok(ah);
@@ -126,8 +126,29 @@ test("een ingrediënt dat niet in deze winkels ligt is een waarschuwing", async 
 	const buckets = h.plugin.lists.buckets(ah);
 	assert.deepEqual(buckets.buy, []);
 	assert.deepEqual(buckets.notHere.map((item) => item.name).sort(), ["Passata", "Ui"]);
-	assert.equal(h.plugin.lists.relevant(ah, product(h, "Passata")), false);
 	assert.match(h.note(ah), /## Not at these shops\n\n- \[\[Passata\]\] · 1 pak — Lidl\n- \[\[Ui\]\] · 1 stuk — Lidl/);
+});
+
+test("wat niet in deze winkels ligt wordt wél geteld", async () => {
+	// Tellen doe je thuis: dat een maaltijd om Passata vraagt terwijl je naar
+	// de AH gaat, verandert niets aan de vraag of je hem nog hebt. Blijkt van
+	// wel, dan valt de waarschuwing weg.
+	const h = await run();
+	const ah = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["AH"], meals: [DINNER] });
+	assert.ok(ah);
+
+	assert.equal(h.plugin.lists.relevant(ah, product(h, "Passata")), true);
+	// Olijfolie ligt evenmin in deze winkel, maar geen maaltijd vraagt erom:
+	// die blijft weg. Alleen wat gevraagd wordt komt erbij, niet de hele kast.
+	assert.equal(h.plugin.lists.relevant(ah, product(h, "Olijfolie")), false);
+
+	await h.plugin.products.update(product(h, "Passata"), { count: "plus" });
+	await h.plugin.lists.refresh(ah);
+	assert.deepEqual(h.plugin.lists.buckets(ah).notHere.map((item) => item.name), ["Ui"]);
+	assert.doesNotMatch(h.note(ah), /Passata/);
+	// Geteld en genoeg, maar de vraag blijft: hij hoort in de check te blijven
+	// staan, zodat een correctie meteen kan.
+	assert.equal(h.plugin.lists.relevant(ah, product(h, "Passata")), true);
 });
 
 test("de lijst verhuist mee met haar winkels en datum, met het mandje", async () => {
