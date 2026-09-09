@@ -218,12 +218,6 @@ export class ListView extends ItemView {
 					}
 					return null;
 				},
-				// Tellen doe je thuis, kopen niet: wat elders ligt staat in een
-				// eigen blok onderaan en telt niet mee als boodschap.
-				aside: {
-					title: list.shops.length > 0 ? `Not at ${list.shops.join(" · ")}` : "Not here",
-					holds: (product) => !lists.atShops(list, product),
-				},
 				reload: () => lists.refresh(list),
 			});
 			this.stock.mount(inner, actions, body, sub);

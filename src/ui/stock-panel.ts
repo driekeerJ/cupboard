@@ -26,13 +26,6 @@ export interface StockSource {
 	buy(product: Product): number | null;
 	/** Iets anders dan "buy 2" rechts van de naam, als er iets bijzonders is. */
 	note?(product: Product): string | null;
-	/**
-	 * Producten die hier alleen geteld worden en niet gekocht: ze krijgen een
-	 * eigen blok onderaan en tellen niet mee als "te kopen". Zo staat wat bij
-	 * een andere winkel ligt wél op de telronde — je loopt toch langs die kast
-	 * — zonder tussen je boodschappen te gaan staan.
-	 */
-	aside?: { title: string; holds(product: Product): boolean };
 	/** Doorrekenen vóór het hertekenen. */
 	reload(): Promise<void>;
 }
@@ -130,15 +123,8 @@ export class StockPanel {
 		return !product.check && this.source.need(product) === 0;
 	}
 
-	private aside(product: Product): boolean {
-		return this.source.aside?.holds(product) ?? false;
-	}
-
 	private belongs(product: Product): boolean {
 		if (this.irrelevant(product)) return false;
-		// Niet te koop waar je heen gaat: dan hoort hij niet thuis onder een
-		// filter dat over de boodschappen zelf gaat.
-		if (this.aside(product)) return this.memory.filter === "all";
 		if (this.memory.filter === "check") return product.check;
 		if (this.memory.filter === "buy") {
 			const buy = this.source.buy(product);
@@ -209,7 +195,6 @@ export class StockPanel {
 		let buying = 0;
 		let checking = 0;
 		all.forEach((product) => {
-			if (this.aside(product)) return;
 			if (product.check) checking++;
 			const buy = this.source.buy(product);
 			if (buy !== null && buy > 0) buying++;
@@ -230,12 +215,7 @@ export class StockPanel {
 		}
 
 		const groups = new Map<string, Product[]>();
-		const aside: Product[] = [];
 		shown.forEach((product) => {
-			if (this.aside(product)) {
-				aside.push(product);
-				return;
-			}
 			const key = product.storage || UNASSIGNED;
 			const bucket = groups.get(key) ?? [];
 			bucket.push(product);
@@ -250,16 +230,6 @@ export class StockPanel {
 				);
 				this.drawGroup(body, storage, items);
 			});
-
-		// Onderaan, na alles wat je hier wél haalt.
-		const title = this.source.aside?.title;
-		if (title && aside.length > 0) {
-			this.drawGroup(
-				body,
-				title,
-				aside.sort((a, b) => a.name.localeCompare(b.name))
-			);
-		}
 
 		restore();
 	}
