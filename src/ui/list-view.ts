@@ -209,7 +209,20 @@ export class ListView extends ItemView {
 				buy: (product) => lists.amount(list, product),
 				note: (product) => {
 					const owner = lists.ownerOf(list, product);
-					return owner ? `on ${listLabel(owner)}` : null;
+					if (owner) return `on ${listLabel(owner)}`;
+					// Hier niet te koop: dan zegt "buy 1" iets dat niet kan.
+					if (!lists.atShops(list, product)) {
+						return product.shops.length > 0
+							? `at ${product.shops.join(", ")}`
+							: "no shop set";
+					}
+					return null;
+				},
+				// Tellen doe je thuis, kopen niet: wat elders ligt staat in een
+				// eigen blok onderaan en telt niet mee als boodschap.
+				aside: {
+					title: list.shops.length > 0 ? `Not at ${list.shops.join(" · ")}` : "Not here",
+					holds: (product) => !lists.atShops(list, product),
 				},
 				reload: () => lists.refresh(list),
 			});
