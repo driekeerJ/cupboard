@@ -25,6 +25,7 @@ export class StockView extends ItemView {
 		this.panel = new StockPanel({
 			plugin,
 			memory: plugin.ui.stock,
+			needs: plugin.needs,
 			candidates: () => plugin.products.all().filter((product) => !product.ignored),
 			need: (product: Product) => product.minimum + plugin.needs.get(product),
 			buy: (product: Product) => toBuy(product, plugin.needs.get(product)),

@@ -203,6 +203,7 @@ export class ListView extends ItemView {
 			this.stock = new StockPanel({
 				plugin: this.plugin,
 				memory: this.plugin.ui.list(list.path).stock,
+				needs: lists.needsOf(list),
 				candidates: () =>
 					this.plugin.products.all().filter((product) => lists.relevant(list, product)),
 				need: (product) => lists.need(list, product),

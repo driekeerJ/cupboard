@@ -1,7 +1,7 @@
 import { Modal, Notice, setIcon } from "obsidian";
 import { guarded } from "../guard";
 import type PantryPlugin from "../main";
-import type { NeedSource } from "../needs";
+import type { NeedIndex, NeedSource } from "../needs";
 import { chipPicker } from "./kit";
 import { dedupe } from "../text";
 import { parseNumber } from "../number";
@@ -58,6 +58,13 @@ export class ProductSheet extends Modal {
 	private focus: SheetFocus;
 	private onChange: () => void;
 	private run: SheetRun | null;
+	/**
+	 * Waar "Needed for" uit leest. Vanuit een boodschappenlijst is dat de
+	 * index van díe lijst: alleen háár maaltijden. De plan-brede index wordt
+	 * sinds de lijsten alleen nog door All stock en de planner doorgerekend,
+	 * dus wie hem hier zonder meer gebruikt kijkt naar een lege of oude stand.
+	 */
+	private needs: NeedIndex;
 	private more = false;
 	/** The picker whose free-text field is open; only ever one at a time. */
 	private typing: string | null = null;
@@ -72,7 +79,8 @@ export class ProductSheet extends Modal {
 		product: Product,
 		focus: SheetFocus,
 		onChange: () => void = () => undefined,
-		run: SheetRun | null = null
+		run: SheetRun | null = null,
+		needs: NeedIndex = plugin.needs
 	) {
 		super(plugin.app);
 		this.plugin = plugin;
@@ -80,6 +88,7 @@ export class ProductSheet extends Modal {
 		this.focus = focus;
 		this.onChange = onChange;
 		this.run = run;
+		this.needs = needs;
 		this.plan();
 	}
 
@@ -197,7 +206,7 @@ export class ProductSheet extends Modal {
 	 * counts for nothing is exactly the one that confuses you at the shelf.
 	 */
 	private drawNeeds(body: HTMLElement): void {
-		const sources = this.plugin.needs.sources(this.product);
+		const sources = this.needs.sources(this.product);
 		if (sources.length === 0) return;
 
 		const block = body.createDiv({ cls: "pantry-sheet-block pantry-sheet-needs" });

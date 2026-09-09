@@ -1,6 +1,7 @@
 import { setIcon } from "obsidian";
 import { guarded } from "../guard";
 import type PantryPlugin from "../main";
+import type { NeedIndex } from "../needs";
 import { UNASSIGNED, type Product, type ProductPatch } from "../products";
 import { matchesQuery } from "../search";
 import { emptyState, keepScroll, segment } from "./kit";
@@ -18,6 +19,8 @@ import type { StockFilter as Filter, StockMemory } from "./view-memory";
 export interface StockSource {
 	plugin: PantryPlugin;
 	memory: StockMemory;
+	/** De index achter `need` en `buy`; de productkaart toont er "Needed for" uit. */
+	needs: NeedIndex;
 	/** De producten die hier überhaupt in beeld mogen komen. */
 	candidates(): Product[];
 	/** Het minimum plus wat de maaltijden vragen: tot hier loopt de strip. */
@@ -327,6 +330,7 @@ export class StockPanel {
 		items.forEach((product) =>
 			drawStockRow(list, product, {
 				plugin: this.source.plugin,
+				needs: this.source.needs,
 				need: (item) => this.source.need(item),
 				status: (item) => {
 					const note = this.source.note?.(item);

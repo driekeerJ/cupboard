@@ -343,8 +343,13 @@ export class ShopStep {
 	 */
 	private edit(product: Product): void {
 		this.editing = null;
-		new ProductSheet(this.plugin, product, "shop", () =>
-			guarded("could not refresh your shopping list", () => this.reload())
+		new ProductSheet(
+			this.plugin,
+			product,
+			"shop",
+			() => guarded("could not refresh your shopping list", () => this.reload()),
+			null,
+			this.plugin.lists.needsOf(this.list)
 		).open();
 	}
 

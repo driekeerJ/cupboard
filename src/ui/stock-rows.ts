@@ -1,5 +1,6 @@
 import { setIcon } from "obsidian";
 import type PantryPlugin from "../main";
+import type { NeedIndex } from "../needs";
 import type { Count, Product, ProductPatch } from "../products";
 import { ProductSheet } from "./product-sheet";
 
@@ -20,6 +21,8 @@ const HOLD_MS = 550;
  */
 export interface StockRowContext {
 	plugin: PantryPlugin;
+	/** De index waar dit scherm mee rekent; de productkaart leest er "Needed for" uit. */
+	needs: NeedIndex;
 	/** The number the control runs to: the minimum plus what the meals ask. */
 	need(product: Product): number;
 	/** Wat er rechts van de naam staat. */
@@ -54,7 +57,7 @@ export function drawStockRow(
 	// A product moves house more often than you would think; fix it where
 	// you notice it, which is here, halfway through the counting round.
 	name.onclick = () =>
-		new ProductSheet(ctx.plugin, product, "storage", () => ctx.redraw()).open();
+		new ProductSheet(ctx.plugin, product, "storage", () => ctx.redraw(), null, ctx.needs).open();
 	if (product.unit) {
 		name.createSpan({ cls: "pantry-stock-unit", text: product.unit });
 	}
