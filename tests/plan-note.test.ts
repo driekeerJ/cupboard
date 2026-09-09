@@ -32,10 +32,10 @@ test("een dagnotitie met $& plakt het oude blok er niet in", async () => {
 	// M14. `content.replace(pattern, block)` legt $-reeksen in `block` uit als
 	// terugverwijzing, en de dagnotitie is vrije tekst die je zelf typt.
 	const h = plan(`# Week 35\n\n${BLOK}\n`);
-	const week = await h.plugin.plans.load(WEEK);
-	assert.ok(week.days[0]);
-	week.days[0].note = "kosten $& en $1";
-	await h.plugin.plans.save(WEEK, week);
+	await h.plugin.plans.update(WEEK, (week) => {
+		assert.ok(week.days[0]);
+		week.days[0].note = "kosten $& en $1";
+	});
 
 	const after = h.vault.read(PATH);
 	assert.match(after, /note: kosten \$& en \$1/);
@@ -50,7 +50,11 @@ test("een blok zonder sluitende fence wordt niet aangevuld met een tweede", asyn
 	const h = plan(kapot);
 
 	const week = await h.plugin.plans.load(WEEK);
-	await h.plugin.plans.save(WEEK, week);
+	assert.ok(week.unreadable, "een blok zonder sluiting is onleesbaar, niet leeg");
+	await assert.rejects(
+		h.plugin.plans.update(WEEK, () => undefined),
+		/no closing fence/
+	);
 
 	const after = h.vault.read(PATH);
 	assert.equal(after, kapot, "onaangeroerd gelaten");
@@ -59,10 +63,10 @@ test("een blok zonder sluitende fence wordt niet aangevuld met een tweede", asyn
 
 test("eigen tekst rond het blok blijft staan", async () => {
 	const h = plan(`# Week 35\n\n## Boven\n\n${BLOK}\n\n## Onder\n\n- blijft\n`);
-	const week = await h.plugin.plans.load(WEEK);
-	assert.ok(week.days[0]);
-	week.days[0].note = "training";
-	await h.plugin.plans.save(WEEK, week);
+	await h.plugin.plans.update(WEEK, (week) => {
+		assert.ok(week.days[0]);
+		week.days[0].note = "training";
+	});
 
 	const after = h.vault.read(PATH);
 	assert.match(after, /## Boven/);

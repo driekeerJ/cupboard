@@ -11,7 +11,7 @@ export const DRAG_MIME = "text/plain";
 
 export type DragPayload =
 	| { kind: "recipe"; name: string }
-	| { kind: "planned"; date: string; meal: string; index: number };
+	| { kind: "planned"; date: string; meal: string; index: number; recipe?: string };
 
 export function readPayload(event: DragEvent): DragPayload | null {
 	const raw = event.dataTransfer?.getData(DRAG_MIME);

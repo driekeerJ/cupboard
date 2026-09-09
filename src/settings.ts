@@ -6,6 +6,7 @@ import {
 	type TextComponent,
 } from "obsidian";
 import type PantryPlugin from "./main";
+import { BUILD_STAMP, PANTRY_FORMAT } from "./format";
 import { WEEKDAY_NAMES } from "./date";
 import { guarded } from "./guard";
 import { DEFAULT_SHOPPING_FOLDER } from "./shopping-lists";
@@ -218,6 +219,13 @@ export class PantrySettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
+		// Welke build dit apparaat draait. Obsidian pakt een nieuwe main.js pas
+		// op na een volledige herstart, en Sync brengt hem niet vanzelf naar
+		// de telefoon; hier zie je in één oogopslag of dit apparaat bij is.
+		new Setting(containerEl)
+			.setName("Build")
+			.setDesc(`Built ${BUILD_STAMP} · note format ${PANTRY_FORMAT}. Every device should show the same build; restart Obsidian fully after updating.`);
+
 		this.renderFolders(containerEl);
 		this.renderWeek(containerEl);
 		this.renderMeals(containerEl);
@@ -357,9 +365,9 @@ export class PantrySettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("Keep cook sessions for")
+			.setName("Keep finished cook sessions and shopping lists for")
 			.setDesc(
-				"Days. Older sessions go to the trash when Obsidian starts. Notes you wrote yourself in that folder are left alone. 0 keeps everything."
+				"Days. Older cook sessions and finished shopping lists (in the Done folder) go to the trash when Obsidian starts. Notes you wrote yourself in those folders are left alone. 0 keeps everything."
 			)
 			.addText((text) => {
 				text

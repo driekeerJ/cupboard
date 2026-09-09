@@ -162,6 +162,7 @@ test("onzin in de frontmatter wordt overgeslagen, de rest niet", async () => {
 		"Pantry/Shopping/2026-08-24 Lidl.md": [
 			"---",
 			"pantry: shopping",
+			"format: 2",
 			"date: 2026-08-24",
 			"shops:",
 			"  - '[[Lidl]]'",

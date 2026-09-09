@@ -67,12 +67,12 @@ test("used staat als leesbare link in het weekplan", async () => {
 	// M41: `Products/Rijst.md: 0.33` zegt een mens niets, en Obsidian werkt dat
 	// pad bij hernoemen niet bij.
 	const h = await run();
-	const week = await h.plugin.plans.load(WEEK);
-	const entry = week.days[0]?.meals[0]?.recipes[0];
-	assert.ok(entry);
-	entry.status = "eaten";
-	entry.used = { "Products/Rijst.md": 0.334 };
-	await h.plugin.plans.save(WEEK, week);
+	await h.plugin.plans.update(WEEK, (week) => {
+		const entry = week.days[0]?.meals[0]?.recipes[0];
+		assert.ok(entry);
+		entry.status = "eaten";
+		entry.used = { "Products/Rijst.md": 0.334 };
+	});
 
 	assert.match(h.vault.read("Meal plans/2026-W35.md"), /'\[\[Rijst\]\]': 0\.334 pak/);
 

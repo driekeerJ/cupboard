@@ -158,11 +158,11 @@ test("een maaltijd die je wél kunt inkopen meldt niets", async () => {
 
 test("een afgevinkte maaltijd vraagt niets meer", async () => {
 	const h = await run();
-	const plan = await h.plugin.plans.load(new Date(2026, 7, 31));
-	const entry = plan.days.find((day) => day.date === "2026-09-02")?.meals[0]?.recipes[0];
-	assert.ok(entry);
-	entry.status = "eaten";
-	await h.plugin.plans.save(new Date(2026, 7, 31), plan);
+	await h.plugin.plans.update(new Date(2026, 7, 31), (plan) => {
+		const entry = plan.days.find((day) => day.date === "2026-09-02")?.meals[0]?.recipes[0];
+		assert.ok(entry);
+		entry.status = "eaten";
+	});
 	await h.plugin.needs.rebuild(VANDAAG, 7);
 	assert.deepEqual(lateProducts(h.plugin, ...WOENSDAGAVOND), []);
 });

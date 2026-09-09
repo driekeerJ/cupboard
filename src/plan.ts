@@ -1,11 +1,7 @@
-import {
-	Notice,
-	TFile,
-	normalizePath,
-	parseYaml,
-	stringifyYaml,
-} from "obsidian";
+import { TFile, normalizePath, parseYaml, stringifyYaml } from "obsidian";
 import type PantryPlugin from "./main";
+import { Refusal } from "./guard";
+import { FORMAT_KEY, PANTRY_FORMAT, isNewer, newerMessage } from "./format";
 import { addDays, startOfWeek, toISODate, weekId } from "./date";
 import { markdownIn } from "./folder";
 import { capturePreviewScroll, viewsFor, writeThroughEditor } from "./plan-note-write";
@@ -132,16 +128,36 @@ export class PlanStore {
 		const file = this.noteFile(weekStart);
 		if (!file) return PlanStore.emptyPlan(weekStart);
 
-		// Staat de notitie open in source mode, dan schreef `save()` alleen in
+		// Staat de notitie open in source mode, dan schreef `update()` alleen in
 		// de editorbuffer en loopt de schijf achter. `cachedRead` geeft dan de
-		// oude versie, en de eerstvolgende `mutate()` schrijft die terug — de
-		// maaltijd die je net had gesleept is dan weg. Dezelfde route als bij
-		// schrijven dus, en pas daarna de schijf.
+		// oude versie. Dezelfde route als bij schrijven dus, en pas daarna de
+		// schijf.
 		const content =
 			this.readFromEditor(file) ?? (await this.plugin.app.vault.cachedRead(file));
-		const match = BLOCK_PATTERN.exec(content);
-		if (!match) return PlanStore.emptyPlan(weekStart);
+		return this.planFrom(content, weekStart);
+	}
 
+	/**
+	 * Het plan zoals het in deze notitietekst staat.
+	 *
+	 * Geen blok is een lege week — een notitie die iemand zelf begon en waar
+	 * Pantry het blok nog aan toe moet voegen. Een blok dat er wél is maar niet
+	 * te lezen valt (YAML-fout, opening zonder sluiting) is iets anders: dan
+	 * weten we niet wat er gepland is. Dat plan is leeg én gemarkeerd, en
+	 * `update()` weigert erop te schrijven. Anders wist de eerstvolgende
+	 * maaltijd die je erbij sleept stilletjes de hele week.
+	 */
+	private planFrom(content: string, weekStart: Date): WeekPlan {
+		const match = BLOCK_PATTERN.exec(content);
+		if (!match) {
+			if (content.includes(`\`\`\`${BLOCK_LANGUAGE}`)) {
+				return {
+					...PlanStore.emptyPlan(weekStart),
+					unreadable: "the meal-plan block has no closing fence",
+				};
+			}
+			return PlanStore.emptyPlan(weekStart);
+		}
 		return this.normalise(PlanStore.parse(match[1] ?? "", weekStart));
 	}
 
@@ -170,16 +186,29 @@ export class PlanStore {
 		return plan;
 	}
 
-	/** Defensive: the block is hand-editable, so anything may show up in it. */
+	/**
+	 * Defensive: the block is hand-editable, so anything may show up in it.
+	 *
+	 * Een YAML-fout geeft een leeg plan dat als onleesbaar gemarkeerd is —
+	 * niet stilletjes leeg, want leeg zou bij de volgende schrijfactie de
+	 * waarheid worden.
+	 */
 	static parse(body: string, weekStart: Date): WeekPlan {
 		let raw: unknown;
 		try {
 			raw = parseYaml(body);
-		} catch {
-			return PlanStore.emptyPlan(weekStart);
+		} catch (error) {
+			const reason = error instanceof Error ? error.message.split("\n")[0] ?? "" : "";
+			return {
+				...PlanStore.emptyPlan(weekStart),
+				unreadable: `the meal-plan block is not valid YAML${reason ? ` (${reason})` : ""}`,
+			};
 		}
 
 		const record = asRecord(raw);
+		if (isNewer(record[FORMAT_KEY])) {
+			return { ...PlanStore.emptyPlan(weekStart), unreadable: newerMessage(record[FORMAT_KEY]) };
+		}
 		const days: PlannedDay[] = asArray(record.days).map((rawDay) => {
 			const day = asRecord(rawDay);
 			const note = asText(day.note).trim();
@@ -258,6 +287,7 @@ export class PlanStore {
 
 	serialise(plan: WeekPlan): string {
 		const clean = {
+			[FORMAT_KEY]: PANTRY_FORMAT,
 			weekStart: plan.weekStart,
 			days: plan.days
 				.map((day) => ({
@@ -293,64 +323,103 @@ export class PlanStore {
 		return `${PLAN_BLOCK_NOTE}\n${stringifyYaml(clean).trimEnd()}`;
 	}
 
-	async save(weekStart: Date, plan: WeekPlan): Promise<void> {
-		const { vault } = this.plugin.app;
+	private blockFor(plan: WeekPlan): string {
+		return `\`\`\`${BLOCK_LANGUAGE}\n${this.serialise(plan)}\n\`\`\``;
+	}
 
+	/**
+	 * Past één wijziging toe op het plan zoals het **nu in de notitie staat**,
+	 * en geeft het plan terug zoals het geschreven is.
+	 *
+	 * Dit is de enige manier om een weekplan te schrijven. Er was een
+	 * `save(plan)` die een compleet plan uit het geheugen wegschreef, en die
+	 * kostte op 2026-09-09 een week: de planner op de telefoon had de notitie
+	 * geladen vóórdat Sync de versie van de Mac bracht, toonde dus een lege
+	 * week, en "maaltijd toevoegen" schreef die lege week plus één maaltijd
+	 * over alles heen — inclusief het boodschappenmoment van de lijst. Een
+	 * geheugenkopie is per definitie oud; de notitie is de waarheid, en een
+	 * wijziging is een wijziging **daarop**.
+	 *
+	 * De wijziging wordt binnen `vault.process` toegepast, dus op de inhoud
+	 * die Obsidian op dat moment heeft, en het resultaat vervangt alleen het
+	 * blok. `change` moet synchroon zijn en mag opnieuw aangeroepen worden op
+	 * een ander plan-object dan de aanroeper in beeld heeft — zoek een
+	 * maaltijd dus op datum, maaltijd en positie, niet op objectidentiteit.
+	 *
+	 * Is de notitie niet te lezen (`unreadable`), dan wordt er niets
+	 * geschreven en gooit dit een fout: liever een melding dan een week kwijt.
+	 */
+	async update(weekStart: Date, change: (plan: WeekPlan) => void): Promise<WeekPlan> {
+		const { vault } = this.plugin.app;
 		const path = this.notePath(weekStart);
-		const block = `\`\`\`${BLOCK_LANGUAGE}\n${this.serialise(plan)}\n\`\`\``;
 
 		const existing = vault.getFileByPath(path);
 		if (!existing) {
+			const plan = PlanStore.emptyPlan(weekStart);
+			change(plan);
 			await ensureFolder(vault, path);
-			const fresh = PlanStore.template(weekStart, block);
+			const fresh = PlanStore.template(weekStart, this.blockFor(plan));
 			this.lastWritten = fresh;
 			await vault.create(path, fresh);
-			return;
+			return plan;
 		}
 
 		// Prefer the editor when the note is open: rewriting the whole file
 		// replaces the editor's document, which drops the cursor at the end and
-		// scrolls the note to the bottom under the user.
-		// De editor flusht pas seconden later naar schijf; onthoud nu al wat er
-		// straks in het modify-event zal staan.
-		const throughEditor = writeThroughEditor(
-			this.plugin.app,
-			existing,
-			block,
-			BLOCK_PATTERN
-		);
-		if (throughEditor !== null) {
-			this.lastWritten = throughEditor;
-			return;
+		// scrolls the note to the bottom under the user. De editor flusht pas
+		// seconden later naar schijf; onthoud nu al wat er straks in het
+		// modify-event zal staan. En lees dan ook uít de editor: de schijf
+		// loopt op dat moment achter.
+		const inEditor = this.readFromEditor(existing);
+		if (inEditor !== null) {
+			const plan = this.planFrom(inEditor, weekStart);
+			this.refuseIfUnreadable(plan, existing);
+			change(plan);
+			const throughEditor = writeThroughEditor(
+				this.plugin.app,
+				existing,
+				this.blockFor(plan),
+				BLOCK_PATTERN
+			);
+			if (throughEditor !== null) {
+				this.lastWritten = throughEditor;
+				return plan;
+			}
+			// Geen blok in de editor: dan voegt process() het hieronder toe.
 		}
 
 		const restoreScroll = capturePreviewScroll(this.plugin.app, existing);
-		let refused = false;
-		this.lastWritten = await vault.process(existing, (content: string) => {
+		let result: WeekPlan | null = null;
+		let written: string | null = null;
+		const outcome = await vault.process(existing, (content: string) => {
+			const plan = this.planFrom(content, weekStart);
+			if (plan.unreadable) return content;
+			change(plan);
+			result = plan;
+			const block = this.blockFor(plan);
 			if (BLOCK_PATTERN.test(content)) {
 				// De functievorm, want `block` bevat vrije tekst: de dagnotitie
 				// typ je zelf. Als vervangingspatroon zou `$&` het complete
 				// oude blok midden in het nieuwe plakken en `$1` de oude YAML.
-				return content.replace(BLOCK_PATTERN, () => block);
+				written = content.replace(BLOCK_PATTERN, () => block);
+			} else {
+				written = `${content.trimEnd()}\n\n${block}\n`;
 			}
-			// Een opening zonder sluiting: dan matcht het patroon niet en zou er
-			// een tweede blok onderaan komen. De opslag daarna matcht van de
-			// oude opening tot de nieuwe sluiting en eet alles ertussen op,
-			// inclusief wat de gebruiker daar zelf geschreven heeft.
-			if (content.includes(`\`\`\`${BLOCK_LANGUAGE}`)) {
-				refused = true;
-				return content;
-			}
-			return `${content.trimEnd()}\n\n${block}\n`;
+			return written;
 		});
 		restoreScroll();
 
-		if (refused) {
-			console.error(`Pantry: unclosed meal-plan block in ${path}`);
-			new Notice(
-				`Pantry did not save: the meal-plan block in ${existing.basename} has no closing fence. Fix it in the note and try again.`
-			);
+		if (result === null || written === null) {
+			this.refuseIfUnreadable(this.planFrom(outcome, weekStart), existing);
+			throw new Error(`Pantry could not update ${path}`);
 		}
+		this.lastWritten = written;
+		return result;
+	}
+
+	private refuseIfUnreadable(plan: WeekPlan, file: TFile): void {
+		if (!plan.unreadable) return;
+		throw new Refusal(`Pantry did not save ${file.basename}: ${plan.unreadable}.`);
 	}
 
 	/** De inhoud zoals de open editor hem kent, of null als hij niet openstaat. */
@@ -387,15 +456,8 @@ export class PlanStore {
 		const to = newName.trim();
 		if (from.length === 0 || to.length === 0 || from === to.toLowerCase()) return 0;
 
-		let changedNotes = 0;
-		for (const file of this.planFiles()) {
-			const content = await this.plugin.app.vault.cachedRead(file);
-			const match = BLOCK_PATTERN.exec(content);
-			if (!match) continue;
-
-			const plan = PlanStore.parse(match[1] ?? "", new Date());
+		return this.rewriteAll((plan) => {
 			let touched = false;
-
 			for (const day of plan.days) {
 				for (const meal of day.meals) {
 					for (const entry of meal.recipes) {
@@ -405,16 +467,8 @@ export class PlanStore {
 					}
 				}
 			}
-			if (!touched) continue;
-
-			const block = `\`\`\`${BLOCK_LANGUAGE}\n${this.serialise(plan)}\n\`\`\``;
-			this.lastWritten = await this.plugin.app.vault.process(file, (current: string) =>
-				current.replace(BLOCK_PATTERN, () => block)
-			);
-			changedNotes++;
-		}
-
-		return changedNotes;
+			return touched;
+		});
 	}
 
 	async renameEverywhere(
@@ -429,15 +483,8 @@ export class PlanStore {
 		const matches = (value: string) =>
 			value.trim().toLowerCase() === from.toLowerCase();
 
-		let changedNotes = 0;
-		for (const file of this.planFiles()) {
-			const content = await this.plugin.app.vault.read(file);
-			const match = BLOCK_PATTERN.exec(content);
-			if (!match) continue;
-
-			const plan = PlanStore.parse(match[1] ?? "", new Date());
+		return this.rewriteAll((plan) => {
 			let touched = false;
-
 			for (const day of plan.days) {
 				for (const meal of day.meals) {
 					if (kind === "meal" && matches(meal.meal)) {
@@ -457,18 +504,35 @@ export class PlanStore {
 					}
 				}
 			}
+			return touched;
+		});
+	}
 
+	/**
+	 * Eén wijziging over alle weeknotities, elk binnen zijn eigen
+	 * `vault.process`: gelezen en herschreven in dezelfde stap, zodat er geen
+	 * versie tussen zit die intussen van een ander apparaat kwam. Een notitie
+	 * zonder blok, of met een onleesbaar blok, blijft met rust — daar valt
+	 * niets in te hernoemen zonder de rest te vernielen.
+	 */
+	private async rewriteAll(change: (plan: WeekPlan) => boolean): Promise<number> {
+		let changedNotes = 0;
+		for (const file of this.planFiles()) {
+			let touched = false;
+			const written = await this.plugin.app.vault.process(file, (current: string) => {
+				const match = BLOCK_PATTERN.exec(current);
+				if (!match) return current;
+				const plan = PlanStore.parse(match[1] ?? "", new Date());
+				if (plan.unreadable || !change(plan)) return current;
+				touched = true;
+				// Functievorm: zie `update()`. Een dagnotitie met `$&` erin zou
+				// het oude blok midden in het nieuwe plakken.
+				return current.replace(BLOCK_PATTERN, () => this.blockFor(plan));
+			});
 			if (!touched) continue;
-
-			const block = `\`\`\`${BLOCK_LANGUAGE}\n${this.serialise(plan)}\n\`\`\``;
-			this.lastWritten = await this.plugin.app.vault.process(file, (current: string) =>
-				// Functievorm: zie `save()`. Een dagnotitie met `$&` erin zou het
-				// oude blok midden in het nieuwe plakken.
-				current.replace(BLOCK_PATTERN, () => block)
-			);
+			this.lastWritten = written;
 			changedNotes++;
 		}
-
 		return changedNotes;
 	}
 
@@ -652,4 +716,45 @@ export function isEater(stored: string, name: string, id: string): boolean {
 
 export function formatServings(value: number): string {
 	return Number.isInteger(value) ? `${value}` : value.toFixed(2).replace(/0+$/, "");
+}
+
+/**
+ * Een maaltijd in het plan aanwijzen zonder objectidentiteit: `update()`
+ * geeft de wijziging een vers gelezen plan, dus het object dat het scherm
+ * vasthoudt is daar nooit in te vinden. Datum, maaltijd en positie wijzen
+ * hem aan; het recept is de controle dat het nog steeds dezelfde is — is
+ * de positie intussen verschoven (een ander apparaat haalde er een weg),
+ * dan wint het recept in dezelfde maaltijd.
+ */
+export interface EntryRef {
+	date: string;
+	meal: string;
+	index: number;
+	/** Receptnaam zonder haakjes, zie `linkTarget`. */
+	recipe: string;
+}
+
+export function refOf(
+	date: string,
+	meal: MealType | string,
+	index: number,
+	entry: PlannedRecipe
+): EntryRef {
+	return {
+		date,
+		meal: typeof meal === "string" ? meal : mealLabel(meal),
+		index,
+		recipe: linkTarget(entry.recipe),
+	};
+}
+
+export function entryAt(plan: WeekPlan, ref: EntryRef): PlannedRecipe | null {
+	const slot = plan.days
+		.find((day) => day.date === ref.date)
+		?.meals.find((meal) => sameLabel(meal.meal, ref.meal));
+	if (!slot) return null;
+	const wanted = ref.recipe.toLowerCase();
+	const atIndex = slot.recipes[ref.index];
+	if (atIndex && linkTarget(atIndex.recipe).toLowerCase() === wanted) return atIndex;
+	return slot.recipes.find((entry) => linkTarget(entry.recipe).toLowerCase() === wanted) ?? null;
 }

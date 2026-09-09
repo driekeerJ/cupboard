@@ -1,5 +1,6 @@
 import { ItemView, Notice, ViewStateResult, WorkspaceLeaf, setIcon } from "obsidian";
 import { guarded } from "../guard";
+import { confirm } from "./confirm";
 import type PantryPlugin from "../main";
 import { formatListDate, listLabel, type ShoppingList } from "../shopping-list";
 import { segment } from "./kit";
@@ -254,6 +255,12 @@ export class ListView extends ItemView {
 		done.setAttr("aria-label", "Finish this shopping list");
 		done.onclick = () =>
 			guarded("could not finish the list", async () => {
+				const sure = await confirm(this.app, {
+					title: `Finish ${listLabel(list)}?`,
+					body: "The list moves to the Done folder and disappears from Shopping lists. Its shopping moment stays in the meal plan.",
+					action: "Finish",
+				});
+				if (!sure) return;
 				await this.plugin.lists.finish(list);
 				this.plugin.ui.forgetList(list.path);
 				new Notice(`${listLabel(list)} is done.`);

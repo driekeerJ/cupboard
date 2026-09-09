@@ -12,10 +12,14 @@ import {
 import { toBuy, type Product } from "./products";
 import { DEFAULT_EXTRA_AMOUNT, extraLabel, newExtraId, type Extra } from "./extras";
 import { groupForShopping, NO_SHOP } from "./grouping";
-import { fromISODate, startOfWeek } from "./date";
+import { fromISODate, startOfWeek, toISODate } from "./date";
+import { asText } from "./text";
 import { setShopping, shoppingAt } from "./plan";
 import type { ShoppingStop } from "./types";
 import {
+	DONE_FOLDER,
+	DONE_MARK_VALUE,
+	LIST_MARK,
 	LIST_REGION,
 	hasShop,
 	isValidDraft,
@@ -27,10 +31,12 @@ import {
 	serialiseList,
 	type Arrival,
 	type BasketEntry,
+	noUnresolved,
 	type ListDraft,
 	type MealRef,
 	type ShoppingList,
 } from "./shopping-list";
+import { Refusal } from "./guard";
 
 /** Waar de lijsten staan als er niets is ingesteld. */
 export const DEFAULT_SHOPPING_FOLDER = "Pantry/Shopping";
@@ -49,7 +55,7 @@ const SIGNATURE =
 	"*Kept up to date by Pantry. Tick a box and that product counts as full again.*";
 
 /** De sleutels die de plugin zelf beheert in de frontmatter van een lijst. */
-const OWN_KEYS = ["pantry", "date", "arrives", "shops", "meals", "basket", "nudge", "skipped", "extras"];
+const OWN_KEYS = ["pantry", "format", "date", "arrives", "shops", "meals", "basket", "nudge", "skipped", "extras"];
 
 /** Wat een lijst deze keer te zeggen heeft over elk product. */
 export interface ListBuckets {
@@ -67,6 +73,20 @@ export interface ListBuckets {
 function cleanAmount(value: number): number {
 	const amount = Math.round(Number(value));
 	return Number.isFinite(amount) && amount > 0 ? amount : DEFAULT_EXTRA_AMOUNT;
+}
+
+/** Neemt alles wat de notitie zegt over in het object dat het scherm vasthoudt. */
+function adopt(into: ShoppingList, from: ShoppingList): void {
+	into.date = from.date;
+	into.arrival = from.arrival;
+	into.shops = from.shops;
+	into.meals = from.meals;
+	into.basket = from.basket;
+	into.nudge = from.nudge;
+	into.skipped = from.skipped;
+	into.extras = from.extras;
+	into.unresolved = from.unresolved;
+	into.frozen = from.frozen;
 }
 
 /** Eerder is eerder: op datum, en bij dezelfde dag op pad — vast en voorspelbaar. */
@@ -106,6 +126,12 @@ export class ShoppingLists {
 	/** Op datum, de eerste boodschappen bovenaan. */
 	all(): ShoppingList[] {
 		return [...this.lists.values()].sort((a, b) => (precedes(a, b) ? -1 : 1));
+	}
+
+	/** De reden dat deze build een lijst niet mag schrijven, als er zo'n lijst is. */
+	frozenReason(): string | null {
+		for (const list of this.lists.values()) if (list.frozen) return list.frozen;
+		return null;
 	}
 
 	byPath(path: string): ShoppingList | null {
@@ -160,18 +186,24 @@ export class ShoppingLists {
 			nudge: new Map(),
 			skipped: new Set(),
 			extras: parsed.extras,
+			unresolved: noUnresolved(),
+			frozen: parsed.frozen,
 		};
+		// Wat niet oplost blijft bewaard op naam: zie ShoppingList.unresolved.
 		for (const { name, entry } of parsed.basket) {
 			const product = this.resolve(name, path);
 			if (product) list.basket.set(product.path, entry);
+			else list.unresolved.basket.push({ name, entry });
 		}
 		for (const { name, step } of parsed.nudge) {
 			const product = this.resolve(name, path);
 			if (product) list.nudge.set(product.path, step);
+			else list.unresolved.nudge.push({ name, step });
 		}
 		for (const name of parsed.skipped) {
 			const product = this.resolve(name, path);
 			if (product) list.skipped.add(product.path);
+			else list.unresolved.skipped.push(name);
 		}
 		return list;
 	}
@@ -409,10 +441,12 @@ export class ShoppingLists {
 			nudge: new Map(),
 			skipped: new Set(),
 			extras: [],
+			unresolved: noUnresolved(),
+			frozen: null,
 		};
 		this.lists.set(path, list);
 		await this.needsOf(list).rebuildFor(list);
-		await this.write(list, true);
+		await this.createNote(list);
 		await this.placeStops(list.date, list.shops, list.arrival);
 		return list;
 	}
@@ -426,16 +460,15 @@ export class ShoppingLists {
 		if (!isValidDraft(draft)) return;
 		const before = { date: list.date, shops: [...list.shops] };
 
-		list.date = draft.date;
-		list.arrival = draft.arrival;
-		list.shops = [...draft.shops];
-		list.meals = draft.meals.map((ref) => ({ ...ref }));
+		const wanted = listPath(this.folder(), draft);
+		if (wanted !== list.path) await this.move(list, this.freePath(draft));
 
-		const wanted = listPath(this.folder(), list);
-		if (wanted !== list.path) await this.move(list, this.freePath(list));
-
-		await this.needsOf(list).rebuildFor(list);
-		await this.write(list);
+		await this.mutate(list, (fresh) => {
+			fresh.date = draft.date;
+			fresh.arrival = draft.arrival;
+			fresh.shops = [...draft.shops];
+			fresh.meals = draft.meals.map((ref) => ({ ...ref }));
+		});
 
 		const sameStop =
 			before.date === list.date &&
@@ -468,9 +501,71 @@ export class ShoppingLists {
 		if (written !== undefined) this.lastWritten.set(to, written);
 	}
 
-	/** Klaar: de notitie gaat weg, het boodschappenmoment blijft in het plan staan. */
+	/**
+	 * Klaar: de notitie verhuist naar `Done/` en krijgt het merk
+	 * `shopping-done`; het boodschappenmoment blijft in het plan staan.
+	 *
+	 * Eerst ging de notitie de prullenbak in. Op een telefoon is Done één
+	 * tik, en op 2026-09-09 was een lijst ineens weg zonder dat na te gaan
+	 * viel hoe. Een afgeronde lijst is bovendien een verslag van wat je
+	 * gehaald hebt. Dus: opzij, niet weg — `sweep()` ruimt hem later op.
+	 */
 	async finish(list: ShoppingList): Promise<void> {
-		await this.remove(list);
+		const { vault } = this.plugin.app;
+		const file = vault.getFileByPath(list.path);
+		this.forget(list.path);
+		if (!file) return;
+
+		const today = toISODate(new Date());
+		await vault.process(file, (latest: string) => {
+			const match = FRONTMATTER.exec(latest);
+			const existing = this.frontmatterOf(latest);
+			existing[LIST_MARK] = DONE_MARK_VALUE;
+			existing.done = today;
+			const yaml = stringifyYaml(existing).trimEnd();
+			const body = match ? latest.slice(match[0].length) : latest;
+			return `---\n${yaml}\n---\n${body}`;
+		});
+
+		const target = this.freeDonePath(file.basename);
+		await ensureFolder(vault, target);
+		await this.plugin.app.fileManager.renameFile(file, target);
+	}
+
+	private doneFolder(): string {
+		return `${this.folder()}/${DONE_FOLDER}`;
+	}
+
+	private freeDonePath(basename: string): string {
+		const base = `${this.doneFolder()}/${basename}.md`;
+		if (!this.plugin.app.vault.getFileByPath(base)) return base;
+		for (let n = 2; n < 100; n += 1) {
+			const candidate = base.replace(/\.md$/, ` ${n}.md`);
+			if (!this.plugin.app.vault.getFileByPath(candidate)) return candidate;
+		}
+		return base;
+	}
+
+	/**
+	 * Ruimt afgeronde lijsten op die ouder zijn dan `cookKeepDays` — dezelfde
+	 * termijn als kooksessies, want het is dezelfde vraag: hoe lang wil je
+	 * terug kunnen kijken. Alleen notities met het merk `shopping-done` en
+	 * een `done`-datum; wat iemand zelf in die map zette blijft staan.
+	 */
+	async sweep(): Promise<void> {
+		const days = this.plugin.settings.cookKeepDays;
+		if (!days || days <= 0) return;
+		const cutoff = toISODate(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
+		for (const file of markdownIn(this.plugin.app.vault, this.doneFolder())) {
+			const content = await this.plugin.app.vault.cachedRead(file);
+			const frontmatter = this.frontmatterOf(content);
+			if (frontmatter[LIST_MARK] !== DONE_MARK_VALUE) continue;
+			const raw = frontmatter.done;
+			// Obsidian leest een kale datum als Date; js-yaml in het harnas als tekst.
+			const done = raw instanceof Date ? toISODate(raw) : asText(raw).slice(0, 10);
+			if (!/^\d{4}-\d{2}-\d{2}$/.test(done) || done > cutoff) continue;
+			await this.plugin.app.fileManager.trashFile(file);
+		}
 	}
 
 	/** Toch niet: de notitie én het boodschappenmoment gaan weg. */
@@ -498,10 +593,12 @@ export class ShoppingLists {
 		const day = fromISODate(date);
 		if (!day) return;
 		const weekStart = startOfWeek(day, this.plugin.settings.weekStartDay);
-		const plan = await this.plugin.plans.load(weekStart);
-		const kept = shoppingAt(plan, date).filter((stop) => !hasShop(shops, stop.shop));
-		setShopping(plan, date, [...kept, ...shops.map((shop) => this.stopFor(shop, arrival))]);
-		await this.plugin.plans.save(weekStart, plan);
+		// Op de notitie zoals hij nú is, niet op een gelezen kopie: zie
+		// PlanStore.update.
+		await this.plugin.plans.update(weekStart, (plan) => {
+			const kept = shoppingAt(plan, date).filter((stop) => !hasShop(shops, stop.shop));
+			setShopping(plan, date, [...kept, ...shops.map((shop) => this.stopFor(shop, arrival))]);
+		});
 	}
 
 	private async removeStops(date: string, shops: string[]): Promise<void> {
@@ -509,12 +606,15 @@ export class ShoppingLists {
 		const day = fromISODate(date);
 		if (!day) return;
 		const weekStart = startOfWeek(day, this.plugin.settings.weekStartDay);
+		// Alleen schrijven als er iets weg te halen valt; een lege wijziging
+		// zou anders een notitie aanmaken voor een week zonder plan.
 		const plan = await this.plugin.plans.load(weekStart);
 		const stops = shoppingAt(plan, date);
-		const kept = stops.filter((stop) => !hasShop(shops, stop.shop));
-		if (kept.length === stops.length) return;
-		setShopping(plan, date, kept);
-		await this.plugin.plans.save(weekStart, plan);
+		if (stops.every((stop) => !hasShop(shops, stop.shop))) return;
+		await this.plugin.plans.update(weekStart, (fresh) => {
+			const current = shoppingAt(fresh, date);
+			setShopping(fresh, date, current.filter((stop) => !hasShop(shops, stop.shop)));
+		});
 	}
 
 	// --------------------------------------------------------------- mandje
@@ -533,17 +633,30 @@ export class ShoppingLists {
 		await this.write(list);
 	}
 
+	/**
+	 * Zet het product in het mandje van de lijst zoals hij in de notitie
+	 * staat, en boekt de voorraad. De productnotitie is van de voorraad, de
+	 * lijstnotitie van het mandje; allebei worden ze aangepast op wat er nu
+	 * staat, niet op wat het scherm nog dacht.
+	 */
 	private async markBoughtQuietly(list: ShoppingList, product: Product): Promise<void> {
 		// Ook de check-vlag bewaren: die wordt hieronder gewist, en zonder
 		// bewaren kreeg een product uit "Check first" hem nooit meer terug.
-		list.basket.set(product.path, { count: product.count, check: product.check });
-		list.nudge.delete(product.path);
+		const entry: BasketEntry = { count: product.count, check: product.check };
+		await this.mutate(list, (fresh) => {
+			if (fresh.basket.has(product.path)) return;
+			fresh.basket.set(product.path, entry);
+			fresh.nudge.delete(product.path);
+		});
 		await this.plugin.products.update(product, { count: "plus", check: false });
 	}
 
 	private async undoBoughtQuietly(list: ShoppingList, product: Product): Promise<void> {
-		const before: BasketEntry | undefined = list.basket.get(product.path);
-		list.basket.delete(product.path);
+		let before: BasketEntry | undefined;
+		await this.mutate(list, (fresh) => {
+			before = fresh.basket.get(product.path);
+			fresh.basket.delete(product.path);
+		});
 		await this.plugin.products.update(product, {
 			count: before?.count ?? null,
 			check: before?.check ?? false,
@@ -551,9 +664,10 @@ export class ShoppingLists {
 	}
 
 	async setNudge(list: ShoppingList, product: Product, step: number): Promise<void> {
-		if (step === 0) list.nudge.delete(product.path);
-		else list.nudge.set(product.path, step);
-		await this.write(list);
+		await this.mutate(list, (fresh) => {
+			if (step === 0) fresh.nudge.delete(product.path);
+			else fresh.nudge.set(product.path, step);
+		});
 	}
 
 	/**
@@ -562,9 +676,10 @@ export class ShoppingLists {
 	 * in huis is, en daar verandert een winkelbezoek te voet niets aan.
 	 */
 	async setSkipped(list: ShoppingList, product: Product, skipped: boolean): Promise<void> {
-		if (skipped) list.skipped.add(product.path);
-		else list.skipped.delete(product.path);
-		await this.write(list);
+		await this.mutate(list, (fresh) => {
+			if (skipped) fresh.skipped.add(product.path);
+			else fresh.skipped.delete(product.path);
+		});
 	}
 
 	// ------------------------------------------------------ losse boodschappen
@@ -583,8 +698,9 @@ export class ShoppingLists {
 			shop: draft.shop.trim(),
 			shelf: draft.shelf.trim(),
 		};
-		list.extras.push(extra);
-		await this.write(list);
+		await this.mutate(list, (fresh) => {
+			fresh.extras.push(extra);
+		});
 		return extra;
 	}
 
@@ -593,24 +709,27 @@ export class ShoppingLists {
 		id: string,
 		patch: Partial<Omit<Extra, "id">>
 	): Promise<void> {
-		const extra = this.extraById(list, id);
-		if (!extra) return;
-		if (patch.name !== undefined) {
-			const name = patch.name.trim();
-			if (name.length > 0) extra.name = name;
-		}
-		if (patch.amount !== undefined) extra.amount = cleanAmount(patch.amount);
-		if (patch.shop !== undefined) extra.shop = patch.shop.trim();
-		if (patch.shelf !== undefined) extra.shelf = patch.shelf.trim();
-		await this.write(list);
+		if (!this.extraById(list, id)) return;
+		await this.mutate(list, (fresh) => {
+			const extra = this.extraById(fresh, id);
+			if (!extra) return;
+			if (patch.name !== undefined) {
+				const name = patch.name.trim();
+				if (name.length > 0) extra.name = name;
+			}
+			if (patch.amount !== undefined) extra.amount = cleanAmount(patch.amount);
+			if (patch.shop !== undefined) extra.shop = patch.shop.trim();
+			if (patch.shelf !== undefined) extra.shelf = patch.shelf.trim();
+		});
 	}
 
 	/** Afvinken is wissen: een los regeltje heeft geen voorraad om naar terug te vallen. */
 	async removeExtra(list: ShoppingList, id: string): Promise<void> {
-		const at = list.extras.findIndex((extra) => extra.id === id);
-		if (at === -1) return;
-		list.extras.splice(at, 1);
-		await this.write(list);
+		if (!this.extraById(list, id)) return;
+		await this.mutate(list, (fresh) => {
+			const at = fresh.extras.findIndex((extra) => extra.id === id);
+			if (at !== -1) fresh.extras.splice(at, 1);
+		});
 	}
 
 	private matchExtra(list: ShoppingList, text: string): Extra | null {
@@ -646,20 +765,16 @@ export class ShoppingLists {
 		if (known) {
 			// Keuzes uit de notitie; het mandje ook, want daar staan de vinkjes
 			// van een ander apparaat in.
-			known.date = fresh.date;
-			known.arrival = fresh.arrival;
-			known.shops = fresh.shops;
-			known.meals = fresh.meals;
-			known.basket = fresh.basket;
-			known.nudge = fresh.nudge;
-			known.skipped = fresh.skipped;
-			known.extras = fresh.extras;
+			adopt(known, fresh);
 		} else {
 			this.lists.set(file.path, list);
 		}
 
-		let inBought = false;
+		// Eerst alle vinkjes lezen, dan boeken, dan één keer schrijven.
+		const bought: Product[] = [];
+		const returned: Product[] = [];
 		const tickedExtras: string[] = [];
+		let inBought = false;
 		for (const line of content.split(/\r?\n/)) {
 			if (line.startsWith("## ")) {
 				inBought = line.trim() === BOUGHT_HEADING;
@@ -673,11 +788,8 @@ export class ShoppingLists {
 			if (match) {
 				const product = this.resolve((match[2] ?? "").trim(), file.path);
 				if (!product) continue;
-				if (ticked && !inBought && !list.basket.has(product.path)) {
-					await this.markBoughtQuietly(list, product);
-				} else if (!ticked && inBought && list.basket.has(product.path)) {
-					await this.undoBoughtQuietly(list, product);
-				}
+				if (ticked && !inBought && !list.basket.has(product.path)) bought.push(product);
+				else if (!ticked && inBought && list.basket.has(product.path)) returned.push(product);
 				continue;
 			}
 
@@ -685,13 +797,17 @@ export class ShoppingLists {
 			const extra = this.matchExtra(list, (box[2] ?? "").trim());
 			if (extra) tickedExtras.push(extra.id);
 		}
-		for (const id of tickedExtras) {
-			const at = list.extras.findIndex((extra) => extra.id === id);
-			if (at !== -1) list.extras.splice(at, 1);
-		}
+
+		for (const product of bought) await this.markBoughtQuietly(list, product);
+		for (const product of returned) await this.undoBoughtQuietly(list, product);
 
 		await this.needsOf(list).rebuildFor(list);
-		await this.write(list);
+		await this.mutate(list, (current) => {
+			for (const id of tickedExtras) {
+				const at = current.extras.findIndex((extra) => extra.id === id);
+				if (at !== -1) current.extras.splice(at, 1);
+			}
+		});
 	}
 
 	/**
@@ -699,32 +815,84 @@ export class ShoppingLists {
 	 * afvinklijst in het stuk dat Pantry beheert. Wat je zelf onder de lijst
 	 * schrijft blijft staan; een frontmatter-veld dat niet van ons is ook.
 	 */
-	async write(list: ShoppingList, fresh = false): Promise<void> {
-		const { vault } = this.plugin.app;
-		// M40: een lege productindex is geen boodschappenlijst van niks.
-		if (this.plugin.products.all().length === 0) return;
+	async write(list: ShoppingList): Promise<void> {
+		await this.mutate(list, null);
+	}
 
+	private async createNote(list: ShoppingList): Promise<void> {
+		const { vault } = this.plugin.app;
+		await ensureFolder(vault, list.path);
+		const content = this.compose(list, "");
+		this.lastWritten.set(list.path, content);
+		await vault.create(list.path, content);
+	}
+
+	/**
+	 * Past één wijziging toe op de lijst **zoals hij nu in de notitie staat**
+	 * en schrijft het resultaat. Dit is de enige weg naar de notitie.
+	 *
+	 * Het object in het geheugen is een kopie van een moment; de notitie kan
+	 * intussen van een ander apparaat een vinkje gekregen hebben dat hier nog
+	 * niet verwerkt is. Vanuit het geheugen schrijven zou dat vinkje wissen —
+	 * en het product stond op dat apparaat al op "gekocht". Daarom leest dit
+	 * binnen `vault.process` de frontmatter opnieuw, past de wijziging daarop
+	 * toe, en neemt daarna dat resultaat over in het object dat het scherm
+	 * vasthoudt. De body is een spiegel en wordt altijd opnieuw getekend.
+	 *
+	 * `change` moet synchroon zijn; de voorraad boeken gebeurt erbuiten.
+	 */
+	private async mutate(
+		list: ShoppingList,
+		change: ((fresh: ShoppingList) => void) | null
+	): Promise<void> {
+		const { vault } = this.plugin.app;
 		const file = vault.getFileByPath(list.path);
 		if (!file) {
-			if (!fresh) return;
-			await ensureFolder(vault, list.path);
-			const content = this.compose(list, "");
-			this.lastWritten.set(list.path, content);
-			await vault.create(list.path, content);
+			// De notitie is weg (Done op een ander apparaat, of nog niet
+			// gesynchroniseerd). Niet opnieuw aanmaken: dat zou een lijst
+			// terugbrengen die iemand net had afgerond. Zonder wijziging
+			// valt er ook niets te melden.
+			if (!change) return;
+			change(list);
+			throw new Refusal(`Pantry did not save: the list note ${list.path} is gone.`);
+		}
+		// M40: een lege productindex is geen boodschappenlijst van niks.
+		if (this.plugin.products.all().length === 0) {
+			change?.(list);
 			return;
 		}
 
-		const current = await vault.cachedRead(file);
-		if (!this.mayWriteTo(current, list.path)) return;
-		clearWarning(file);
-		if (current === this.compose(list, current)) return;
+		// Alleen een spiegel-verversing: niets schrijven als er niets te
+		// verversen valt. Elke schrijfactie is een sync-ronde en een
+		// cache-event, en die lopen anders rond.
+		if (!change) {
+			const current = await vault.cachedRead(file);
+			if (!this.mayWriteTo(current, list.path)) return;
+			const fresh = this.read(list.path, current);
+			if (fresh) adopt(list, fresh);
+			if (list.frozen || this.compose(list, current) === current) return;
+		}
 
-		// process() in plaats van modify(): dit is precies de notitie die je
-		// waarschijnlijk open hebt staan, en een blinde modify gooit weg wat er
-		// tussen lezen en schrijven bij kwam.
-		const written = await vault.process(file, (latest: string) =>
-			this.compose(list, latest)
-		);
+		let refused: string | null = null;
+		const written = await vault.process(file, (latest: string) => {
+			if (!this.mayWriteTo(latest, list.path)) {
+				refused = `Pantry left ${list.path} alone: it is not a Pantry shopping list.`;
+				return latest;
+			}
+			const fresh = this.read(list.path, latest);
+			if (fresh) adopt(list, fresh);
+			if (list.frozen) {
+				refused = `Pantry did not save ${file.basename}: ${list.frozen}.`;
+				return latest;
+			}
+			change?.(list);
+			return this.compose(list, latest);
+		});
+		if (refused) {
+			if (!change) return;
+			throw new Refusal(refused);
+		}
+		clearWarning(file);
 		this.lastWritten.set(list.path, written);
 	}
 

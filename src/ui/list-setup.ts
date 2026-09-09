@@ -1,5 +1,6 @@
 import { Notice, setIcon } from "obsidian";
 import { guarded } from "../guard";
+import { confirm } from "./confirm";
 import type PantryPlugin from "../main";
 import { addDays, atMidnight, toISODate } from "../date";
 import { mealLabel } from "../plan";
@@ -53,6 +54,8 @@ export class SetupStep {
 	private draft: ListDraft;
 	private days: PlannedDayChoice[] = [];
 	private loaded = false;
+	/** Weeknotities die niet te lezen waren; die maaltijden zijn er wel, maar onzichtbaar. */
+	private unreadable: string[] = [];
 	private touched = false;
 	private bodyEl: HTMLElement | null = null;
 
@@ -98,7 +101,9 @@ export class SetupStep {
 		const own = this.list?.path ?? null;
 
 		const days: PlannedDayChoice[] = [];
+		const unreadable: string[] = [];
 		for (const plan of await this.plugin.plans.covering(start, span)) {
+			if (plan.unreadable) unreadable.push(`${plan.weekStart}: ${plan.unreadable}`);
 			for (const day of plan.days) {
 				if (day.date < first || day.date > last) continue;
 				const meals: PlannedDayChoice["meals"] = [];
@@ -120,6 +125,7 @@ export class SetupStep {
 			}
 		}
 		this.days = days.sort((a, b) => a.date.localeCompare(b.date));
+		this.unreadable = unreadable;
 		this.loaded = true;
 		this.drawBody();
 	}
@@ -262,6 +268,13 @@ export class SetupStep {
 			list.createDiv({ cls: "pantry-pick-intro", text: "Reading your meal plan…" });
 			return;
 		}
+		// Niet doen alsof er niets gepland is als we het gewoon niet weten.
+		for (const problem of this.unreadable) {
+			list.createDiv({
+				cls: "pantry-pick-intro pantry-problem",
+				text: `A week could not be read (${problem}). Its meals are missing here until the note is fixed.`,
+			});
+		}
 		if (this.days.length === 0) {
 			emptyState(
 				list,
@@ -364,6 +377,13 @@ export class SetupStep {
 			});
 			remove.onclick = () =>
 				guarded("could not delete the list", async () => {
+					const sure = await confirm(this.plugin.app, {
+						title: `Delete ${listLabel(existing)}?`,
+						body: "The note goes to the trash and its shopping moment is taken out of the meal plan. Your stock counts are not touched.",
+						action: "Delete",
+						danger: true,
+					});
+					if (!sure) return;
 					await this.plugin.lists.discard(existing);
 					this.plugin.ui.forgetList(existing.path);
 					this.plugin.refreshViews();

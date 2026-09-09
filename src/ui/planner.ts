@@ -1,5 +1,5 @@
 import { Menu, Notice, setIcon } from "obsidian";
-import { guarded } from "../guard";
+import { guarded, Refusal } from "../guard";
 import type PantryPlugin from "../main";
 import {
 	addDays,
@@ -12,6 +12,7 @@ import {
 } from "../date";
 import {
 	addRecipe,
+	entryAt,
 	formatServings,
 	isMeal,
 	linkTarget,
@@ -19,12 +20,14 @@ import {
 	noteAt,
 	PlanStore,
 	recipesAt,
+	refOf,
 	removeRecipe,
 	servingsFor,
 	setNote,
 	setShopping,
 	shoppingAt,
 	toLink,
+	type EntryRef,
 } from "../plan";
 import type {
 	MealStatus,
@@ -105,6 +108,20 @@ function findMeal(meals: MealType[], label: string): MealType | null {
 	return meals.find((meal) => isMeal(label, meal)) ?? null;
 }
 
+/** Haalt precies déze maaltijd uit het plan, ook als zijn positie verschoof. */
+function removeEntry(plan: WeekPlan, ref: EntryRef): PlannedRecipe | null {
+	const target = entryAt(plan, ref);
+	if (!target) return null;
+	const slot = plan.days
+		.find((day) => day.date === ref.date)
+		?.meals.find((meal) => isMeal(meal.meal, { id: ref.meal, name: ref.meal }));
+	if (!slot) return null;
+	const at = slot.recipes.indexOf(target);
+	if (at === -1) return null;
+	slot.recipes.splice(at, 1);
+	return target;
+}
+
 /**
  * Renders the week grid. Owned by both the dedicated view and the `meal-plan`
  * code block, so the two always look and behave the same.
@@ -180,6 +197,14 @@ export class PlannerGrid {
 		this.narrow = this.measureNarrow();
 		this.root.toggleClass("is-narrow", this.narrow);
 		this.renderToolbar();
+		if (this.plan.unreadable) {
+			// Een lege week tekenen zou liegen; en elke wijziging wordt
+			// geweigerd tot de notitie hersteld is (PlanStore.update).
+			this.root.createDiv({
+				cls: "pantry-problem",
+				text: `This week's note could not be read: ${this.plan.unreadable}. Fix the note; nothing is saved until then.`,
+			});
+		}
 
 		this.scrollerEl = this.root.createDiv({ cls: "pantry-grid-scroll" });
 		// Doorrekenen vóór het tekenen: de waarschuwing op een maaltijdblokje
@@ -295,22 +320,38 @@ export class PlannerGrid {
 		await this.render();
 	}
 
-	/** Saves the plan as it stands, after something edited it in place. */
-	private async persist(): Promise<void> {
-		await this.mutate(() => undefined);
+	/**
+	 * Writes one change without redrawing the grid. Used by the day note: a
+	 * redraw would rebuild the field under the cursor and swallow what is
+	 * being typed.
+	 */
+	private async saveQuietly(change: (plan: WeekPlan) => void): Promise<void> {
+		change(this.plan);
+		try {
+			this.plan = await this.plugin.plans.update(this.weekStart, change);
+		} catch (error) {
+			console.error("Pantry: could not save the meal plan", error);
+			new Notice(
+				error instanceof Refusal
+					? error.message
+					: "Pantry could not save your meal plan. See the console for details."
+			);
+		}
 	}
 
 	/**
-	 * Writes the plan without redrawing the grid. Used by the day note: a redraw
-	 * would rebuild the field under the cursor and swallow what is being typed.
+	 * Zet wat het paneel aan een maaltijd veranderde (eters, gasten) in het
+	 * plan. Het paneel werkt op het object dat het scherm vasthoudt; de
+	 * schrijfactie zoekt dezelfde maaltijd op in de vers gelezen notitie en
+	 * neemt de velden over.
 	 */
-	private async saveQuietly(): Promise<void> {
-		try {
-			await this.plugin.plans.save(this.weekStart, this.plan);
-		} catch (error) {
-			console.error("Pantry: could not save the meal plan", error);
-			new Notice("Pantry could not save your meal plan. See the console for details.");
-		}
+	private async syncEntry(ref: EntryRef, entry: PlannedRecipe): Promise<void> {
+		await this.mutate((plan) => {
+			const target = entryAt(plan, ref);
+			if (!target || target === entry) return;
+			target.eaters = [...entry.eaters];
+			target.guests = entry.guests;
+		});
 	}
 
 	/**
@@ -333,12 +374,23 @@ export class PlannerGrid {
 		this.noteTimer = 0;
 	}
 
-	/** Applies a change, writes it to the week note and redraws just the grid. */
+	/**
+	 * Applies a change, writes it to the week note and redraws just the grid.
+	 *
+	 * De wijziging gaat twee keer: eerst op het plan in beeld, zodat de tik
+	 * meteen landt, en dan — via `PlanStore.update` — op het plan zoals het
+	 * nú in de notitie staat. Dat tweede is de schrijfactie die telt; het
+	 * resultaat daarvan wordt het plan in beeld. Zo kan een verouderde
+	 * geheugenkopie (de telefoon die de notitie las vóórdat Sync de versie
+	 * van de Mac bracht) nooit meer over de notitie heen geschreven worden.
+	 * Een wijziging moet dus op elk plan-object toepasbaar zijn: zoek een
+	 * maaltijd op met `entryAt`, niet op het object in de closure.
+	 */
 	private async mutate(change: (plan: WeekPlan) => void): Promise<void> {
 		change(this.plan);
 		this.drawGrid();
 		try {
-			await this.plugin.plans.save(this.weekStart, this.plan);
+			this.plan = await this.plugin.plans.update(this.weekStart, change);
 			// Opnieuw doorrekenen en dán pas de waarschuwingen tekenen: sleep
 			// je een maaltijd naar een dag waar je de boodschappen niet meer
 			// voor haalt, dan moet dat blokje meteen geel zijn.
@@ -346,7 +398,11 @@ export class PlannerGrid {
 			this.drawGrid();
 		} catch (error) {
 			console.error("Pantry: could not save the meal plan", error);
-			new Notice("Pantry could not save your meal plan. See the console for details.");
+			new Notice(
+				error instanceof Refusal
+					? error.message
+					: "Pantry could not save your meal plan. See the console for details."
+			);
 			// Het rooster is al getekend met de wijziging erin, maar op schijf
 			// staat hij niet. Opnieuw laden, zodat het scherm de waarheid toont
 			// in plaats van iets wat bij de volgende render toch verdwijnt.
@@ -578,16 +634,17 @@ export class PlannerGrid {
 					.setTitle(name)
 					.setIcon("shopping-cart")
 					.onClick(() => {
-						const stops = [...shoppingAt(this.plan, isoDate)];
-						if (stops.some((stop) => stop.shop === name)) return;
-						stops.push(
-							first
-								? { shop: name, meal: first.name, when: "before" }
-								: { shop: name }
-						);
-						setShopping(this.plan, isoDate, stops);
 						guarded("could not save your meal plan", () =>
-							this.persist()
+							this.mutate((plan) => {
+								const stops = [...shoppingAt(plan, isoDate)];
+								if (stops.some((stop) => stop.shop === name)) return;
+								stops.push(
+									first
+										? { shop: name, meal: first.name, when: "before" }
+										: { shop: name }
+								);
+								setShopping(plan, isoDate, stops);
+							})
 						);
 					})
 			);
@@ -611,12 +668,13 @@ export class PlannerGrid {
 					.setTitle(spot.label)
 					.setChecked(spot.label === current)
 					.onClick(() => {
-						const stops = shoppingAt(this.plan, isoDate).map((entry) =>
-							sameStop(entry, stop) ? { shop: entry.shop, ...spot.stop } : entry
-						);
-						setShopping(this.plan, isoDate, stops);
 						guarded("could not save your meal plan", () =>
-							this.persist()
+							this.mutate((plan) => {
+								const stops = shoppingAt(plan, isoDate).map((entry) =>
+									sameStop(entry, stop) ? { shop: entry.shop, ...spot.stop } : entry
+								);
+								setShopping(plan, isoDate, stops);
+							})
 						);
 					})
 			);
@@ -628,11 +686,14 @@ export class PlannerGrid {
 				.setTitle("Remove")
 				.setIcon("trash-2")
 				.onClick(() => {
-					const stops = shoppingAt(this.plan, isoDate).filter(
-						(entry) => !sameStop(entry, stop)
+					guarded("could not save your meal plan", () =>
+						this.mutate((plan) => {
+							const stops = shoppingAt(plan, isoDate).filter(
+								(entry) => !sameStop(entry, stop)
+							);
+							setShopping(plan, isoDate, stops);
+						})
 					);
-					setShopping(this.plan, isoDate, stops);
-					guarded("could not save your meal plan", () => this.persist());
 				})
 		);
 		menu.showAtMouseEvent(event);
@@ -674,10 +735,10 @@ export class PlannerGrid {
 		const store = (): void => {
 			this.clearNoteTimer();
 			if (noteAt(this.plan, isoDate) === input.value.trim()) return;
-			setNote(this.plan, isoDate, input.value);
+			const text = input.value;
 			// saveQuietly meldt zelf al wat er misgaat; hier alleen de promise
 			// netjes afhandelen zonder het veld onder de cursor te herbouwen.
-			void this.saveQuietly().catch(() => undefined);
+			void this.saveQuietly((plan) => setNote(plan, isoDate, text)).catch(() => undefined);
 		};
 
 		input.addEventListener("input", () => {
@@ -783,11 +844,12 @@ export class PlannerGrid {
 			attr: { "aria-label": `Remove ${name}` },
 		});
 		setIcon(remove, "x");
+		const ref = refOf(date, meal, index, entry);
 		remove.onclick = (event: MouseEvent) => {
 			event.stopPropagation();
 			guarded("could not remove that meal", () =>
 				this.mutate((plan) => {
-					removeRecipe(plan, date, meal, index);
+					removeEntry(plan, ref);
 				})
 			);
 		};
@@ -799,7 +861,7 @@ export class PlannerGrid {
 		});
 
 		this.drawShoppingWarning(card, entry, date, mealIndex);
-		this.drawTicks(card, entry);
+		this.drawTicks(card, entry, ref);
 
 		card.addEventListener("dragstart", (event: DragEvent) => {
 			event.dataTransfer?.setData(
@@ -809,6 +871,7 @@ export class PlannerGrid {
 					date,
 					meal: mealLabel(meal),
 					index,
+					recipe: name,
 				})
 			);
 			if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
@@ -822,6 +885,7 @@ export class PlannerGrid {
 				date,
 				meal: mealLabel(meal),
 				index,
+				recipe: name,
 			}),
 			label: () => name,
 			drop: (payload, toDate, toMeal) => {
@@ -852,7 +916,7 @@ export class PlannerGrid {
 				this.plugin,
 				entry,
 				card.getBoundingClientRect(),
-				() => guarded("could not save your meal plan", () => this.persist()),
+				() => guarded("could not save your meal plan", () => this.syncEntry(ref, entry)),
 				openNote,
 				{
 					date,
@@ -861,7 +925,7 @@ export class PlannerGrid {
 					meals: this.plugin.settings.meals.map(mealLabel),
 					move: (targetDate: string, targetMeal: string) =>
 						guarded("could not move that meal", () =>
-							this.moveEntry(date, meal, index, targetDate, targetMeal)
+							this.moveEntry(ref, targetDate, targetMeal)
 						),
 					cook: () =>
 						guarded("could not open cook mode", () =>
@@ -962,7 +1026,7 @@ export class PlannerGrid {
 		).open();
 	}
 
-	private drawTicks(card: HTMLElement, entry: PlannedRecipe): void {
+	private drawTicks(card: HTMLElement, entry: PlannedRecipe, ref: EntryRef): void {
 		const status = entry.status ?? null;
 		card.toggleClass("is-eaten", status === "eaten");
 		card.toggleClass("is-skipped", status === "skipped");
@@ -979,7 +1043,7 @@ export class PlannerGrid {
 			button.onclick = (event: MouseEvent) => {
 				event.stopPropagation();
 				guarded("could not book that meal", () =>
-					this.setStatus(entry, status === value ? null : value)
+					this.setStatus(entry, ref, status === value ? null : value)
 				);
 			};
 		};
@@ -1001,6 +1065,7 @@ export class PlannerGrid {
 	 */
 	private async setStatus(
 		entry: PlannedRecipe,
+		ref: EntryRef,
 		next: MealStatus | null
 	): Promise<void> {
 		const current = entry.status ?? null;
@@ -1034,12 +1099,22 @@ export class PlannerGrid {
 				taken = await takeFromStock(this.plugin, amounts);
 			}
 		} finally {
-			await this.mutate(() => {
-				if (next) entry.status = next;
-				else delete entry.status;
+			await this.mutate((plan) => {
+				// Staat de maaltijd niet meer in de notitie (een ander apparaat
+				// haalde hem weg), dan komt hij terug: de voorraad is al
+				// afgeboekt, en dat moet ergens opgeschreven staan.
+				let target = entryAt(plan, ref);
+				if (!target) {
+					const meal = findMeal(this.plugin.settings.meals, ref.meal);
+					if (!meal) return;
+					target = { recipe: entry.recipe, eaters: [...entry.eaters], guests: entry.guests };
+					addRecipe(plan, ref.date, meal, target);
+				}
+				if (next) target.status = next;
+				else delete target.status;
 
-				if (taken && Object.keys(taken.used).length > 0) entry.used = taken.used;
-				else delete entry.used;
+				if (taken && Object.keys(taken.used).length > 0) target.used = taken.used;
+				else delete target.used;
 			});
 
 			this.booking.delete(entry);
@@ -1098,19 +1173,13 @@ export class PlannerGrid {
 
 	/** Move without dragging, driven by the picker in the eaters panel. */
 	private async moveEntry(
-		fromDate: string,
-		fromMeal: MealType,
-		index: number,
+		ref: EntryRef,
 		toDate: string,
 		toMealLabel: string
 	): Promise<void> {
 		const target = findMeal(this.plugin.settings.meals, toMealLabel);
 		if (!target) return;
-		await this.handleDrop(
-			{ kind: "planned", date: fromDate, meal: mealLabel(fromMeal), index },
-			toDate,
-			target
-		);
+		await this.handleDrop({ kind: "planned", ...ref }, toDate, target);
 	}
 
 	private async handleDrop(
@@ -1139,7 +1208,9 @@ export class PlannerGrid {
 		if (payload.date === date && isMeal(payload.meal, meal)) return;
 
 		await this.mutate((plan) => {
-			const moved = removeRecipe(plan, payload.date, source, payload.index);
+			const moved = payload.recipe
+				? removeEntry(plan, { ...payload, recipe: payload.recipe })
+				: removeRecipe(plan, payload.date, source, payload.index);
 			if (moved) addRecipe(plan, date, meal, moved);
 		});
 		this.flashNewest(date, label);

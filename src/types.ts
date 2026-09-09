@@ -145,4 +145,10 @@ export interface WeekPlan {
 	/** ISO date of the first day of the week. */
 	weekStart: string;
 	days: PlannedDay[];
+	/**
+	 * Waarom het blok niet te lezen was, als dat zo is. Zo'n plan is leeg
+	 * omdat we het niet wéten, niet omdat er niets gepland is — en daarom
+	 * mag er nooit vanuit dit plan geschreven worden. Zie `PlanStore.update`.
+	 */
+	unreadable?: string;
 }

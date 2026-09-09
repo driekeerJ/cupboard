@@ -270,11 +270,11 @@ test("een gegeten maaltijd is geen maaltijd meer op de lijst", async () => {
 	assert.ok(list);
 	assert.equal(h.plugin.lists.amount(list, product(h, "Ui")), 1);
 
-	const plan = await h.plugin.plans.load(WEEK);
-	const entry = plan.days[0]?.meals[0]?.recipes[0];
-	assert.ok(entry);
-	entry.status = "eaten";
-	await h.plugin.plans.save(WEEK, plan);
+	await h.plugin.plans.update(WEEK, (plan) => {
+		const entry = plan.days[0]?.meals[0]?.recipes[0];
+		assert.ok(entry);
+		entry.status = "eaten";
+	});
 	await h.plugin.lists.refresh(list);
 
 	assert.equal(h.plugin.lists.amount(list, product(h, "Ui")), 0);

@@ -33,6 +33,13 @@ const context = await esbuild.context({
   treeShaking: true,
   outfile: "main.js",
   minify: prod,
+  // Het bouwtijdstip staat in de plugin (Settings → Pantry), zodat je op elk
+  // apparaat kunt zien of het de laatste build draait. Obsidian pakt een
+  // nieuwe main.js pas op na een volledige herstart, en Sync brengt hem niet
+  // vanzelf naar de telefoon — "werkt niet" is meestal "oude build".
+  define: {
+    PANTRY_BUILD: JSON.stringify(new Date().toISOString().slice(0, 16).replace("T", " ")),
+  },
 });
 
 if (prod) {

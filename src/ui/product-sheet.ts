@@ -1,5 +1,6 @@
 import { Modal, Notice, setIcon } from "obsidian";
 import { guarded } from "../guard";
+import { confirm } from "./confirm";
 import type PantryPlugin from "../main";
 import type { NeedIndex, NeedSource } from "../needs";
 import { chipPicker } from "./kit";
@@ -284,7 +285,15 @@ export class ProductSheet extends Modal {
 				text: "Delete",
 			});
 			remove.onclick = () =>
-				guarded(`could not delete ${this.product.name}`, () => this.remove());
+				guarded(`could not delete ${this.product.name}`, async () => {
+					const sure = await confirm(this.app, {
+						title: `Delete ${this.product.name}?`,
+						body: "The product note goes to the trash. Recipes that mention it keep their line, but it will no longer be counted or put on a list.",
+						action: "Delete",
+						danger: true,
+					});
+					if (sure) await this.remove();
+				});
 		}
 
 		const open = foot.createEl("button", {

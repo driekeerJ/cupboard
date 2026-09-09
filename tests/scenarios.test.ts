@@ -72,6 +72,7 @@ test("week-basis: één gepland recept vult de boodschappenlijst", async () => {
 		[
 			"---",
 			"pantry: shopping",
+			"format: 2",
 			"date: '2026-08-24'",
 			"shops:",
 			"  - '[[Lidl]]'",

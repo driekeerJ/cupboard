@@ -58,6 +58,8 @@ export class HomeView extends ItemView {
 	private bodyEl: HTMLElement | null = null;
 	private subEl: HTMLElement | null = null;
 	private planned = 0;
+	/** Waarom dit apparaat niets mag schrijven, als dat zo is; zie src/format.ts. */
+	private problem: string | null = null;
 	/** Meals up to and including today that have no eaten/skipped answer yet. */
 	private toTick = 0;
 
@@ -105,6 +107,9 @@ export class HomeView extends ItemView {
 		await this.plugin.cleanup.rebuild();
 
 		const plan = await this.plugin.plans.load(week);
+		this.problem = plan.unreadable
+			? `This week's meal plan: ${plan.unreadable}`
+			: this.plugin.lists.frozenReason();
 		this.planned = plan.days.reduce(
 			(total, day) =>
 				total +
@@ -284,6 +289,10 @@ export class HomeView extends ItemView {
 
 		const week = this.plugin.currentWeek();
 		this.subEl?.setText(`Week ${isoWeek(week).week} · ${formatRange(week)}`);
+
+		// Bovenaan, vóór de tegels: dit is het scherm dat je als eerste ziet,
+		// en dit is de ene boodschap die vóór alles gaat.
+		if (this.problem) body.createDiv({ cls: "pantry-problem", text: this.problem });
 
 		const grid = body.createDiv({ cls: "pantry-tiles" });
 		this.tiles().forEach((tile) => {

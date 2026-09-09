@@ -4854,3 +4854,27 @@
 	color: var(--text-error);
 	font-weight: 600;
 }
+
+/* Een melding die blijft staan: iets in de vault klopt niet en tot dat
+   hersteld is doet het scherm alsof het niets weet — en zegt dat. */
+.pantry-app .pantry-problem,
+.pantry-planner .pantry-problem {
+	margin: 8px 12px;
+	padding: 8px 12px;
+	border-radius: var(--radius-m);
+	background: rgba(var(--color-red-rgb), 0.12);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+}
+
+/* Bevestiging vóór Done, Delete list en Delete product. */
+.pantry-confirm .pantry-confirm-body {
+	margin: 4px 0 16px;
+	color: var(--text-muted);
+	line-height: 1.45;
+}
+.pantry-confirm .pantry-confirm-foot {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}

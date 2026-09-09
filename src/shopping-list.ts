@@ -17,9 +17,9 @@
  *   in hooguit één lijst, anders koop je dubbel.
  *
  * De lijst is een notitie in `Pantry/Shopping/`: de keuzes, het mandje en de
- * ± aanpassingen staan in de frontmatter, de afvinklijst in de body. Klaar is
- * de notitie weg. Zo is er niets buiten de vault dat bijgehouden moet worden,
- * en neemt Obsidian Sync alles mee naar je telefoon.
+ * ± aanpassingen staan in de frontmatter, de afvinklijst in de body. Klaar
+ * verhuist de notitie naar `Done/`. Zo is er niets buiten de vault dat
+ * bijgehouden moet worden, en neemt Obsidian Sync alles mee naar je telefoon.
  *
  * Wat hier staat is het pure model: lezen, schrijven, benoemen. De rekenkern
  * en de vault-kant staan in `shopping-lists.ts`.
@@ -31,10 +31,20 @@ import { parseExtras, type Extra } from "./extras";
 import { asText } from "./text";
 import { fromISODate, toISODate, WEEKDAY_NAMES } from "./date";
 import { safeFileName } from "./cook-session";
+import { FORMAT_KEY, PANTRY_FORMAT, isNewer, newerMessage } from "./format";
 
 /** De frontmatter-sleutel die een notitie als boodschappenlijst merkt. */
 export const LIST_MARK = "pantry";
 export const LIST_MARK_VALUE = "shopping";
+/**
+ * Een afgeronde lijst. Hij verhuist naar de map `Done/` en krijgt dit merk,
+ * zodat de index hem niet meer ziet maar de notitie er nog wel is: wat je
+ * gehaald hebt staat erin, en een Done die je niet bedoelde is terug te
+ * draaien door het merk terug te zetten. Na `cookKeepDays` ruimt Pantry hem op.
+ */
+export const DONE_MARK_VALUE = "shopping-done";
+/** Submap van de lijstmap waar afgeronde lijsten heen gaan. */
+export const DONE_FOLDER = "Done";
 
 /** Het stuk van de notitie dat Pantry beheert; zie src/notes.ts. */
 export const LIST_REGION = "shopping";
@@ -85,6 +95,32 @@ export interface ShoppingList {
 	 */
 	skipped: Set<string>;
 	extras: Extra[];
+	/**
+	 * Wat in de notitie staat maar nu niet naar een product te herleiden is.
+	 *
+	 * Een product dat Sync nog niet gebracht heeft, of dat net hernoemd is,
+	 * lost even niet op. Dat is geen reden om het uit de notitie te halen: de
+	 * volgende keer lezen kan het er wél zijn. Dit blijft dus staan zoals het
+	 * was en gaat bij het schrijven ongewijzigd mee. Op 2026-09-09 verloor een
+	 * half gesynchroniseerde telefoon zo bijna een mandje.
+	 */
+	unresolved: Unresolved;
+	/**
+	 * Waarom deze lijst hier niet geschreven mag worden: de notitie komt van
+	 * een nieuwere Pantry dan deze build. Lezen en tonen mag; elke schrijfactie
+	 * weigert, en Home zegt dat dit apparaat bijgewerkt moet worden.
+	 */
+	frozen: string | null;
+}
+
+export interface Unresolved {
+	basket: { name: string; entry: BasketEntry }[];
+	nudge: { name: string; step: number }[];
+	skipped: string[];
+}
+
+export function noUnresolved(): Unresolved {
+	return { basket: [], nudge: [], skipped: [] };
 }
 
 /** De keuzes uit het setup-scherm: alles behalve wat je in de winkel doet. */
@@ -202,6 +238,8 @@ export function serialiseArrival(arrival: Arrival | null): string | null {
 /** Wat er van de keuzes in de frontmatter te lezen valt. */
 export interface ParsedList {
 	draft: ListDraft;
+	/** Zie ShoppingList.frozen. */
+	frozen: string | null;
 	/** Het mandje, nog op productnáám: paden kent de notitie niet. */
 	basket: { name: string; entry: BasketEntry }[];
 	nudge: { name: string; step: number }[];
@@ -282,6 +320,7 @@ export function parseList(frontmatter: Record<string, unknown>): ParsedList | nu
 			shops,
 			meals,
 		},
+		frozen: isNewer(frontmatter[FORMAT_KEY]) ? newerMessage(frontmatter[FORMAT_KEY]) : null,
 		basket,
 		nudge,
 		skipped,
@@ -304,6 +343,7 @@ export function serialiseList(
 ): Record<string, unknown> {
 	const out: Record<string, unknown> = {
 		[LIST_MARK]: LIST_MARK_VALUE,
+		[FORMAT_KEY]: PANTRY_FORMAT,
 		date: list.date,
 	};
 	const arrives = serialiseArrival(list.arrival);
@@ -317,15 +357,19 @@ export function serialiseList(
 		}));
 	}
 
+	const basketEntry = (name: string, entry: BasketEntry): Record<string, unknown> => {
+		const clean: Record<string, unknown> = { product: toLink(name) };
+		if (entry.count !== null) clean.count = entry.count === "plus" ? "+" : entry.count;
+		if (entry.check) clean.check = true;
+		return clean;
+	};
 	const basket: Record<string, unknown>[] = [];
 	for (const [path, entry] of list.basket) {
 		const name = nameOf(path);
 		if (!name) continue;
-		const clean: Record<string, unknown> = { product: toLink(name) };
-		if (entry.count !== null) clean.count = entry.count === "plus" ? "+" : entry.count;
-		if (entry.check) clean.check = true;
-		basket.push(clean);
+		basket.push(basketEntry(name, entry));
 	}
+	for (const { name, entry } of list.unresolved.basket) basket.push(basketEntry(name, entry));
 	if (basket.length > 0) out.basket = basket;
 
 	const nudge: Record<string, unknown>[] = [];
@@ -334,6 +378,7 @@ export function serialiseList(
 		if (!name || step === 0) continue;
 		nudge.push({ product: toLink(name), step });
 	}
+	for (const { name, step } of list.unresolved.nudge) nudge.push({ product: toLink(name), step });
 	if (nudge.length > 0) out.nudge = nudge;
 
 	const skipped: string[] = [];
@@ -341,6 +386,7 @@ export function serialiseList(
 		const name = nameOf(path);
 		if (name) skipped.push(toLink(name));
 	}
+	for (const name of list.unresolved.skipped) skipped.push(toLink(name));
 	if (skipped.length > 0) out.skipped = skipped;
 
 	if (list.extras.length > 0) {

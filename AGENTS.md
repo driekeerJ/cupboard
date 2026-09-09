@@ -43,6 +43,29 @@ schrijfactie moet zichtbaar zijn: `console.error` **én** een `Notice`. De plugi
 schrijft continu naar de vault; stil falen betekent dat iemand denkt dat zijn
 voorraad geboekt is terwijl er niets gebeurd is.
 
+**Nooit vanuit een geheugenkopie schrijven.** Een plan of lijst in het geheugen
+is een momentopname; de notitie kan intussen via Sync van een ander apparaat
+veranderd zijn. Elke schrijfactie is een *wijziging op wat er nu staat*:
+`PlanStore.update(week, change)` en `ShoppingLists.mutate(list, change)` lezen
+de notitie binnen `vault.process` opnieuw, passen `change` daarop toe en
+schrijven dat. Er is geen `save(plan)`. `change` is synchroon en wijst een
+maaltijd aan met `entryAt(plan, ref)`, nooit via objectidentiteit. Wat niet te
+lezen is (`plan.unreadable`, `list.frozen`) wordt nooit overschreven — dat
+geeft een `Refusal` met de reden in de melding.
+
+**Onbekend product ≠ weg.** Een mandje-regel voor een product dat hier (nog)
+niet bestaat blijft op naam bewaard (`list.unresolved`) en gaat ongewijzigd mee
+bij het schrijven.
+
+**Formaatnummer.** Elke notitie die Pantry schrijft draagt `format:
+PANTRY_FORMAT` (`src/format.ts`). Een build die een hoger nummer tegenkomt leest
+wel, schrijft niet, en Home zegt dat het apparaat bijgewerkt moet worden.
+Verhoog het nummer alleen als een oudere build iets zou weggooien.
+
+**Iets weggooien vraagt eerst.** Done, Delete list en Delete product gaan door
+`confirm()` (`src/ui/confirm.ts`). Done gooit niet weg maar verhuist naar
+`Pantry/Shopping/Done/`; `sweep()` ruimt na `cookKeepDays` op.
+
 **Notities zijn de waarheid.** `data.json` is alleen voor wat geen notitie kan
 zijn. Een boodschappenlijst is één notitie in `Pantry/Shopping/`: de keuzes en
 het mandje in de frontmatter, de afvinklijst in de body als spiegel van de

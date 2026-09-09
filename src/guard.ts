@@ -26,8 +26,22 @@ export async function guard<T>(
 		return await work();
 	} catch (error) {
 		console.error(`Pantry: ${message}`, error);
-		new Notice(`Pantry ${message}. See the console for details.`);
+		if (error instanceof Refusal) new Notice(error.message);
+		else new Notice(`Pantry ${message}. See the console for details.`);
 		return null;
+	}
+}
+
+/**
+ * Een schrijfactie die bewust níét doorging, met een reden die de gebruiker
+ * iets zegt: "de notitie is niet te lezen, herstel dat eerst". Anders dan een
+ * onverwachte fout hoort de reden zelf in de melding, niet "see the console".
+ * De tekst is een volledige zin die met "Pantry" begint.
+ */
+export class Refusal extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "Refusal";
 	}
 }
 

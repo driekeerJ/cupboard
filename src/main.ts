@@ -160,6 +160,9 @@ export default class PantryPlugin extends Plugin {
 			guarded("could not tidy up old cooking sessions", () =>
 				this.cook.sweep()
 			);
+			guarded("could not tidy up finished shopping lists", () =>
+				this.lists.sweep()
+			);
 		});
 
 		this.registerView(
