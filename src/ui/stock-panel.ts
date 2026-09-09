@@ -4,7 +4,7 @@ import type PantryPlugin from "../main";
 import { UNASSIGNED, type Product, type ProductPatch } from "../products";
 import { matchesQuery } from "../search";
 import { emptyState, keepScroll, segment } from "./kit";
-import { drawStockRow, stockStatus } from "./stock-rows";
+import { drawSkippedRow, drawStockRow, stockStatus } from "./stock-rows";
 import type { StockFilter as Filter, StockMemory } from "./view-memory";
 
 /**
@@ -32,6 +32,13 @@ export interface StockSource {
 	 * volgende stap, en die heeft zijn eigen scherm.
 	 */
 	filters?: Filter[];
+	/**
+	 * Deze keer overslaan: niet tellen, niet kopen. Alleen de voorraadcheck
+	 * van een lijst heeft dit; All stock gaat over wat er is, niet over één
+	 * keer boodschappen doen.
+	 */
+	skipped?: (product: Product) => boolean;
+	setSkipped?: (product: Product, skipped: boolean) => Promise<void>;
 	/** Doorrekenen vóór het hertekenen. */
 	reload(): Promise<void>;
 }
@@ -186,6 +193,25 @@ export class StockPanel {
 		this.leaving.clear();
 	}
 
+	private isSkipped(product: Product): boolean {
+		return this.source.skipped?.(product) ?? false;
+	}
+
+	/**
+	 * Overslaan of terugnemen. Het product verhuist naar het blok onderaan
+	 * of komt terug op zijn plek; dat de lijst daarbij beweegt is goed, want
+	 * dit was een bewuste, vastgehouden keuze en geen tik in de telronde.
+	 */
+	private setSkipped(product: Product, skipped: boolean): void {
+		const write = this.source.setSkipped;
+		if (!write) return;
+		guarded(`could not ${skipped ? "skip" : "restore"} ${product.name}`, async () => {
+			await write(product, skipped);
+			this.leaving.delete(product.path);
+			this.drawList();
+		});
+	}
+
 	private drawHideButton(): void {
 		const button = this.hideEl;
 		if (!button) return;
@@ -212,17 +238,25 @@ export class StockPanel {
 
 		let buying = 0;
 		let checking = 0;
+		let skipping = 0;
 		all.forEach((product) => {
+			if (this.isSkipped(product)) {
+				skipping++;
+				return;
+			}
 			if (product.check) checking++;
 			const buy = this.source.buy(product);
 			if (buy !== null && buy > 0) buying++;
 		});
 		const parts = [`${buying} to buy`];
 		if (checking > 0) parts.push(`${checking} to check`);
+		if (skipping > 0) parts.push(`${skipping} skipped`);
 		this.countEl?.setText(parts.join("  ·  "));
 
-		const shown = this.visible();
-		if (shown.length === 0) {
+		const everything = this.visible();
+		const shown = everything.filter((product) => !this.isSkipped(product));
+		const skipped = everything.filter((product) => this.isSkipped(product));
+		if (shown.length === 0 && skipped.length === 0) {
 			const filter = this.memory.filter;
 			emptyState(
 				body,
@@ -249,7 +283,27 @@ export class StockPanel {
 				this.drawGroup(body, storage, items);
 			});
 
+		if (skipped.length > 0) this.drawSkipped(body, skipped);
+
 		restore();
+	}
+
+	/**
+	 * Onderaan, na de kasten: wat je deze keer laat liggen. Niet tussen de
+	 * rest — daar zou een rij zonder strip alleen maar verwarren — en niet
+	 * weg, want terugnemen moet zonder zoeken kunnen.
+	 */
+	private drawSkipped(parent: HTMLElement, items: Product[]): void {
+		const group = parent.createDiv({ cls: "pantry-section pantry-skipped" });
+		const heading = group.createDiv({ cls: "pantry-section-head is-static" });
+		heading.createSpan({ cls: "pantry-section-name", text: "Skipped this time" });
+		heading.createSpan({ cls: "pantry-section-count", text: `${items.length}` });
+		const list = group.createDiv({ cls: "pantry-section-body" });
+		[...items]
+			.sort((a, b) => a.name.localeCompare(b.name))
+			.forEach((product) =>
+				drawSkippedRow(list, product, (item) => this.setSkipped(item, false))
+			);
 	}
 
 	private drawGroup(parent: HTMLElement, storage: string, items: Product[]): void {
@@ -282,6 +336,9 @@ export class StockPanel {
 				change: (item, patch) => this.change(item, patch),
 				leaving: (item) => this.leaving.has(item.path),
 				redraw: () => this.drawList(),
+				...(this.source.setSkipped
+					? { skip: (item: Product) => this.setSkipped(item, true) }
+					: {}),
 			})
 		);
 	}

@@ -7,6 +7,12 @@ import { ProductSheet } from "./product-sheet";
 const STRIP_LIMIT = 8;
 
 /**
+ * Hoe lang je de skip-knop vasthoudt. Lang genoeg dat een tik die naast de
+ * strip belandt niets doet, kort genoeg dat het geen wachten wordt.
+ */
+const HOLD_MS = 550;
+
+/**
  * Wat een telscherm over een rij te zeggen heeft. Het All stock-scherm en de
  * voorraadcheck van een boodschappenlijst tekenen dezelfde rij — dezelfde
  * strip, dezelfde stepper, dezelfde vlag — en verschillen alleen in de som
@@ -24,6 +30,11 @@ export interface StockRowContext {
 	leaving(product: Product): boolean;
 	/** Redraw after the product sheet changed something. */
 	redraw(): void;
+	/**
+	 * Deze keer overslaan — alleen op de voorraadcheck van een lijst. Het
+	 * All stock-scherm heeft geen "deze keer", dus daar ontbreekt hij.
+	 */
+	skip?: (product: Product) => void;
 }
 
 export function drawStockRow(
@@ -67,6 +78,82 @@ export function drawStockRow(
 		product.check ? "On the check list" : "Put on the check list"
 	);
 	check.onclick = () => ctx.change(product, { check: !product.check });
+
+	if (ctx.skip) drawSkip(controls, product, ctx.skip);
+}
+
+/**
+ * Overslaan doe je door vast te houden, niet door te tikken. De knop staat
+ * naast een strip waar je de hele telronde op zit te tikken, en één misser
+ * haalt anders stilletjes een product van de lijst. Een korte tik zegt alleen
+ * hoe het wél moet.
+ */
+function drawSkip(parent: HTMLElement, product: Product, skip: (product: Product) => void): void {
+	const button = parent.createEl("button", { cls: "pantry-skip" });
+	setIcon(button.createSpan({ cls: "pantry-skip-icon" }), "circle-off");
+	const label = button.createSpan({ cls: "pantry-skip-label", text: "skip" });
+	button.setAttr("aria-label", `Hold to skip ${product.name} this time`);
+
+	let timer = 0;
+	let hint = 0;
+	let held = false;
+
+	const disarm = (): void => {
+		window.clearTimeout(timer);
+		button.removeClass("is-holding");
+	};
+	const arm = (event: PointerEvent): void => {
+		if (event.button !== 0) return;
+		event.preventDefault();
+		held = false;
+		button.addClass("is-holding");
+		timer = window.setTimeout(() => {
+			held = true;
+			disarm();
+			skip(product);
+		}, HOLD_MS);
+	};
+	const release = (): void => {
+		if (!button.hasClass("is-holding")) return;
+		disarm();
+		if (held) return;
+		// Losgelaten vóór de tijd om was: even zeggen wat er verwacht wordt.
+		label.setText("hold…");
+		window.clearTimeout(hint);
+		hint = window.setTimeout(() => label.setText("skip"), 900);
+	};
+
+	button.addEventListener("pointerdown", arm);
+	button.addEventListener("pointerup", release);
+	button.addEventListener("pointerleave", release);
+	button.addEventListener("pointercancel", release);
+	// Lang drukken opent op een telefoon anders het contextmenu.
+	button.addEventListener("contextmenu", (event) => event.preventDefault());
+	button.onclick = (event) => event.preventDefault();
+}
+
+/**
+ * Een overgeslagen product: alleen de naam en de weg terug. Geen strip, want
+ * tellen was precies wat je niet ging doen. Terugnemen is één tik — per
+ * ongeluk iets wél meenemen is geen ramp.
+ */
+export function drawSkippedRow(
+	parent: HTMLElement,
+	product: Product,
+	restore: (product: Product) => void
+): void {
+	const row = parent.createDiv({ cls: "pantry-stock-row is-skipped" });
+	const top = row.createDiv({ cls: "pantry-stock-line" });
+	const name = top.createDiv({ cls: "pantry-stock-name" });
+	name.createSpan({ text: product.name });
+	if (product.unit) {
+		name.createSpan({ cls: "pantry-stock-unit", text: product.unit });
+	}
+	const button = top.createEl("button", { cls: "pantry-skip is-active" });
+	setIcon(button.createSpan({ cls: "pantry-skip-icon" }), "undo-2");
+	button.createSpan({ cls: "pantry-skip-label", text: "take along" });
+	button.setAttr("aria-label", `Take ${product.name} along after all`);
+	button.onclick = () => restore(product);
 }
 
 function drawStrip(parent: HTMLElement, product: Product, ctx: StockRowContext): void {

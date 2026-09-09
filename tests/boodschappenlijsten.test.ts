@@ -151,6 +151,59 @@ test("wat niet in deze winkels ligt wordt wél geteld", async () => {
 	assert.equal(h.plugin.lists.relevant(ah, product(h, "Passata")), true);
 });
 
+test("deze keer overslaan: niet tellen, niet kopen, en de volgende lijst mag hem hebben", async () => {
+	// Lopend naar de Lidl: alleen het hoognodige. Ui gaat deze keer niet mee.
+	// Hij blijft in de voorraadcheck staan (in het blok onderaan), staat niet
+	// op de lijst, en de AH-lijst van een dag later pakt hem gewoon op — want
+	// overgeslagen is niet gehaald.
+	const h = await run();
+	await h.plugin.products.update(product(h, "Ui"), { shops: ["Lidl", "AH"] });
+	const lidl = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], meals: [DINNER] });
+	const ah = await h.plugin.lists.create({ date: "2026-08-26", arrival: null, shops: ["AH"], meals: [] });
+	assert.ok(lidl && ah);
+	const buying = (list: typeof lidl) =>
+		h.plugin.lists.buckets(list).buy.map((item) => item.name);
+	assert.deepEqual(buying(lidl), ["Passata", "Rijst", "Ui"]);
+
+	await h.plugin.lists.setSkipped(lidl, product(h, "Ui"), true);
+	assert.equal(h.plugin.lists.isSkipped(lidl, product(h, "Ui")), true);
+	assert.equal(h.plugin.lists.relevant(lidl, product(h, "Ui")), true, "blijft in de check");
+	assert.deepEqual(buying(lidl), ["Passata", "Rijst"]);
+	assert.doesNotMatch(h.note(lidl), /- \[ \] \[\[Ui\]\]/);
+	assert.match(h.note(lidl), /^skipped:\n {2}- '\[\[Ui\]\]'$/m);
+
+	await h.plugin.lists.refresh(ah);
+	const later = h.plugin.lists.buckets(ah);
+	assert.deepEqual(later.elsewhere, []);
+	assert.deepEqual(later.buy.map((item) => item.name), ["Ui"]);
+
+	// De keuze staat in de notitie, dus hij overleeft een herlezing.
+	h.vault.write(lidl.path, h.note(lidl));
+	await h.plugin.lists.syncFromNote(h.vault.vault.getFileByPath(lidl.path)!);
+	assert.equal(h.plugin.lists.isSkipped(lidl, product(h, "Ui")), true);
+
+	// Toch meenemen: alles terug zoals het was.
+	await h.plugin.lists.setSkipped(lidl, product(h, "Ui"), false);
+	assert.deepEqual(buying(lidl), ["Passata", "Rijst", "Ui"]);
+	assert.doesNotMatch(h.note(lidl), /^skipped:/m);
+	await h.plugin.lists.refresh(ah);
+	assert.deepEqual(h.plugin.lists.buckets(ah).elsewhere.map((item) => item.product.name), ["Ui"]);
+});
+
+test("overslaan wat hier toch al niet ligt haalt ook de waarschuwing weg", async () => {
+	// Naar de AH voor de rijst-maaltijd; Passata ligt bij de Lidl en staat
+	// dus onder "Not at these shops". Sla je hem over, dan is dat de keuze
+	// en hoeft de lijst er niet meer over te beginnen.
+	const h = await run();
+	const ah = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["AH"], meals: [DINNER] });
+	assert.ok(ah);
+	assert.match(h.note(ah), /## Not at these shops\n\n- \[\[Passata\]\]/);
+
+	await h.plugin.lists.setSkipped(ah, product(h, "Passata"), true);
+	assert.deepEqual(h.plugin.lists.buckets(ah).notHere.map((item) => item.name), ["Ui"]);
+	assert.doesNotMatch(h.note(ah), /\[\[Passata\]\] ·/);
+});
+
 test("de lijst verhuist mee met haar winkels en datum, met het mandje", async () => {
 	const h = await run();
 	const list = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], meals: [] });

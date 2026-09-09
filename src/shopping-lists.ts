@@ -49,7 +49,7 @@ const SIGNATURE =
 	"*Kept up to date by Pantry. Tick a box and that product counts as full again.*";
 
 /** De sleutels die de plugin zelf beheert in de frontmatter van een lijst. */
-const OWN_KEYS = ["pantry", "date", "arrives", "shops", "meals", "basket", "nudge", "extras"];
+const OWN_KEYS = ["pantry", "date", "arrives", "shops", "meals", "basket", "nudge", "skipped", "extras"];
 
 /** Wat een lijst deze keer te zeggen heeft over elk product. */
 export interface ListBuckets {
@@ -158,6 +158,7 @@ export class ShoppingLists {
 			...parsed.draft,
 			basket: new Map(),
 			nudge: new Map(),
+			skipped: new Set(),
 			extras: parsed.extras,
 		};
 		for (const { name, entry } of parsed.basket) {
@@ -167,6 +168,10 @@ export class ShoppingLists {
 		for (const { name, step } of parsed.nudge) {
 			const product = this.resolve(name, path);
 			if (product) list.nudge.set(product.path, step);
+		}
+		for (const name of parsed.skipped) {
+			const product = this.resolve(name, path);
+			if (product) list.skipped.add(product.path);
 		}
 		return list;
 	}
@@ -272,6 +277,11 @@ export class ShoppingLists {
 		return product.check && this.atShops(list, product);
 	}
 
+	/** Deze keer bewust niet: niet tellen, niet kopen, niet waarschuwen. */
+	isSkipped(list: ShoppingList, product: Product): boolean {
+		return list.skipped.has(product.path);
+	}
+
 	/** De lijst die dit product al op zich heeft genomen, als die eerder valt. */
 	ownerOf(list: ShoppingList, product: Product): ShoppingList | null {
 		for (const other of this.all()) {
@@ -284,6 +294,8 @@ export class ShoppingLists {
 	/** Staat het op die lijst om te kopen of te checken, en is het daar nog niet afgevinkt? */
 	private claims(list: ShoppingList, product: Product): boolean {
 		if (product.ignored || list.basket.has(product.path)) return false;
+		// Overgeslagen is niet gehaald: de volgende lijst mag hem hebben.
+		if (this.isSkipped(list, product)) return false;
 		if (!this.atShops(list, product)) return false;
 		const amount = this.amount(list, product);
 		if (amount === null) return this.need(list, product) > 0;
@@ -298,6 +310,9 @@ export class ShoppingLists {
 			// `pantry: ignore`: bestaat alleen zodat recepten ernaar kunnen
 			// wijzen. Nooit op de lijst, wat er ook in `minimum` staat.
 			if (product.ignored || list.basket.has(product.path)) continue;
+			// Overgeslagen: niet op de lijst, en ook geen waarschuwing — dat je
+			// hem niet haalt was juist de keuze.
+			if (this.isSkipped(list, product)) continue;
 
 			if (!this.atShops(list, product)) {
 				// Een maaltijd vraagt erom, maar het ligt niet waar je heen gaat.
@@ -392,6 +407,7 @@ export class ShoppingLists {
 			meals: draft.meals.map((ref) => ({ ...ref })),
 			basket: new Map(),
 			nudge: new Map(),
+			skipped: new Set(),
 			extras: [],
 		};
 		this.lists.set(path, list);
@@ -540,6 +556,17 @@ export class ShoppingLists {
 		await this.write(list);
 	}
 
+	/**
+	 * Deze keer overslaan, of toch weer meenemen. Alleen de lijst verandert;
+	 * de telling in de productnotitie blijft wat hij was, want die zegt wat er
+	 * in huis is, en daar verandert een winkelbezoek te voet niets aan.
+	 */
+	async setSkipped(list: ShoppingList, product: Product, skipped: boolean): Promise<void> {
+		if (skipped) list.skipped.add(product.path);
+		else list.skipped.delete(product.path);
+		await this.write(list);
+	}
+
 	// ------------------------------------------------------ losse boodschappen
 
 	extraById(list: ShoppingList, id: string): Extra | null {
@@ -625,6 +652,7 @@ export class ShoppingLists {
 			known.meals = fresh.meals;
 			known.basket = fresh.basket;
 			known.nudge = fresh.nudge;
+			known.skipped = fresh.skipped;
 			known.extras = fresh.extras;
 		} else {
 			this.lists.set(file.path, list);

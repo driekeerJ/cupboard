@@ -220,6 +220,8 @@ export class ListView extends ItemView {
 				},
 				// Wat je koopt is de volgende stap; hier tel je alleen.
 				filters: ["all", "check"],
+				skipped: (product) => lists.isSkipped(list, product),
+				setSkipped: (product, skipped) => lists.setSkipped(list, product, skipped),
 				reload: () => lists.refresh(list),
 			});
 			this.stock.mount(inner, actions, body, sub);

@@ -3004,6 +3004,80 @@
 	background: color-mix(in srgb, var(--text-accent) 10%, transparent);
 }
 
+/* --- Skip this time: a button you hold, not tap ------------------------ */
+
+/* It sits next to the strip you tap all through the counting round, so a
+   plain tap does nothing. Holding fills it from the left; let go early and
+   the label says "hold…". */
+.pantry-app button.pantry-skip {
+	height: 34px;
+	min-height: 0;
+	padding: 0 12px;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	border: 1px dashed var(--background-modifier-border);
+	border-radius: 999px;
+	background-color: transparent;
+	background-image: linear-gradient(
+		color-mix(in srgb, var(--text-muted) 22%, transparent),
+		color-mix(in srgb, var(--text-muted) 22%, transparent)
+	);
+	background-repeat: no-repeat;
+	background-size: 0% 100%;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	box-shadow: none;
+	cursor: pointer;
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
+	-webkit-touch-callout: none;
+}
+
+.pantry-app button.pantry-skip.is-holding {
+	background-size: 100% 100%;
+	transition: background-size 550ms linear;
+	color: var(--text-muted);
+}
+
+.pantry-app button.pantry-skip .pantry-skip-icon {
+	display: inline-flex;
+}
+
+.pantry-app button.pantry-skip svg {
+	width: 14px;
+	height: 14px;
+}
+
+/* Restoring is one tap: a solid button, because it is meant to be pressed. */
+.pantry-app button.pantry-skip.is-active {
+	border-style: solid;
+	color: var(--text-muted);
+}
+
+.pantry-stock-row.is-skipped {
+	padding-top: 10px;
+	padding-bottom: 10px;
+}
+
+.pantry-stock-row.is-skipped .pantry-stock-line {
+	align-items: center;
+	margin-bottom: 0;
+}
+
+.pantry-stock-row.is-skipped .pantry-stock-name {
+	color: var(--text-muted);
+	font-weight: 500;
+	text-decoration: line-through;
+	text-decoration-color: var(--text-faint);
+}
+
+.pantry-skipped {
+	margin-top: 8px;
+}
+
 /* --- Narrow panes and phones ------------------------------------------ */
 
 @media (max-width: 560px) {
@@ -3017,6 +3091,10 @@
 
 	.pantry-app button.pantry-flag .pantry-flag-label {
 		display: none;
+	}
+
+	.pantry-app button.pantry-skip {
+		padding: 0 10px;
 	}
 
 	.pantry-app button.pantry-strip-item {

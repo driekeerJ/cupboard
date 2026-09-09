@@ -78,6 +78,12 @@ export interface ShoppingList {
 	basket: Map<string, BasketEntry>;
 	/** De ± aanpassingen van de lijst, gesleuteld op productpad. */
 	nudge: Map<string, number>;
+	/**
+	 * Deze keer overgeslagen, als productpaden. Niet tellen, niet kopen: je
+	 * gaat lopend naar de winkel en haalt alleen wat echt moet. Het product
+	 * zelf blijft zoals het is — de volgende lijst vraagt er gewoon weer om.
+	 */
+	skipped: Set<string>;
 	extras: Extra[];
 }
 
@@ -199,6 +205,8 @@ export interface ParsedList {
 	/** Het mandje, nog op productnáám: paden kent de notitie niet. */
 	basket: { name: string; entry: BasketEntry }[];
 	nudge: { name: string; step: number }[];
+	/** Overgeslagen, ook nog op naam. */
+	skipped: string[];
 	extras: Extra[];
 }
 
@@ -261,6 +269,12 @@ export function parseList(frontmatter: Record<string, unknown>): ParsedList | nu
 		nudge.push({ name, step: Math.round(step) });
 	}
 
+	const skipped: string[] = [];
+	for (const value of asArray(frontmatter.skipped)) {
+		const name = linkTarget(asText(value));
+		if (name.length > 0 && !skipped.includes(name)) skipped.push(name);
+	}
+
 	return {
 		draft: {
 			date,
@@ -270,6 +284,7 @@ export function parseList(frontmatter: Record<string, unknown>): ParsedList | nu
 		},
 		basket,
 		nudge,
+		skipped,
 		extras: parseExtras(frontmatter.extras),
 	};
 }
@@ -320,6 +335,13 @@ export function serialiseList(
 		nudge.push({ product: toLink(name), step });
 	}
 	if (nudge.length > 0) out.nudge = nudge;
+
+	const skipped: string[] = [];
+	for (const path of list.skipped) {
+		const name = nameOf(path);
+		if (name) skipped.push(toLink(name));
+	}
+	if (skipped.length > 0) out.skipped = skipped;
 
 	if (list.extras.length > 0) {
 		out.extras = list.extras.map((extra) => {
