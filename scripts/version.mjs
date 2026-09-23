@@ -5,14 +5,14 @@
  * through the "version" script, which also stages the two files so they land
  * in the same commit and under the same tag. Obsidian reads the version from
  * manifest.json and the tag must match it exactly, so the three cannot drift.
+ * The tag carries no `v` (see .npmrc): Obsidian compares it literally.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 
-const version = process.env.npm_package_version;
-if (!version) {
-	console.error("Run this through `npm version`, not by hand.");
-	process.exit(1);
-}
+// From package.json on disk, not `npm_package_version`: npm fills that
+// environment variable when it starts, so during `npm version` it still
+// holds the old number.
+const { version } = JSON.parse(readFileSync("package.json", "utf8"));
 
 const manifest = JSON.parse(readFileSync("manifest.json", "utf8"));
 manifest.version = version;
