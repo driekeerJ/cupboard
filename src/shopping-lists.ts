@@ -295,18 +295,23 @@ export class ShoppingLists {
 	/**
 	 * Hoort dit product in de voorraadcheck van deze lijst?
 	 *
-	 * Alles wat de lijst vraagt, plus wat je zelf hebt gemarkeerd om even te
-	 * kijken. Ook wat niet in deze winkels ligt telt mee: tellen doe je thuis,
-	 * in één ronde langs je kasten, en juist daar blijkt dat je van de hummus
-	 * nog drie bakjes hebt. Blijkt er genoeg te zijn, dan valt hij vanzelf uit
-	 * de waarschuwing "Not at these shops" — hij hoefde nooit gehaald te
-	 * worden. De met de hand gezette vlag geldt alleen voor wat hier te koop
-	 * is: die zegt "kijk ernaar vóór je gaat", en dat slaat op deze winkels.
+	 * Alleen wat de lijst vraagt: het minimum of een maaltijd. Ook wat niet in
+	 * deze winkels ligt telt mee: tellen doe je thuis, in één ronde langs je
+	 * kasten, en juist daar blijkt dat je van de hummus nog drie bakjes hebt.
+	 * Blijkt er genoeg te zijn, dan valt hij vanzelf uit de waarschuwing "Not
+	 * at these shops" — hij hoefde nooit gehaald te worden.
+	 *
+	 * De check-vlag maakt een product hier níét relevant. Een kooksessie zet
+	 * hem op alles wat op "+" stond (zie consume.ts), en de meeste van die
+	 * producten vraagt niemand deze week. Tot de tik van 2026-09-23 stonden ze
+	 * dan toch in de check, en wie de vlag daar uitzette zag de regel
+	 * verdwijnen. De vlag blijft op het product staan en doet zijn werk zodra
+	 * een lijst het product wél vraagt: dan staat het onder "Check first" in
+	 * plaats van als "genoeg" — zie `wanted()`.
 	 */
 	relevant(list: ShoppingList, product: Product): boolean {
 		if (product.ignored) return false;
-		if (this.need(list, product) > 0) return true;
-		return product.check && this.atShops(list, product);
+		return this.need(list, product) > 0;
 	}
 
 	/** Deze keer bewust niet: niet tellen, niet kopen, niet waarschuwen. */
@@ -329,8 +334,20 @@ export class ShoppingLists {
 		// Overgeslagen is niet gehaald: de volgende lijst mag hem hebben.
 		if (this.isSkipped(list, product)) return false;
 		if (!this.atShops(list, product)) return false;
+		return this.wanted(list, product);
+	}
+
+	/**
+	 * Vraagt deze lijst dit product, als regel om te kopen of om na te kijken?
+	 *
+	 * Een telling ontbreekt of is gevlagd als onzeker: dan is de vraag "heb je
+	 * het?" en telt wat de lijst nodig heeft. Anders telt wat je zou kopen —
+	 * en "+" is dan genoeg. Zonder de vlag hier zou een product waar je mee
+	 * gekookt hebt terwijl het op "+" stond, stil van de lijst blijven.
+	 */
+	private wanted(list: ShoppingList, product: Product): boolean {
 		const amount = this.amount(list, product);
-		if (amount === null) return this.need(list, product) > 0;
+		if (amount === null || product.check) return this.need(list, product) > 0;
 		return amount > 0;
 	}
 
@@ -356,17 +373,14 @@ export class ShoppingLists {
 				continue;
 			}
 
-			const amount = this.amount(list, product);
-			const wanted =
-				amount === null ? this.need(list, product) > 0 : amount > 0;
-			if (!wanted) continue;
+			if (!this.wanted(list, product)) continue;
 
 			const owner = this.ownerOf(list, product);
 			if (owner) {
 				out.elsewhere.push({ product, list: owner });
 				continue;
 			}
-			if (amount === null || product.check) out.unsure.push(product);
+			if (this.amount(list, product) === null || product.check) out.unsure.push(product);
 			else out.buy.push(product);
 		}
 
@@ -1004,7 +1018,9 @@ export class ShoppingLists {
 
 	amountText(list: ShoppingList, product: Product): string {
 		const amount = this.amount(list, product);
-		if (amount === null) return "?";
+		// Gevlagd en op papier niets te kopen: de vlag zegt juist dat dat
+		// papier niet klopt. Dan is "?" eerlijker dan "0".
+		if (amount === null || (amount === 0 && product.check)) return "?";
 		return `${amount}${product.unit ? ` ${product.unit}` : ""}`;
 	}
 

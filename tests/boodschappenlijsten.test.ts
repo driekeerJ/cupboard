@@ -281,3 +281,32 @@ test("een gegeten maaltijd is geen maaltijd meer op de lijst", async () => {
 	assert.deepEqual(await h.plugin.lists.liveMeals(list), []);
 	assert.match(h.note(list), /Nothing needed\./);
 });
+
+test("een vlag zonder vraag hoort niet in de voorraadcheck van een lijst", async () => {
+	// Een kooksessie zet de vlag op een product dat op "+" staat: die "+" is
+	// dan niet meer te vertrouwen. Maar zolang geen maaltijd erom vraagt en er
+	// geen minimum is, valt er niets te kopen — en dus ook niets te tellen.
+	// De vlag blijft op het product staan tot het er wél toe doet.
+	const h = await run();
+	await h.plugin.products.update(product(h, "Passata"), { count: "plus", check: true });
+	const lidl = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], meals: [] });
+	assert.ok(lidl);
+
+	assert.equal(h.plugin.lists.relevant(lidl, product(h, "Passata")), false);
+	assert.equal(product(h, "Passata").check, true, "de vlag zelf blijft staan");
+	assert.doesNotMatch(h.note(lidl), /Passata/);
+});
+
+test("een gevlagd product dat de maaltijd vraagt staat onder Check first, ook op '+'", async () => {
+	// Dezelfde Passata, maar nu vraagt het recept erom. "+" zegt genoeg, de
+	// vlag zegt dat die "+" onzeker is: dan is "kijk eerst even" het eerlijke
+	// antwoord, niet "niets nodig".
+	const h = await run();
+	await h.plugin.products.update(product(h, "Passata"), { count: "plus", check: true });
+	const lidl = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], meals: [DINNER] });
+	assert.ok(lidl);
+
+	assert.equal(h.plugin.lists.relevant(lidl, product(h, "Passata")), true);
+	assert.ok(h.plugin.lists.buckets(lidl).unsure.some((item) => item.name === "Passata"));
+	assert.match(h.note(lidl), /## Check first\n\n- \[ \] \[\[Passata\]\] · \?/);
+});
