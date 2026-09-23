@@ -1,6 +1,6 @@
 {
   "name": "pantry",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Plan meals, scale recipes and build grocery lists from your notes.",
   "main": "main.js",
   "scripts": {
@@ -9,9 +9,18 @@
     "lint:fix": "eslint . --fix",
     "test": "node --import ./tests/harness/register.mjs --test \"tests/**/*.test.ts\"",
     "build": "npm run test && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-    "build:deploy": "npm run build && node scripts/deploy.mjs"
+    "build:deploy": "npm run build && node scripts/deploy.mjs",
+    "version": "node scripts/version.mjs && git add manifest.json versions.json",
+    "screenshots": "node scripts/screenshots.mjs"
   },
-  "keywords": [],
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "meal-planning",
+    "recipes",
+    "grocery-list",
+    "pantry"
+  ],
   "author": "Jeroen van der Wal",
   "license": "MIT",
   "devDependencies": {

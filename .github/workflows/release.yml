@@ -1,0 +1,55 @@
+# Maakt de GitHub-release die Obsidian's community-catalogus leest.
+#
+# Obsidian haalt main.js, manifest.json en styles.css uit de release waarvan de
+# tag gelijk is aan `version` in manifest.json. Dat is het hele contract: geen
+# npm-publish, geen zip. Een tag pushen is dus de release:
+#
+#   npm version 1.0.1 --no-git-tag-version   # manifest.json + versions.json via
+#                                            # scripts/version.mjs
+#   git commit -am "1.0.1" && git tag 1.0.1 && git push && git push --tags
+#
+# De tag moet zonder `v` — Obsidian vergelijkt letterlijk met manifest.json.
+# Klopt de tag niet met het manifest, dan stopt de workflow vóór de release.
+name: Release
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Amsterdam
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Tag must match manifest.json
+        run: |
+          version="$(node -p "require('./manifest.json').version")"
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            echo "manifest.json says $version but the tag is $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            main.js manifest.json styles.css
