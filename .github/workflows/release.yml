@@ -4,9 +4,8 @@
 # tag gelijk is aan `version` in manifest.json. Dat is het hele contract: geen
 # npm-publish, geen zip. Een tag pushen is dus de release:
 #
-#   npm version 1.0.1 --no-git-tag-version   # manifest.json + versions.json via
-#                                            # scripts/version.mjs
-#   git commit -am "1.0.1" && git tag 1.0.1 && git push && git push --tags
+#   node scripts/release.mjs 1.0.1     # package, lockfile, manifest, versions; commit; tag
+#   git push origin main 1.0.1
 #
 # De tag moet zonder `v` — Obsidian vergelijkt letterlijk met manifest.json.
 # Klopt de tag niet met het manifest, dan stopt de workflow vóór de release.

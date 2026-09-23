@@ -10,8 +10,8 @@
     "test": "node --import ./tests/harness/register.mjs --test \"tests/**/*.test.ts\"",
     "build": "npm run test && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "build:deploy": "npm run build && node scripts/deploy.mjs",
-    "version": "node scripts/version.mjs && git add manifest.json versions.json",
-    "screenshots": "node scripts/screenshots.mjs"
+    "screenshots": "node scripts/screenshots.mjs",
+    "release": "node scripts/release.mjs"
   },
   "keywords": [
     "obsidian",

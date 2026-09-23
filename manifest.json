@@ -1,7 +1,7 @@
 {
 	"id": "cupboard",
 	"name": "Cupboard",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"minAppVersion": "1.7.2",
 	"description": "Plan your meals for the week, scale recipes to the number of eaters and turn them into a grocery list.",
 	"author": "Jeroen van der Wal",
