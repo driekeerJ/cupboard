@@ -65,20 +65,19 @@ test("week-basis: één gepland recept vult de boodschappenlijst", async () => {
 	// Shops/Lidl.md. Olijfolie ligt bij Albert Heijn, dus die winkel staat
 	// ook op de lijst — en krijgt geen kopje, want er valt daar niets te halen.
 	assert.equal(h.list.path, "Cupboard/Shopping/2026-08-24 Lidl · Albert Heijn.md");
-	// De aanhalingstekens om de datums komen van js-yaml in het harnas;
-	// Obsidian schrijft ze kaal. Lezen kan allebei.
+	// Kale datums, zoals Obsidian ze ook schrijft.
 	assert.equal(
 		h.note(h.list),
 		[
 			"---",
 			"pantry: shopping",
 			"format: 2",
-			"date: '2026-08-24'",
+			"date: 2026-08-24",
 			"shops:",
 			"  - '[[Lidl]]'",
 			"  - '[[Albert Heijn]]'",
 			"meals:",
-			"  - date: '2026-08-26'",
+			"  - date: 2026-08-26",
 			"    meal: Dinner",
 			"    recipe: '[[Rijst met ui]]'",
 			"---",

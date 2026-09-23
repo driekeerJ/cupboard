@@ -13,7 +13,7 @@
  * `products.ts`, `needs.ts`, `list.ts` en `consume.ts` **ongewijzigd** draaien.
  * Er is dus geen tweede versie van de code die kan gaan afwijken.
  */
-import { dump, load } from "js-yaml";
+import { dump, load } from "./yaml";
 
 export class TAbstractFile {
 	path = "";
@@ -64,8 +64,5 @@ export function parseYaml(value: string): unknown {
 }
 
 export function stringifyYaml(value: unknown): string {
-	// Obsidian schrijft blokstijl zonder regelafbreking; js-yaml doet dat met
-	// lineWidth -1. Zonder dat knipt hij lange receptnamen af en klopt de
-	// snapshot van de boodschappennotitie niet meer.
-	return dump(value, { lineWidth: -1, noRefs: true });
+	return dump(value);
 }

@@ -1,22 +1,21 @@
 import esbuild from "esbuild";
 import process from "process";
-import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { builtinModules } from "node:module";
 
 const prod = process.argv[2] === "production";
 
+/**
+ * A release build is stamped with the version alone. The community directory
+ * rebuilds main.js from a source archive without git history and expects a
+ * byte-identical file, so nothing that varies per checkout or per clock may
+ * end up in it. A dev build adds the time: those are the ones where "is this
+ * the latest build?" is the actual question.
+ */
 function buildStamp() {
   const { version } = JSON.parse(readFileSync("manifest.json", "utf8"));
-  let commit = "";
-  try {
-    commit = execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] })
-      .toString()
-      .trim();
-  } catch {
-    // No git (a source tarball): the version alone still tells devices apart.
-  }
-  return commit ? `${version} (${commit})` : version;
+  if (prod) return version;
+  return `${version} dev ${new Date().toISOString().slice(0, 16).replace("T", " ")}`;
 }
 
 const context = await esbuild.context({
@@ -50,9 +49,7 @@ const context = await esbuild.context({
   minify: prod,
   // Which build a device runs is shown in the settings tab: Obsidian only
   // picks up a new main.js after a full restart, and Sync does not carry it
-  // to the phone, so "it does not work" is usually "old build". The stamp is
-  // the version plus the commit, never the clock: the community directory
-  // rebuilds the release from source and expects a byte-identical main.js.
+  // to the phone, so "it does not work" is usually "old build".
   define: {
     PANTRY_BUILD: JSON.stringify(buildStamp()),
   },

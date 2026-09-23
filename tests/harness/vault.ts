@@ -10,7 +10,7 @@
  * muteren en terugschrijven. Zonder dat is de schrijfkant van de keten (en dus
  * bevinding H1, voorraad die uit het niets ontstaat) niet te testen.
  */
-import { dump, load } from "js-yaml";
+import { dump, load } from "./yaml";
 // Waardes, geen types: de neppe vault maakt er echte instanties van, zodat
 // `instanceof TFile` en `instanceof TFolder` in de broncode kloppen.
 import { TFile, TFolder } from "obsidian";
@@ -43,7 +43,7 @@ function splitFrontMatter(markdown: string): {
 
 function joinFrontMatter(data: Record<string, unknown>, body: string): string {
 	if (Object.keys(data).length === 0) return body;
-	const yaml = dump(data, { lineWidth: -1, noRefs: true }).trimEnd();
+	const yaml = dump(data).trimEnd();
 	return `---\n${yaml}\n---\n${body.replace(/^\r?\n/, "")}`;
 }
 
