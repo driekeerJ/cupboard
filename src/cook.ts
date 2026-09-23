@@ -178,7 +178,7 @@ export class CookStore {
 		return this.plugin.app.vault;
 	}
 
-	/** True als deze notitie een kooksessie van Pantry is. */
+	/** True als deze notitie een kooksessie van Cupboard is. */
 	isSession(content: string): boolean {
 		return frontmatterValue(content, COOK_MARK) === COOK_MARK_VALUE;
 	}

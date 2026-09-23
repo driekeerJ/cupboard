@@ -60,7 +60,7 @@ export class RecipeIndex {
 		// Een recept dat ergens anders staat maar `pantry: recipe` in de
 		// frontmatter heeft, telt ook mee. De map blijft de gewone manier; dit
 		// is het uitje voor het recept dat om een andere reden ergens anders
-		// hoort te staan. Pantry stempelt haar eigen notities al zo — dat
+		// hoort te staan. Cupboard stempelt haar eigen notities al zo — dat
 		// stempel werd alleen nooit gelezen.
 		for (const file of this.plugin.app.vault.getMarkdownFiles()) {
 			if (found.has(file.path)) continue;
@@ -150,7 +150,7 @@ function sortKey(recipe: Recipe, field: string): string | null {
 	);
 }
 
-/** `pantry: recipe` in de frontmatter: het stempel dat Pantry zelf ook zet. */
+/** `pantry: recipe` in de frontmatter: het stempel dat Cupboard zelf ook zet. */
 export function isMarkedRecipe(frontmatter: Record<string, unknown>): boolean {
 	return toValues(frontmatter.pantry).some(
 		(value) => value.trim().toLowerCase() === "recipe"

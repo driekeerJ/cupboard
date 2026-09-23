@@ -73,7 +73,7 @@ export class SetupWizard extends Modal {
 		contentEl.addClass("pantry-wizard");
 
 		const header = contentEl.createDiv({ cls: "pantry-wizard-header" });
-		header.createDiv({ cls: "pantry-wizard-eyebrow", text: "Pantry setup" });
+		header.createDiv({ cls: "pantry-wizard-eyebrow", text: "Cupboard setup" });
 		this.titleTextEl = header.createEl("h2", { cls: "pantry-wizard-title" });
 		this.introEl = header.createEl("p", { cls: "pantry-wizard-intro" });
 
@@ -170,7 +170,7 @@ export class SetupWizard extends Modal {
 		this.close();
 
 		if (apply) {
-			new Notice("Pantry is ready. Drag a recipe onto the week to get started.");
+			new Notice("Cupboard is ready. Drag a recipe onto the week to get started.");
 			guarded("could not open the planner", () => this.plugin.activatePlanner());
 		}
 	}
@@ -215,7 +215,7 @@ export class SetupWizard extends Modal {
 
 		body.createDiv({
 			cls: "pantry-wizard-note",
-			text: "Pantry creates a folder the first time it writes something there. A recipe folder you name here is one you make yourself.",
+			text: "Cupboard creates a folder the first time it writes something there. A recipe folder you name here is one you make yourself.",
 		});
 	}
 

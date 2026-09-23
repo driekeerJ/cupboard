@@ -20,7 +20,7 @@ const BLOCK_LANGUAGE = "meal-plan";
 
 /** Eerlijk zijn over wat er met hand-edits in dit blok gebeurt. */
 const PLAN_BLOCK_NOTE =
-	"# Pantry herschrijft dit blok bij elke wijziging. Eigen velden en opmerkingen hierin gaan verloren.";
+	"# Cupboard herschrijft dit blok bij elke wijziging. Eigen velden en opmerkingen hierin gaan verloren.";
 /** Matches a fenced ```meal-plan block, capturing its body. */
 const BLOCK_PATTERN = /^```meal-plan[ \t]*\r?\n([\s\S]*?)^```[ \t]*$/m;
 
@@ -141,7 +141,7 @@ export class PlanStore {
 	 * Het plan zoals het in deze notitietekst staat.
 	 *
 	 * Geen blok is een lege week — een notitie die iemand zelf begon en waar
-	 * Pantry het blok nog aan toe moet voegen. Een blok dat er wél is maar niet
+	 * Cupboard het blok nog aan toe moet voegen. Een blok dat er wél is maar niet
 	 * te lezen valt (YAML-fout, opening zonder sluiting) is iets anders: dan
 	 * weten we niet wat er gepland is. Dat plan is leeg én gemarkeerd, en
 	 * `update()` weigert erop te schrijven. Anders wist de eerstvolgende
@@ -411,7 +411,7 @@ export class PlanStore {
 
 		if (result === null || written === null) {
 			this.refuseIfUnreadable(this.planFrom(outcome, weekStart), existing);
-			throw new Error(`Pantry could not update ${path}`);
+			throw new Error(`Cupboard could not update ${path}`);
 		}
 		this.lastWritten = written;
 		return result;
@@ -419,7 +419,7 @@ export class PlanStore {
 
 	private refuseIfUnreadable(plan: WeekPlan, file: TFile): void {
 		if (!plan.unreadable) return;
-		throw new Refusal(`Pantry did not save ${file.basename}: ${plan.unreadable}.`);
+		throw new Refusal(`Cupboard did not save ${file.basename}: ${plan.unreadable}.`);
 	}
 
 	/** De inhoud zoals de open editor hem kent, of null als hij niet openstaat. */

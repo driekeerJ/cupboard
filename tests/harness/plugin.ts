@@ -1,5 +1,5 @@
 /**
- * Zet een complete Pantry neer op een neppe vault.
+ * Zet een complete Cupboard neer op een neppe vault.
  *
  * De indexen zijn de **echte** klassen uit `src/`. Alleen `PantryPlugin` zelf
  * is nagemaakt, want die erft van Obsidians `Plugin` en dat is precies het

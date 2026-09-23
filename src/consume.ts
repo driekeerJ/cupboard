@@ -107,7 +107,7 @@ async function apply(
 				try {
 					await plugin.products.update(product, { check: true });
 				} catch (error) {
-					console.error(`Pantry: could not flag ${product.name}`, error);
+					console.error(`Cupboard: could not flag ${product.name}`, error);
 					change.failed.push(product.name);
 					continue;
 				}
@@ -119,7 +119,7 @@ async function apply(
 		try {
 			await plugin.products.update(product, moved.patch);
 		} catch (error) {
-			console.error(`Pantry: could not update ${product.name}`, error);
+			console.error(`Cupboard: could not update ${product.name}`, error);
 			change.failed.push(product.name);
 			continue;
 		}

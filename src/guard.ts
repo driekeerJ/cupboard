@@ -15,7 +15,7 @@ import { Notice } from "obsidian";
  * houden het spoor vast (`console.error`), en wat ná de schrijfactie hoort te
  * gebeuren — meestal een redraw — gebeurt alleen als de schrijfactie lukte.
  *
- * Bericht schrijven als een zin die achter "Pantry" past:
+ * Bericht schrijven als een zin die achter "Cupboard" past:
  * `guard("could not update the product", …)`.
  */
 export async function guard<T>(
@@ -25,9 +25,9 @@ export async function guard<T>(
 	try {
 		return await work();
 	} catch (error) {
-		console.error(`Pantry: ${message}`, error);
+		console.error(`Cupboard: ${message}`, error);
 		if (error instanceof Refusal) new Notice(error.message);
-		else new Notice(`Pantry ${message}. See the console for details.`);
+		else new Notice(`Cupboard ${message}. See the console for details.`);
 		return null;
 	}
 }
@@ -36,7 +36,7 @@ export async function guard<T>(
  * Een schrijfactie die bewust níét doorging, met een reden die de gebruiker
  * iets zegt: "de notitie is niet te lezen, herstel dat eerst". Anders dan een
  * onverwachte fout hoort de reden zelf in de melding, niet "see the console".
- * De tekst is een volledige zin die met "Pantry" begint.
+ * De tekst is een volledige zin die met "Cupboard" begint.
  */
 export class Refusal extends Error {
 	constructor(message: string) {

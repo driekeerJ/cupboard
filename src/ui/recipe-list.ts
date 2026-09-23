@@ -353,7 +353,7 @@ export class RecipeList {
 		if (all.length === 0) {
 			results.createDiv({
 				cls: "pantry-empty-state",
-				text: `No recipes found. Check the recipe folder in the Pantry settings — it is set to "${this.plugin.settings.recipeFolder}".`,
+				text: `No recipes found. Check the recipe folder in the Cupboard settings — it is set to "${this.plugin.settings.recipeFolder}".`,
 			});
 			return;
 		}

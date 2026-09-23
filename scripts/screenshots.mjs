@@ -61,7 +61,7 @@ function buildVault() {
 		if (!existsSync(from)) throw new Error(`${name} is missing — run npm run build first.`);
 		cpSync(from, join(pluginDir, name));
 	}
-	cpSync(join(ROOT, "demo", ".pantry-demo", "data.json"), join(pluginDir, "data.json"));
+	cpSync(join(ROOT, "demo", ".pantry-demo", "settings.json"), join(pluginDir, "data.json"));
 
 	writeFileSync(join(config, "community-plugins.json"), JSON.stringify([ID]));
 	writeFileSync(join(config, "appearance.json"), JSON.stringify({ theme: "moonstone", baseFontSize: 16 }));
@@ -246,7 +246,7 @@ async function main() {
 
 	const plugin = `app.plugins.plugins[${JSON.stringify(ID)}]`;
 	const command = (name) => `app.commands.executeCommandById(${JSON.stringify(`${ID}:${name}`)})`;
-	const list = JSON.stringify("Pantry/Shopping/2026-09-23 Supermarket.md");
+	const list = JSON.stringify("Cupboard/Shopping/2026-09-23 Supermarket.md");
 
 	// Wrapped so nothing DOM-shaped travels back over the wire: CDP refuses to
 	// serialise a returned view or modal ("object reference chain is too long").
@@ -263,6 +263,9 @@ async function main() {
 	// `changeLayout` rather than detaching leaves: since Obsidian 1.14 the
 	// root iteration skips deferred tabs, so detaching left the rest standing.
 	async function screen(name, expression, settle = 900) {
+		// The pointer happens to rest wherever the window came up; a title under
+		// it shows a tooltip. Park it in the corner first.
+		await s.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 2, y: 2 });
 		await s.run(quietly(`app.workspace.changeLayout(${JSON.stringify(LAYOUT)})`));
 		await sleep(300);
 		await s.run(quietly(expression));
@@ -286,7 +289,7 @@ async function main() {
 		`app.workspace.getLeaf(false).openFile(app.vault.getFileByPath(${JSON.stringify(path)}), { state: { mode: "preview" } })`;
 	await screen("recipe-note", openNote("Recipes/Chickpea curry.md"), 1200);
 	await screen("plan-note", openNote("Meal plans/2026-W39.md"), 1400);
-	await screen("list-note", openNote("Pantry/Shopping/2026-09-23 Supermarket.md"), 1200);
+	await screen("list-note", openNote("Cupboard/Shopping/2026-09-23 Supermarket.md"), 1200);
 	await screen("setup", `${plugin}.runSetup()`, 800);
 	await escape();
 

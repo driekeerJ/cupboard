@@ -16,7 +16,7 @@
  * - **de maaltijden** uit het weekplan die deze keer meegaan. Een maaltijd zit
  *   in hooguit één lijst, anders koop je dubbel.
  *
- * De lijst is een notitie in `Pantry/Shopping/`: de keuzes, het mandje en de
+ * De lijst is een notitie in `Cupboard/Shopping/`: de keuzes, het mandje en de
  * ± aanpassingen staan in de frontmatter, de afvinklijst in de body. Klaar
  * verhuist de notitie naar `Done/`. Zo is er niets buiten de vault dat
  * bijgehouden moet worden, en neemt Obsidian Sync alles mee naar je telefoon.
@@ -40,13 +40,13 @@ export const LIST_MARK_VALUE = "shopping";
  * Een afgeronde lijst. Hij verhuist naar de map `Done/` en krijgt dit merk,
  * zodat de index hem niet meer ziet maar de notitie er nog wel is: wat je
  * gehaald hebt staat erin, en een Done die je niet bedoelde is terug te
- * draaien door het merk terug te zetten. Na `cookKeepDays` ruimt Pantry hem op.
+ * draaien door het merk terug te zetten. Na `cookKeepDays` ruimt Cupboard hem op.
  */
 export const DONE_MARK_VALUE = "shopping-done";
 /** Submap van de lijstmap waar afgeronde lijsten heen gaan. */
 export const DONE_FOLDER = "Done";
 
-/** Het stuk van de notitie dat Pantry beheert; zie src/notes.ts. */
+/** Het stuk van de notitie dat Cupboard beheert; zie src/notes.ts. */
 export const LIST_REGION = "shopping";
 
 /** Een geplande maaltijd uit het weekplan, precies genoeg om hem terug te vinden. */
@@ -107,7 +107,7 @@ export interface ShoppingList {
 	unresolved: Unresolved;
 	/**
 	 * Waarom deze lijst hier niet geschreven mag worden: de notitie komt van
-	 * een nieuwere Pantry dan deze build. Lezen en tonen mag; elke schrijfactie
+	 * een nieuwere Cupboard dan deze build. Lezen en tonen mag; elke schrijfactie
 	 * weigert, en Home zegt dat dit apparaat bijgewerkt moet worden.
 	 */
 	frozen: string | null;
@@ -188,7 +188,7 @@ export function listLabel(draft: Pick<ListDraft, "date" | "shops">): string {
 	return `${where} · ${formatListDate(draft.date)}`;
 }
 
-/** `Pantry/Shopping/2026-09-10 Lidl · AH.md` — de datum voorop, dan sorteert de map zichzelf. */
+/** `Cupboard/Shopping/2026-09-10 Lidl · AH.md` — de datum voorop, dan sorteert de map zichzelf. */
 export function listPath(folder: string, draft: Pick<ListDraft, "date" | "shops">): string {
 	const base = folder.replace(/\/+$/, "");
 	const where = draft.shops.length > 0 ? draft.shops.join(" · ") : "Shopping";

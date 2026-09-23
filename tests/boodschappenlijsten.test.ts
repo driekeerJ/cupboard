@@ -218,7 +218,7 @@ test("de lijst verhuist mee met haar winkels en datum, met het mandje", async ()
 		meals: [],
 	});
 
-	assert.equal(list.path, "Pantry/Shopping/2026-08-27 Lidl · AH.md");
+	assert.equal(list.path, "Cupboard/Shopping/2026-08-27 Lidl · AH.md");
 	assert.equal(h.vault.files.has(was), false, "de oude notitie is weg");
 	assert.equal(list.basket.has("Products/Ui.md"), true, "het mandje blijft");
 	assert.match(h.note(list), /^arrives: after Dinner$/m);

@@ -5,9 +5,9 @@
  * Twee apparaten, één vault, en Obsidian Sync neemt de plugin zelf niet
  * automatisch mee: de telefoon kan weken op een oudere build draaien dan de
  * Mac. Een oudere build die een nieuwere notitie herschrijft, gooit stil weg
- * wat hij niet kent. Daarom staat in elke notitie die Pantry schrijft het
+ * wat hij niet kent. Daarom staat in elke notitie die Cupboard schrijft het
  * formaatnummer, en weigert een build die een hoger nummer tegenkomt te
- * schrijven — met een banner op Home die zegt: werk Pantry op dit apparaat bij.
+ * schrijven — met een banner op Home die zegt: werk Cupboard op dit apparaat bij.
  *
  * Verhoog `PANTRY_FORMAT` alleen als een oudere build een nieuwe notitie
  * verkeerd zou lezen of iets zou weggooien. Een extra optioneel veld is geen
@@ -30,11 +30,11 @@ export function formatOf(value: unknown): number {
 	return Number.isInteger(n) && n > 0 ? n : 1;
 }
 
-/** Geschreven door een nieuwere Pantry dan deze build: niet aanraken. */
+/** Geschreven door een nieuwere Cupboard dan deze build: niet aanraken. */
 export function isNewer(value: unknown): boolean {
 	return formatOf(value) > PANTRY_FORMAT;
 }
 
 export function newerMessage(value: unknown): string {
-	return `written by a newer Pantry (format ${formatOf(value)}, this build reads ${PANTRY_FORMAT}) — update Pantry on this device`;
+	return `written by a newer Cupboard (format ${formatOf(value)}, this build reads ${PANTRY_FORMAT}) — update Cupboard on this device`;
 }

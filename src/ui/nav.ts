@@ -11,7 +11,7 @@ export const LISTS_VIEW_TYPE = "pantry-shopping-lists";
 export const LIST_VIEW_TYPE = "pantry-shopping-list";
 
 /**
- * Pantry is seven screens, and moving between them should feel like one app
+ * Cupboard is seven screens, and moving between them should feel like one app
  * rather than seven tabs. Every screen therefore replaces the one before it in
  * the same leaf, and carries the same way back.
  *
@@ -30,8 +30,8 @@ export async function openHere(
 export function drawBackLink(parent: HTMLElement, view: ItemView): HTMLElement {
 	const back = parent.createEl("button", { cls: "pantry-back" });
 	setIcon(back.createSpan({ cls: "pantry-back-icon" }), "arrow-left");
-	back.createSpan({ cls: "pantry-back-label", text: "Pantry" });
-	back.setAttr("aria-label", "Back to Pantry");
+	back.createSpan({ cls: "pantry-back-label", text: "Cupboard" });
+	back.setAttr("aria-label", "Back to Cupboard");
 	back.onclick = () =>
 		guarded("could not open the home screen", () => openHere(view, HOME_VIEW_TYPE));
 	return back;

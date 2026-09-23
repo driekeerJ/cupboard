@@ -1,5 +1,5 @@
 /**
- * De maten die Pantry kent, op één plek.
+ * De maten die Cupboard kent, op één plek.
  *
  * Er stonden er twee: `needs.ts` had de omrekentabellen en `ingredients.ts` een
  * lijst met precies dezelfde twintig woorden om een maat te herkennen. Ze

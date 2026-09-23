@@ -42,7 +42,7 @@ import type { PantrySettings } from "./types";
  * Elk scherm van de plugin, op één plek.
  *
  * Deze tabel voedt vier dingen die eerder los van elkaar werden bijgehouden:
- * welke tabbladen bij Pantry horen, welke `registerView` er is, welk commando
+ * welke tabbladen bij Cupboard horen, welke `registerView` er is, welk commando
  * het palet aanbiedt, en welke schermen na een wijziging opnieuw getekend
  * worden. Die laatste twee waren allebei met de hand bijgehouden lijsten en
  * allebei al uit de pas: `refreshStockViews` miste Cleanup, en zes schermen
@@ -211,8 +211,8 @@ export default class PantryPlugin extends Plugin {
 		);
 
 		// One door into the plugin; the screens behind it navigate to each other.
-		this.addRibbonIcon("chef-hat", "Open Pantry", () => {
-			guarded("could not open Pantry", () => this.activateHome());
+		this.addRibbonIcon("chef-hat", "Open Cupboard", () => {
+			guarded("could not open Cupboard", () => this.activateHome());
 		});
 
 		// Elk scherm heeft een commando.
@@ -443,7 +443,7 @@ export default class PantryPlugin extends Plugin {
 						const changed = await this.products.renameShop(was, file.basename);
 						if (changed > 0) {
 							new Notice(
-								`Pantry moved ${changed} product${changed === 1 ? "" : "s"} to ${file.basename}.`
+								`Cupboard moved ${changed} product${changed === 1 ? "" : "s"} to ${file.basename}.`
 							);
 						}
 					});
@@ -463,7 +463,7 @@ export default class PantryPlugin extends Plugin {
 						);
 						if (notes > 0) {
 							new Notice(
-								`Pantry renamed "${was}" in ${notes} meal plan${notes === 1 ? "" : "s"}.`
+								`Cupboard renamed "${was}" in ${notes} meal plan${notes === 1 ? "" : "s"}.`
 							);
 						}
 					});
@@ -479,7 +479,7 @@ export default class PantryPlugin extends Plugin {
 						const notes = await this.plans.renameRecipe(was, file.basename);
 						if (notes > 0) {
 							new Notice(
-								`Pantry updated ${notes} meal plan${notes === 1 ? "" : "s"}.`
+								`Cupboard updated ${notes} meal plan${notes === 1 ? "" : "s"}.`
 							);
 						}
 					});
@@ -495,7 +495,7 @@ export default class PantryPlugin extends Plugin {
 	}
 
 	/**
-	 * Opens a Pantry screen, reusing the tab a Pantry screen is already in. The
+	 * Opens a Cupboard screen, reusing the tab a Cupboard screen is already in. The
 	 * screens replace each other, so the plugin behaves like one app
 	 * rather than a drawer full of tabs.
 	 */
@@ -503,8 +503,8 @@ export default class PantryPlugin extends Plugin {
 	 * Brings a screen up, reusing the tab it is already in.
 	 *
 	 * Op de telefoon deelt de hele plugin één tabblad: daar is een tweede
-	 * Pantry-scherm naast het eerste geen ruimte maar verlies, dus wordt een
-	 * bestaand Pantry-tabblad omgezet. Buiten de telefoon kostte diezelfde
+	 * Cupboard-scherm naast het eerste geen ruimte maar verlies, dus wordt een
+	 * bestaand Cupboard-tabblad omgezet. Buiten de telefoon kostte diezelfde
 	 * regel meer dan hij opleverde — klikken op het ribbon-icoon terwijl je op
 	 * Voorraad stond maakte van jouw Voorraad-tab een Home-tab, twee schermen
 	 * naast elkaar kon niet, en een vastgezet tabblad werd toch weggenavigeerd.
@@ -714,7 +714,7 @@ export default class PantryPlugin extends Plugin {
 
 	/** Called after settings change so open planners pick the change up at once. */
 	/**
-	 * Redraws every open Pantry screen.
+	 * Redraws every open Cupboard screen.
 	 *
 	 * Eén lus over de schermtabel, in plaats van zeven keer hetzelfde blok met
 	 * een `instanceof` per view. Dat handmatige lijstje liep al achter: Cook

@@ -159,7 +159,7 @@ test("een handgeschreven regel die niets van ons is blijft met rust", async () =
 
 test("onzin in de frontmatter wordt overgeslagen, de rest niet", async () => {
 	const h = await run({
-		"Pantry/Shopping/2026-08-24 Lidl.md": [
+		"Cupboard/Shopping/2026-08-24 Lidl.md": [
 			"---",
 			"pantry: shopping",
 			"format: 2",
@@ -178,9 +178,9 @@ test("onzin in de frontmatter wordt overgeslagen, de rest niet", async () => {
 		].join("\n"),
 	});
 	// `run` maakte zelf ook een lijst; die kreeg een volgnummer omdat het pad bezet was.
-	assert.equal(h.list.path, "Pantry/Shopping/2026-08-24 Lidl 2.md");
+	assert.equal(h.list.path, "Cupboard/Shopping/2026-08-24 Lidl 2.md");
 	await h.plugin.lists.refreshAll();
-	const list = h.plugin.lists.byPath("Pantry/Shopping/2026-08-24 Lidl.md");
+	const list = h.plugin.lists.byPath("Cupboard/Shopping/2026-08-24 Lidl.md");
 	assert.ok(list);
 
 	const extras = list.extras;

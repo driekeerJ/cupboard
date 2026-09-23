@@ -73,7 +73,7 @@ export class HomeView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return "Pantry";
+		return "Cupboard";
 	}
 
 	getIcon(): string {
@@ -275,7 +275,7 @@ export class HomeView extends ItemView {
 		const head = root.createDiv({ cls: "pantry-head" });
 		const inner = head.createDiv({ cls: "pantry-head-inner" });
 		const titles = inner.createDiv({ cls: "pantry-head-titles" });
-		titles.createEl("h1", { cls: "pantry-head-title", text: "Pantry" });
+		titles.createEl("h1", { cls: "pantry-head-title", text: "Cupboard" });
 		this.subEl = titles.createDiv({ cls: "pantry-head-sub" });
 
 		this.bodyEl = root.createDiv({ cls: "pantry-body" });

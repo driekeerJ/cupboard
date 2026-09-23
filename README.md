@@ -1,4 +1,4 @@
-# Pantry
+# Cupboard
 
 Plan the week's meals, scale recipes to the people who are eating, keep track
 of what is in the house, and walk into the shop with a list that is already
@@ -10,7 +10,7 @@ servers, no network requests.
 
 ## What it does
 
-**Plan the week.** Drag recipes onto the days. Tick who is eating, and Pantry
+**Plan the week.** Drag recipes onto the days. Tick who is eating, and Cupboard
 works out the servings: a child can count as half an adult portion, guests
 count as a full one. A note per day holds what the calendar says, and grocery
 stops mark when a shop's goods arrive.
@@ -51,7 +51,7 @@ made on the desktop is the one you tick off in the shop.
 
 ## Your notes stay yours
 
-Pantry reads and writes ordinary Markdown. Nothing is stored anywhere else,
+Cupboard reads and writes ordinary Markdown. Nothing is stored anywhere else,
 and you can edit every note by hand.
 
 - **Recipes** are notes in a folder you choose. Ingredients are a bulleted
@@ -107,18 +107,18 @@ and you can edit every note by hand.
 
   ![A weekly plan note, with the planner rendered inside it](docs/screenshots/plan-note.png)
 
-- **Shopping lists** are one note per trip in `Pantry/Shopping/`. The choices
+- **Shopping lists** are one note per trip in `Cupboard/Shopping/`. The choices
   go in the frontmatter; the body is the checklist, kept in step with the
   product notes. Tick a box in the note and the product counts as full again.
 
-Every note Pantry writes carries a `format` number. A device running an older
+Every note Cupboard writes carries a `format` number. A device running an older
 build reads newer notes but never overwrites them, so two devices on
 different versions cannot lose each other's work.
 
 ## Getting started
 
 1. Install the plugin and enable it.
-2. Click the chef's hat in the ribbon, or run **Pantry: Open home**. The setup
+2. Click the chef's hat in the ribbon, or run **Cupboard: Open home**. The setup
    walks you through the recipe folder, the meals you plan (dinner only, or
    breakfast, lunch and dinner), and who eats along.
 3. Put recipes in the recipe folder. Link ingredients to products with

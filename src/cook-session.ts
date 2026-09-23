@@ -16,7 +16,7 @@
 import { LINK_TARGET } from "./links";
 import { parseNumber } from "./number";
 
-/** De frontmatter-sleutel die een notitie als kooksessie van Pantry merkt. */
+/** De frontmatter-sleutel die een notitie als kooksessie van Cupboard merkt. */
 export const COOK_MARK = "pantry";
 export const COOK_MARK_VALUE = "cook";
 
@@ -95,7 +95,7 @@ export function renderSession(input: SessionInput): string {
 	return out.join("\n");
 }
 
-/** Alleen het stuk dat Pantry beheert; de notities eronder blijven van jou. */
+/** Alleen het stuk dat Cupboard beheert; de notities eronder blijven van jou. */
 export function renderRegion(input: SessionInput): string[] {
 	const out: string[] = [INGREDIENTS_HEADING, ""];
 

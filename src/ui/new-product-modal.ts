@@ -492,7 +492,7 @@ export class NewProductModal extends Modal {
 		});
 
 		if (!file) {
-			new Notice(`Pantry could not create ${name}.`);
+			new Notice(`Cupboard could not create ${name}.`);
 			return;
 		}
 

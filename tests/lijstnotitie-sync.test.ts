@@ -104,7 +104,7 @@ test("Done zet de lijst opzij in Done/, en sweep ruimt hem later op", async () =
 	await h.plugin.lists.finish(list);
 
 	assert.equal(h.vault.files.has(was), false, "weg uit de lijstmap");
-	const done = "Pantry/Shopping/Done/2026-08-25 Lidl.md";
+	const done = "Cupboard/Shopping/Done/2026-08-25 Lidl.md";
 	const note = h.vault.read(done);
 	assert.match(note, /^---\npantry: shopping-done\n/, "herkenbaar als afgerond");
 	assert.match(note, /\ndone: '?\d{4}-\d{2}-\d{2}'?\n/);
@@ -114,11 +114,11 @@ test("Done zet de lijst opzij in Done/, en sweep ruimt hem later op", async () =
 	assert.deepEqual(h.plugin.lists.all(), [], "ook niet na herlezen van de map");
 
 	// Vers afgerond: blijft. Oud genoeg: gaat weg. Een eigen notitie: blijft.
-	h.vault.write("Pantry/Shopping/Done/Eigen aantekening.md", "# Mijn lijstje\n");
+	h.vault.write("Cupboard/Shopping/Done/Eigen aantekening.md", "# Mijn lijstje\n");
 	await h.plugin.lists.sweep();
 	assert.ok(h.vault.files.has(done));
 	h.vault.write(done, note.replace(/\ndone: '?\d{4}-\d{2}-\d{2}'?\n/, "\ndone: 2020-01-01\n"));
 	await h.plugin.lists.sweep();
 	assert.equal(h.vault.files.has(done), false, "opgeruimd na de bewaartermijn");
-	assert.ok(h.vault.files.has("Pantry/Shopping/Done/Eigen aantekening.md"));
+	assert.ok(h.vault.files.has("Cupboard/Shopping/Done/Eigen aantekening.md"));
 });

@@ -147,7 +147,7 @@ const PRODUCT_BODY = [
 	"> `previous`, `counted` \u2014 de vorige stand en wanneer je voor het laatst telde.",
 	"> `check` \u2014 met de hand gemarkeerd: hier wil je naar kijken.",
 	"",
-	"Pantry beheert de frontmatter hierboven. Deze tekst is van jou.",
+	"Cupboard beheert de frontmatter hierboven. Deze tekst is van jou.",
 	"",
 ].join("\n");
 

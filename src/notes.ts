@@ -3,7 +3,7 @@ import { Notice, TFile, type Vault } from "obsidian";
 /**
  * Gedeeld gereedschap voor notities die de plugin zelf schrijft.
  *
- * De rode draad: **een notitie is van de gebruiker.** Pantry schrijft alleen in
+ * De rode draad: **een notitie is van de gebruiker.** Cupboard schrijft alleen in
  * het stuk dat het zelf heeft neergezet, en laat de rest ongemoeid — ook als
  * dat een handgeschreven regel, een Dataview-blok of een briefje aan de slager
  * is. Wat de plugin niet herkent, blijft staan.
@@ -20,7 +20,7 @@ export async function ensureFolder(vault: Vault, path: string): Promise<void> {
 }
 
 /**
- * De grenzen van het stuk dat Pantry beheert.
+ * De grenzen van het stuk dat Cupboard beheert.
  *
  * HTML-commentaar en geen `%%`: een Obsidian-commentaarblok verbergt álles
  * ertussen, en dan is de boodschappenlijst onzichtbaar in leesweergave.
@@ -50,7 +50,7 @@ export function replaceRegion(content: string, name: string, body: string): stri
 	return before.length === 0 ? `${block}\n` : `${before}\n\n${block}\n`;
 }
 
-/** True als de notitie een stuk van Pantry bevat. */
+/** True als de notitie een stuk van Cupboard bevat. */
 export function hasRegion(content: string, name: string): boolean {
 	const { start, end } = regionMarkers(name);
 	const from = content.indexOf(start);
@@ -76,8 +76,8 @@ const warned = new Set<string>();
 export function warnOnce(path: string, message: string): void {
 	if (warned.has(path)) return;
 	warned.add(path);
-	console.error(`Pantry: ${message} (${path})`);
-	new Notice(`Pantry ${message}.`);
+	console.error(`Cupboard: ${message} (${path})`);
+	new Notice(`Cupboard ${message}.`);
 }
 
 /** Vergeet de waarschuwing, zodat een opgeloste situatie opnieuw gemeld kan worden. */

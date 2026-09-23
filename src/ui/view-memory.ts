@@ -1,7 +1,7 @@
 /**
  * Where you were on a screen, kept for as long as Obsidian is open.
  *
- * Pantry's screens share one tab, so tapping through to a product note tears
+ * Cupboard's screens share one tab, so tapping through to a product note tears
  * the Stock view down and coming back builds a new one. Without this the list
  * reopened on "All", scrolled to the top — halfway through a counting round
  * that is the worst possible place to be put back.

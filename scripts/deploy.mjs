@@ -39,7 +39,7 @@ if (!vault) {
 	process.exit(1);
 }
 
-const target = join(vault, ".obsidian", "plugins", "pantry");
+const target = join(vault, ".obsidian", "plugins", "cupboard");
 mkdirSync(target, { recursive: true });
 
 for (const name of ARTEFACTS) {

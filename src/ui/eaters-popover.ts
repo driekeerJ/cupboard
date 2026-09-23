@@ -195,7 +195,7 @@ export class EatersPopover {
 		if (household.length === 0) {
 			body.createDiv({
 				cls: "pantry-settings-hint",
-				text: "No household members yet. Add them in the Pantry settings.",
+				text: "No household members yet. Add them in the Cupboard settings.",
 			});
 		} else {
 			const list = body.createDiv({ cls: "pantry-eaters" });

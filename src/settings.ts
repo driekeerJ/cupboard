@@ -253,7 +253,7 @@ export class PantrySettingTab extends PluginSettingTab {
 		if (notes === 0) return;
 
 		new Notice(
-			`Pantry renamed "${from.trim()}" to "${to.trim()}" in ${notes} plan note${
+			`Cupboard renamed "${from.trim()}" to "${to.trim()}" in ${notes} plan note${
 				notes === 1 ? "" : "s"
 			}.`
 		);
@@ -352,7 +352,7 @@ export class PantrySettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Cook session folder")
 			.setDesc(
-				"Every time you cook, Pantry writes a note here: the ingredients scaled for that meal, the steps, and your ticks."
+				"Every time you cook, Cupboard writes a note here: the ingredients scaled for that meal, the steps, and your ticks."
 			)
 			.addText((text) => {
 				text
@@ -624,8 +624,8 @@ export class PantrySettingTab extends PluginSettingTab {
 							const written = await this.plugin.people.moveToNotes();
 							new Notice(
 								written === 0
-									? "Pantry found nothing to move."
-									: `Pantry wrote ${written} note${written === 1 ? "" : "s"}.`
+									? "Cupboard found nothing to move."
+									: `Cupboard wrote ${written} note${written === 1 ? "" : "s"}.`
 							);
 							this.plugin.refreshViews();
 							this.drawHousehold(false);
@@ -637,7 +637,7 @@ export class PantrySettingTab extends PluginSettingTab {
 		if (household.length === 0) {
 			list.createDiv({
 				cls: "pantry-settings-hint",
-				text: "No one added yet. Add at least one person so Pantry can work out servings.",
+				text: "No one added yet. Add at least one person so Cupboard can work out servings.",
 			});
 			return;
 		}

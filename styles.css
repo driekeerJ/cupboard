@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------------ *
- * Pantry
+ * Cupboard
  * ------------------------------------------------------------------ */
 
 .pantry-view {
@@ -2409,7 +2409,7 @@
 }
 
 /* ====================================================================
- * Pantry app surface — Stock and Groceries
+ * Cupboard app surface — Stock and Groceries
  *
  * One design for both screens: a full-bleed sticky header over a column
  * of content that never grows wider than a comfortable reading measure,

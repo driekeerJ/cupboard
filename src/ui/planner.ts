@@ -225,7 +225,7 @@ export class PlannerGrid {
 		try {
 			await this.plugin.needs.rebuild(new Date());
 		} catch (error) {
-			console.error("Pantry: could not work out what the week needs", error);
+			console.error("Cupboard: could not work out what the week needs", error);
 		}
 	}
 
@@ -330,11 +330,11 @@ export class PlannerGrid {
 		try {
 			this.plan = await this.plugin.plans.update(this.weekStart, change);
 		} catch (error) {
-			console.error("Pantry: could not save the meal plan", error);
+			console.error("Cupboard: could not save the meal plan", error);
 			new Notice(
 				error instanceof Refusal
 					? error.message
-					: "Pantry could not save your meal plan. See the console for details."
+					: "Cupboard could not save your meal plan. See the console for details."
 			);
 		}
 	}
@@ -397,11 +397,11 @@ export class PlannerGrid {
 			await this.refreshNeeds();
 			this.drawGrid();
 		} catch (error) {
-			console.error("Pantry: could not save the meal plan", error);
+			console.error("Cupboard: could not save the meal plan", error);
 			new Notice(
 				error instanceof Refusal
 					? error.message
-					: "Pantry could not save your meal plan. See the console for details."
+					: "Cupboard could not save your meal plan. See the console for details."
 			);
 			// Het rooster is al getekend met de wijziging erin, maar op schijf
 			// staat hij niet. Opnieuw laden, zodat het scherm de waarheid toont
@@ -483,7 +483,7 @@ export class PlannerGrid {
 		if (meals.length === 0) {
 			grid.createDiv({
 				cls: "pantry-empty-state",
-				text: "No meals configured yet. Add one in the Pantry settings to start planning.",
+				text: "No meals configured yet. Add one in the Cupboard settings to start planning.",
 			});
 			return;
 		}
@@ -1150,7 +1150,7 @@ export class PlannerGrid {
 		const failed = [...(taken?.failed ?? []), ...(given?.failed ?? [])];
 		if (failed.length > 0) {
 			new Notice(
-				`Pantry could not update ${list(failed)}. See the console for details.`
+				`Cupboard could not update ${list(failed)}. See the console for details.`
 			);
 		}
 	}

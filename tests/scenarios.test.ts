@@ -64,7 +64,7 @@ test("week-basis: één gepland recept vult de boodschappenlijst", async () => {
 	// looproutevolgorde: Groente vóór Droogwaren, want zo staat het in
 	// Shops/Lidl.md. Olijfolie ligt bij Albert Heijn, dus die winkel staat
 	// ook op de lijst — en krijgt geen kopje, want er valt daar niets te halen.
-	assert.equal(h.list.path, "Pantry/Shopping/2026-08-24 Lidl · Albert Heijn.md");
+	assert.equal(h.list.path, "Cupboard/Shopping/2026-08-24 Lidl · Albert Heijn.md");
 	// De aanhalingstekens om de datums komen van js-yaml in het harnas;
 	// Obsidian schrijft ze kaal. Lezen kan allebei.
 	assert.equal(
@@ -86,7 +86,7 @@ test("week-basis: één gepland recept vult de boodschappenlijst", async () => {
 			"# Lidl · Albert Heijn · Mon 24 Aug",
 			"",
 			"<!-- pantry:shopping -->",
-			"*Kept up to date by Pantry. Tick a box and that product counts as full again.*",
+			"*Kept up to date by Cupboard. Tick a box and that product counts as full again.*",
 			"",
 			"## Lidl",
 			"",
@@ -158,10 +158,10 @@ test("een notitie in de lijstmap die geen lijst is blijft ongemoeid", async () =
 	const h = await run("week-basis");
 
 	const vanJeroen = "# Mijn eigen lijstje\n\n- [ ] kaarsen\n";
-	h.vault.write("Pantry/Shopping/Eigen.md", vanJeroen);
+	h.vault.write("Cupboard/Shopping/Eigen.md", vanJeroen);
 	await h.plugin.lists.refreshAll();
 
-	assert.equal(h.vault.read("Pantry/Shopping/Eigen.md"), vanJeroen, "geen frontmatter, geen markers, niet aankomen");
+	assert.equal(h.vault.read("Cupboard/Shopping/Eigen.md"), vanJeroen, "geen frontmatter, geen markers, niet aankomen");
 	assert.equal(h.plugin.lists.all().length, 1, "en het is geen lijst geworden");
 });
 

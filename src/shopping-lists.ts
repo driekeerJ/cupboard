@@ -39,7 +39,7 @@ import {
 import { Refusal } from "./guard";
 
 /** Waar de lijsten staan als er niets is ingesteld. */
-export const DEFAULT_SHOPPING_FOLDER = "Pantry/Shopping";
+export const DEFAULT_SHOPPING_FOLDER = "Cupboard/Shopping";
 
 const BOUGHT_HEADING = "## In the basket";
 const CHECK_HEADING = "## Check first";
@@ -52,7 +52,7 @@ const ANY_TICK = /^\s*-\s\[([ xX])\]\s*(.+?)\s*$/;
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 
 const SIGNATURE =
-	"*Kept up to date by Pantry. Tick a box and that product counts as full again.*";
+	"*Kept up to date by Cupboard. Tick a box and that product counts as full again.*";
 
 /** De sleutels die de plugin zelf beheert in de frontmatter van een lijst. */
 const OWN_KEYS = ["pantry", "format", "date", "arrives", "shops", "meals", "basket", "nudge", "skipped", "extras"];
@@ -826,7 +826,7 @@ export class ShoppingLists {
 
 	/**
 	 * Schrijft de notitie van een lijst: de keuzes in de frontmatter, de
-	 * afvinklijst in het stuk dat Pantry beheert. Wat je zelf onder de lijst
+	 * afvinklijst in het stuk dat Cupboard beheert. Wat je zelf onder de lijst
 	 * schrijft blijft staan; een frontmatter-veld dat niet van ons is ook.
 	 */
 	async write(list: ShoppingList): Promise<void> {
@@ -868,7 +868,7 @@ export class ShoppingLists {
 			// valt er ook niets te melden.
 			if (!change) return;
 			change(list);
-			throw new Refusal(`Pantry did not save: the list note ${list.path} is gone.`);
+			throw new Refusal(`Cupboard did not save: the list note ${list.path} is gone.`);
 		}
 		// M40: een lege productindex is geen boodschappenlijst van niks.
 		if (this.plugin.products.all().length === 0) {
@@ -890,13 +890,13 @@ export class ShoppingLists {
 		let refused: string | null = null;
 		const written = await vault.process(file, (latest: string) => {
 			if (!this.mayWriteTo(latest, list.path)) {
-				refused = `Pantry left ${list.path} alone: it is not a Pantry shopping list.`;
+				refused = `Cupboard left ${list.path} alone: it is not a Cupboard shopping list.`;
 				return latest;
 			}
 			const fresh = this.read(list.path, latest);
 			if (fresh) adopt(list, fresh);
 			if (list.frozen) {
-				refused = `Pantry did not save ${file.basename}: ${list.frozen}.`;
+				refused = `Cupboard did not save ${file.basename}: ${list.frozen}.`;
 				return latest;
 			}
 			change?.(list);
@@ -910,12 +910,12 @@ export class ShoppingLists {
 		this.lastWritten.set(list.path, written);
 	}
 
-	/** Alleen een notitie die van Pantry is, of leeg is, wordt aangeraakt. */
+	/** Alleen een notitie die van Cupboard is, of leeg is, wordt aangeraakt. */
 	private mayWriteTo(content: string, path: string): boolean {
 		if (content.trim().length === 0) return true;
 		if (hasRegion(content, LIST_REGION)) return true;
 		if (parseList(this.frontmatterOf(content))) return true;
-		warnOnce(path, `left ${path} alone: it is not a Pantry shopping list`);
+		warnOnce(path, `left ${path} alone: it is not a Cupboard shopping list`);
 		return false;
 	}
 

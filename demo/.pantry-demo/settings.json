@@ -1,0 +1,48 @@
+{
+  "recipeFolder": "Recipes",
+  "planFolder": "Meal plans",
+  "productFolder": "Products",
+  "shoppingFolder": "Cupboard/Shopping",
+  "shopFolder": "Shops",
+  "servingsField": "servings",
+  "cookFolder": "Cook sessions",
+  "householdFolder": "",
+  "weekStartDay": 1,
+  "cookKeepDays": 30,
+  "horizonDays": 14,
+  "meals": [
+    {
+      "id": "dinner",
+      "name": "Dinner"
+    }
+  ],
+  "household": [
+    {
+      "id": "maya",
+      "name": "Maya",
+      "portionFactor": 1
+    },
+    {
+      "id": "noah",
+      "name": "Noah",
+      "portionFactor": 1
+    },
+    {
+      "id": "lou",
+      "name": "Lou",
+      "portionFactor": 0.5
+    },
+    {
+      "id": "bo",
+      "name": "Bo",
+      "portionFactor": 0.5
+    }
+  ],
+  "displayFields": [
+    "time",
+    "type",
+    "rating"
+  ],
+  "setupComplete": true,
+  "cookTimers": {}
+}
