@@ -1,4 +1,4 @@
-import { Modal, Notice, setIcon, TFolder } from "obsidian";
+import { Modal, Notice, setIcon } from "obsidian";
 import type PantryPlugin from "../main";
 import { WEEKDAY_NAMES } from "../date";
 import { guarded } from "../guard";
@@ -180,12 +180,11 @@ export class SetupWizard extends Modal {
 	 * ---------------------------------------------------------------- */
 
 	private folderNames(): string[] {
-		const folders: string[] = [];
-		// Vault.getAllLoadedFiles covers folders as well as notes.
-		this.app.vault.getAllLoadedFiles().forEach((file) => {
-			if (file instanceof TFolder && file.path !== "/") folders.push(file.path);
-		});
-		return folders.sort((a, b) => a.localeCompare(b));
+		// Only the folders: the wizard has no business with every file path.
+		return this.app.vault
+			.getAllFolders(false)
+			.map((folder) => folder.path)
+			.sort((a, b) => a.localeCompare(b));
 	}
 
 	private drawFolders(body: HTMLElement): void {

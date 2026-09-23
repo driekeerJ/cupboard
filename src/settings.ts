@@ -8,6 +8,7 @@ import {
 import type PantryPlugin from "./main";
 import { BUILD_STAMP, PANTRY_FORMAT } from "./format";
 import { WEEKDAY_NAMES } from "./date";
+import type { SettingDefinitionItem } from "obsidian";
 import { guarded } from "./guard";
 import { DEFAULT_SHOPPING_FOLDER } from "./shopping-lists";
 import { parseNumber } from "./number";
@@ -215,6 +216,11 @@ export class PantrySettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
+	/**
+	 * Obsidian 1.13 and later never call this: they render
+	 * `getSettingDefinitions()` themselves. Older versions know nothing of
+	 * definitions and get the same tab drawn by hand here.
+	 */
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
@@ -235,6 +241,267 @@ export class PantrySettingTab extends PluginSettingTab {
 
 	private async save(): Promise<void> {
 		await this.plugin.saveSettings();
+	}
+
+	/**
+	 * The same settings, declared. Obsidian 1.13 and later index these for
+	 * the settings search; `display()` keeps drawing the tab itself, because
+	 * the meal and household lists with their rename migration have no
+	 * declarative shape. Keys are fields of `PantrySettings`, so the default
+	 * `getControlValue` reads them straight from `plugin.settings`; the two
+	 * that are stored in another shape than they are edited in (a weekday
+	 * number, a list of fields) are translated below.
+	 */
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		return [
+			{
+				name: "Build",
+				desc: `Built ${BUILD_STAMP} · note format ${PANTRY_FORMAT}. Every device should show the same build; restart Obsidian fully after updating.`,
+				searchable: false,
+			},
+			{
+				name: "Setup",
+				desc: "Walk through the folders, week start, meals and household again.",
+				action: () => this.plugin.runSetup(),
+			},
+			{
+				type: "group",
+				heading: "Folders",
+				items: [
+					{
+						name: "Recipe folder",
+						desc: "Every note in this folder is treated as a recipe.",
+						control: { type: "folder", key: "recipeFolder", placeholder: "Recipes" },
+					},
+					{
+						name: "Shops folder",
+						desc: "One note per shop. The bullet list inside it is the order you walk past the shelves.",
+						control: { type: "folder", key: "shopFolder", placeholder: "Shops" },
+					},
+					{
+						name: "Shopping lists folder",
+						desc: "One note per shopping list: what it is for, what is in the basket, and the list itself.",
+						control: { type: "folder", key: "shoppingFolder", placeholder: DEFAULT_SHOPPING_FOLDER },
+					},
+					{
+						name: "Meal plan folder",
+						desc: "Weekly plan notes are created here, one note per week.",
+						control: { type: "folder", key: "planFolder", placeholder: "Meal plans" },
+					},
+					{
+						name: "Cook session folder",
+						desc: "Every time you cook, a note is written here: the ingredients scaled for that meal, the steps, and your ticks.",
+						control: { type: "folder", key: "cookFolder", placeholder: "Cook sessions" },
+					},
+					{
+						name: "Product folder",
+						desc: "Your base list: one note per product, holding the amount you always want in stock.",
+						control: { type: "folder", key: "productFolder", placeholder: "Products" },
+					},
+					{
+						name: "Keep finished cook sessions and shopping lists for",
+						desc: "Days. Older ones go to the trash when Obsidian starts. 0 keeps everything.",
+						control: { type: "number", key: "cookKeepDays", min: 0, step: 1, placeholder: "30" },
+					},
+				],
+			},
+			{
+				type: "group",
+				heading: "Week",
+				items: [
+					{
+						name: "Start of the week",
+						desc: "The day your planning week begins on.",
+						control: {
+							type: "dropdown",
+							key: "weekStartDay",
+							options: Object.fromEntries(WEEKDAY_NAMES.map((name, index) => [`${index}`, name])),
+						},
+					},
+					{
+						name: "Plan ahead for",
+						desc: "Days. How far forward the grocery list looks, counting from today.",
+						control: { type: "number", key: "horizonDays", min: 1, step: 1, placeholder: "14" },
+					},
+				],
+			},
+			{
+				type: "group",
+				heading: "Meals",
+				extraButtons: [
+					(button) =>
+						button
+							.setIcon("plus")
+							.setTooltip("Add meal")
+							.onClick(() => guarded("could not add a meal", () => this.addMeal())),
+				],
+				items: [
+					{
+						name: "Meals",
+						desc: "The rows of your planner. Name them however you like.",
+						render: (setting) => this.hostList(setting, "meals"),
+					},
+				],
+			},
+			{
+				type: "group",
+				heading: "Household",
+				extraButtons: [
+					(button) =>
+						button
+							.setIcon("plus")
+							.setTooltip("Add person")
+							.setDisabled(this.plugin.people.usingNotes())
+							.onClick(() => guarded("could not add a person", () => this.addPerson())),
+				],
+				items: [
+					{
+						name: "Household folder",
+						desc: "One note per person, with portionFactor in the frontmatter. Leave empty to keep the household in the plugin's own data file.",
+						control: { type: "folder", key: "householdFolder", placeholder: "Household" },
+					},
+					{
+						name: "Household",
+						desc: "Everyone who eats along. The portion factor lets a child count as part of an adult portion \u2014 0.5 means half a portion.",
+						render: (setting) => this.hostList(setting, "household"),
+					},
+				],
+			},
+			{
+				type: "group",
+				heading: "Recipe fields",
+				items: [
+					{
+						name: "Servings field",
+						desc: "Frontmatter field holding the number of servings a recipe is written for.",
+						control: { type: "text", key: "servingsField", placeholder: "servings" },
+					},
+					{
+						name: "Fields shown on recipe cards",
+						desc: "Comma separated frontmatter fields, for example: duration, type",
+						control: { type: "text", key: "displayFields", placeholder: "duration, type" },
+					},
+				],
+			},
+		];
+	}
+
+	/**
+	 * A row that holds one of the editable lists. The framework gives a
+	 * `Setting`; the list goes under its name and description, full width,
+	 * and is redrawn in place whenever an entry changes so the pane never
+	 * scrolls away.
+	 */
+	private hostList(setting: Setting, which: "meals" | "household"): () => void {
+		setting.settingEl.addClass("pantry-settings-block");
+		const list = setting.settingEl.createDiv({ cls: "pantry-settings-list" });
+		if (which === "meals") {
+			this.mealsListEl = list;
+			this.drawMeals(false);
+		} else {
+			this.householdListEl = list;
+			this.drawHousehold(false);
+		}
+		return () => {
+			if (which === "meals" && this.mealsListEl === list) this.mealsListEl = null;
+			if (which === "household" && this.householdListEl === list) this.householdListEl = null;
+		};
+	}
+
+	private async addMeal(): Promise<void> {
+		const meals = this.plugin.settings.meals;
+		meals.push({ id: makeId("meal", meals.map((m) => m.id)), name: "" });
+		await this.save();
+		this.drawMeals(true);
+	}
+
+	private async addPerson(): Promise<void> {
+		const household = this.plugin.settings.household;
+		household.push({
+			id: makeId("person", household.map((m) => m.id)),
+			name: "",
+			portionFactor: 1,
+		});
+		await this.save();
+		this.drawHousehold(true);
+	}
+
+	getControlValue(key: string): unknown {
+		const settings = this.plugin.settings;
+		if (key === "weekStartDay") return `${settings.weekStartDay}`;
+		if (key === "displayFields") return settings.displayFields.join(", ");
+		return (settings as unknown as Record<string, unknown>)[key];
+	}
+
+	/**
+	 * One place that turns what was typed into a valid setting, saves it and
+	 * refreshes what depends on it. Both the tab's own controls and Obsidian's
+	 * declarative rendering land here, so the rules cannot drift apart.
+	 */
+	async setControlValue(key: string, value: unknown): Promise<void> {
+		const settings = this.plugin.settings;
+		// The number controls hand over a number; everything else is text.
+		const text =
+			typeof value === "string" ? value.trim() : typeof value === "number" ? `${value}` : "";
+		const days = (fallback: number, least: number): number => {
+			const parsed = Number(text);
+			return Number.isFinite(parsed) && parsed >= least ? Math.floor(parsed) : fallback;
+		};
+
+		switch (key) {
+			case "recipeFolder":
+			case "shopFolder":
+			case "planFolder":
+			case "cookFolder":
+			case "productFolder":
+			case "householdFolder":
+				settings[key] = text;
+				break;
+			case "shoppingFolder":
+				settings.shoppingFolder = text || DEFAULT_SHOPPING_FOLDER;
+				break;
+			case "cookKeepDays":
+				settings.cookKeepDays = days(0, 0);
+				break;
+			case "horizonDays":
+				settings.horizonDays = days(DEFAULT_SETTINGS.horizonDays, 1);
+				break;
+			case "weekStartDay":
+				settings.weekStartDay = days(DEFAULT_SETTINGS.weekStartDay, 0);
+				break;
+			case "servingsField":
+				settings.servingsField = text || "servings";
+				break;
+			case "displayFields":
+				settings.displayFields = text
+					.split(",")
+					.map((field) => field.trim())
+					.filter((field) => field.length > 0);
+				break;
+			default:
+				return;
+		}
+		await this.save();
+
+		switch (key) {
+			case "shoppingFolder":
+				await this.plugin.lists.refreshAll();
+				this.plugin.refreshViews();
+				break;
+			case "productFolder":
+				this.plugin.products.build();
+				this.plugin.refreshViews();
+				break;
+			case "householdFolder":
+				this.plugin.people.build();
+				this.plugin.refreshViews();
+				this.drawHousehold(false);
+				break;
+			case "weekStartDay":
+			case "displayFields":
+				this.plugin.refreshViews();
+				break;
+		}
 	}
 
 	/**
@@ -298,10 +565,7 @@ export class PantrySettingTab extends PluginSettingTab {
 				text
 					.setPlaceholder("Recipes")
 					.setValue(this.plugin.settings.recipeFolder);
-				onCommit(text, async (value) => {
-					this.plugin.settings.recipeFolder = value.trim();
-					await this.save();
-				});
+				onCommit(text, (value) => this.setControlValue("recipeFolder", value));
 			});
 
 		new Setting(containerEl)
@@ -313,10 +577,7 @@ export class PantrySettingTab extends PluginSettingTab {
 				text
 					.setPlaceholder("Shops")
 					.setValue(this.plugin.settings.shopFolder);
-				onCommit(text, async (value) => {
-					this.plugin.settings.shopFolder = value.trim();
-					await this.save();
-				});
+				onCommit(text, (value) => this.setControlValue("shopFolder", value));
 			});
 
 		new Setting(containerEl)
@@ -328,12 +589,7 @@ export class PantrySettingTab extends PluginSettingTab {
 				text
 					.setPlaceholder(DEFAULT_SHOPPING_FOLDER)
 					.setValue(this.plugin.settings.shoppingFolder);
-				onCommit(text, async (value) => {
-					this.plugin.settings.shoppingFolder = value.trim() || DEFAULT_SHOPPING_FOLDER;
-					await this.save();
-					await this.plugin.lists.refreshAll();
-					this.plugin.refreshViews();
-				});
+				onCommit(text, (value) => this.setControlValue("shoppingFolder", value));
 			});
 
 		new Setting(containerEl)
@@ -343,10 +599,7 @@ export class PantrySettingTab extends PluginSettingTab {
 				text
 					.setPlaceholder("Meal plans")
 					.setValue(this.plugin.settings.planFolder);
-				onCommit(text, async (value) => {
-					this.plugin.settings.planFolder = value.trim();
-					await this.save();
-				});
+				onCommit(text, (value) => this.setControlValue("planFolder", value));
 			});
 
 		new Setting(containerEl)
@@ -358,10 +611,7 @@ export class PantrySettingTab extends PluginSettingTab {
 				text
 					.setPlaceholder("Cook sessions")
 					.setValue(this.plugin.settings.cookFolder);
-				onCommit(text, async (value) => {
-					this.plugin.settings.cookFolder = value.trim();
-					await this.save();
-				});
+				onCommit(text, (value) => this.setControlValue("cookFolder", value));
 			});
 
 		new Setting(containerEl)
@@ -373,12 +623,7 @@ export class PantrySettingTab extends PluginSettingTab {
 				text
 					.setPlaceholder("30")
 					.setValue(`${this.plugin.settings.cookKeepDays}`);
-				onCommit(text, async (value) => {
-					const days = Number(value.trim());
-					this.plugin.settings.cookKeepDays =
-					Number.isFinite(days) && days >= 0 ? Math.floor(days) : 0;
-					await this.save();
-				});
+				onCommit(text, (value) => this.setControlValue("cookKeepDays", value));
 			});
 
 		new Setting(containerEl)
@@ -390,14 +635,7 @@ export class PantrySettingTab extends PluginSettingTab {
 				text
 					.setPlaceholder("14")
 					.setValue(`${this.plugin.settings.horizonDays}`);
-				onCommit(text, async (value) => {
-					const days = Number(value.trim());
-					this.plugin.settings.horizonDays =
-						Number.isFinite(days) && days >= 1
-							? Math.floor(days)
-							: DEFAULT_SETTINGS.horizonDays;
-					await this.save();
-				});
+				onCommit(text, (value) => this.setControlValue("horizonDays", value));
 			});
 
 		new Setting(containerEl)
@@ -409,12 +647,7 @@ export class PantrySettingTab extends PluginSettingTab {
 				text
 					.setPlaceholder("Products")
 					.setValue(this.plugin.settings.productFolder);
-				onCommit(text, async (value) => {
-					this.plugin.settings.productFolder = value.trim();
-					await this.save();
-					this.plugin.products.build();
-					this.plugin.refreshViews();
-				});
+				onCommit(text, (value) => this.setControlValue("productFolder", value));
 			});
 	}
 
@@ -430,10 +663,10 @@ export class PantrySettingTab extends PluginSettingTab {
 				});
 				dropdown
 					.setValue(`${this.plugin.settings.weekStartDay}`)
-					.onChange(async (value) => {
-						this.plugin.settings.weekStartDay = Number(value);
-						await this.save();
-						this.plugin.refreshViews();
+					.onChange((value) => {
+						guarded("could not save your settings", () =>
+							this.setControlValue("weekStartDay", value)
+						);
 					});
 			});
 	}
@@ -451,15 +684,7 @@ export class PantrySettingTab extends PluginSettingTab {
 				button
 					.setButtonText("Add meal")
 					.setCta()
-					.onClick(async () => {
-						const meals = this.plugin.settings.meals;
-						meals.push({
-							id: makeId("meal", meals.map((m) => m.id)),
-							name: "",
-						});
-						await this.save();
-						this.drawMeals(true);
-					})
+					.onClick(() => guarded("could not add a meal", () => this.addMeal()))
 			);
 
 		this.mealsListEl = containerEl.createDiv({ cls: "pantry-settings-list" });
@@ -553,16 +778,7 @@ export class PantrySettingTab extends PluginSettingTab {
 					.setButtonText("Add person")
 					.setCta()
 					.setDisabled(this.plugin.people.usingNotes())
-					.onClick(async () => {
-						const household = this.plugin.settings.household;
-						household.push({
-							id: makeId("person", household.map((m) => m.id)),
-							name: "",
-							portionFactor: 1,
-						});
-						await this.save();
-						this.drawHousehold(true);
-					})
+					.onClick(() => guarded("could not add a person", () => this.addPerson()))
 			);
 
 		new Setting(containerEl)
@@ -574,13 +790,7 @@ export class PantrySettingTab extends PluginSettingTab {
 				text
 					.setPlaceholder("Household")
 					.setValue(this.plugin.settings.householdFolder);
-				onCommit(text, async (value) => {
-					this.plugin.settings.householdFolder = value.trim();
-					await this.save();
-					this.plugin.people.build();
-					this.plugin.refreshViews();
-					this.drawHousehold(false);
-				});
+				onCommit(text, (value) => this.setControlValue("householdFolder", value));
 			});
 
 		this.householdListEl = containerEl.createDiv({ cls: "pantry-settings-list" });
@@ -705,10 +915,7 @@ export class PantrySettingTab extends PluginSettingTab {
 				text
 					.setPlaceholder("servings")
 					.setValue(this.plugin.settings.servingsField);
-				onCommit(text, async (value) => {
-					this.plugin.settings.servingsField = value.trim() || "servings";
-					await this.save();
-				});
+				onCommit(text, (value) => this.setControlValue("servingsField", value));
 			});
 
 		new Setting(containerEl)
@@ -718,14 +925,7 @@ export class PantrySettingTab extends PluginSettingTab {
 				text
 					.setPlaceholder("duration, type")
 					.setValue(this.plugin.settings.displayFields.join(", "));
-				onCommit(text, async (value) => {
-					this.plugin.settings.displayFields = value
-					.split(",")
-					.map((field) => field.trim())
-					.filter((field) => field.length > 0);
-					await this.save();
-					this.plugin.refreshViews();
-				});
+				onCommit(text, (value) => this.setControlValue("displayFields", value));
 			});
 	}
 }

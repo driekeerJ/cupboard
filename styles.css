@@ -217,6 +217,17 @@
 	width: 72px;
 }
 
+/* A settings row that hosts a list (meals, household) under Obsidian's own
+   declarative settings: the list wraps below the name and takes the width. */
+.pantry-settings-block {
+	flex-wrap: wrap;
+}
+
+.pantry-settings-block > .pantry-settings-list {
+	flex-basis: 100%;
+	width: 100%;
+}
+
 .pantry-settings-list {
 	display: flex;
 	flex-direction: column;
@@ -628,7 +639,6 @@
 
 .pantry-planned-card.is-skipped .pantry-planned-name {
 	text-decoration: line-through;
-	text-decoration-thickness: 1px;
 }
 
 .pantry-planned-card.is-eaten:hover,
@@ -3071,7 +3081,6 @@
 	color: var(--text-muted);
 	font-weight: 500;
 	text-decoration: line-through;
-	text-decoration-color: var(--text-faint);
 }
 
 .pantry-skipped {
@@ -4140,16 +4149,17 @@
 	font-family: inherit;
 	line-height: inherit;
 	text-align: left;
-	text-decoration: underline;
-	text-decoration-style: dotted;
-	text-underline-offset: 2px;
+	/* A dotted rule under the name, drawn as a border: the CSS lint of the
+	   community directory marks the decoration-style properties as partial. */
+	border-bottom: 1px dotted currentcolor;
+	padding-bottom: 0;
 	cursor: pointer;
 }
 
 .pantry-planned-warning-name:hover,
 .pantry-planned-warning-name:focus-visible {
 	background: hsla(38, 75%, 45%, 0.16);
-	text-decoration-style: solid;
+	border-bottom-style: solid;
 	box-shadow: none;
 }
 

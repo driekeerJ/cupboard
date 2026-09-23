@@ -19,6 +19,10 @@ on:
 
 permissions:
   contents: write
+  # Attestations let a user verify that main.js was built here, from this
+  # commit, and not swapped afterwards. The community directory checks for them.
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -44,6 +48,14 @@ jobs:
             echo "manifest.json says $version but the tag is $GITHUB_REF_NAME"
             exit 1
           fi
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
 
       - name: Create release
         env:

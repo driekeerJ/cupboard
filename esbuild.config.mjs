@@ -1,8 +1,23 @@
 import esbuild from "esbuild";
 import process from "process";
+import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { builtinModules } from "node:module";
 
 const prod = process.argv[2] === "production";
+
+function buildStamp() {
+  const { version } = JSON.parse(readFileSync("manifest.json", "utf8"));
+  let commit = "";
+  try {
+    commit = execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+  } catch {
+    // No git (a source tarball): the version alone still tells devices apart.
+  }
+  return commit ? `${version} (${commit})` : version;
+}
 
 const context = await esbuild.context({
   entryPoints: ["src/main.ts"],
@@ -33,12 +48,13 @@ const context = await esbuild.context({
   treeShaking: true,
   outfile: "main.js",
   minify: prod,
-  // Het bouwtijdstip staat in de plugin (Settings → Pantry), zodat je op elk
-  // apparaat kunt zien of het de laatste build draait. Obsidian pakt een
-  // nieuwe main.js pas op na een volledige herstart, en Sync brengt hem niet
-  // vanzelf naar de telefoon — "werkt niet" is meestal "oude build".
+  // Which build a device runs is shown in the settings tab: Obsidian only
+  // picks up a new main.js after a full restart, and Sync does not carry it
+  // to the phone, so "it does not work" is usually "old build". The stamp is
+  // the version plus the commit, never the clock: the community directory
+  // rebuilds the release from source and expects a byte-identical main.js.
   define: {
-    PANTRY_BUILD: JSON.stringify(new Date().toISOString().slice(0, 16).replace("T", " ")),
+    PANTRY_BUILD: JSON.stringify(buildStamp()),
   },
 });
 
