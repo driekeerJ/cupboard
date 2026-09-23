@@ -1,6 +1,6 @@
 {
   "name": "cupboard",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Plan meals, scale recipes and build grocery lists from your notes.",
   "main": "main.js",
   "scripts": {
