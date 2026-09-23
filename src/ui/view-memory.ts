@@ -32,6 +32,12 @@ export type ListStep = "setup" | "stock" | "shop";
 /** Waar je was in één boodschappenlijst: de stap, en per stap de plek. */
 export interface ListMemory {
 	step: ListStep;
+	/**
+	 * De kop ingeklapt tot één regel. In de winkel of tijdens het tellen
+	 * zegt de kop niets meer en neemt hij een derde van het scherm; wat je
+	 * daar dichtklapt moet dicht blijven als je een product opent en terugkomt.
+	 */
+	folded: boolean;
 	stock: StockMemory;
 	shop: ShoppingMemory;
 }
@@ -50,7 +56,12 @@ export class ViewMemory {
 	list(path: string): ListMemory {
 		let memory = this.lists.get(path);
 		if (!memory) {
-			memory = { step: "shop", stock: freshStock(), shop: { shop: "", scroll: 0 } };
+			memory = {
+				step: "shop",
+				folded: false,
+				stock: freshStock(),
+				shop: { shop: "", scroll: 0 },
+			};
 			this.lists.set(path, memory);
 		}
 		return memory;

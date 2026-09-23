@@ -4510,6 +4510,70 @@
 	cursor: default;
 }
 
+/* --- De kop ingeklapt ------------------------------------------------- *
+ * In de winkel of tijdens het tellen is de kop dood gewicht. De titel is
+ * de vouwknop; ingeklapt blijft één regel over met de naam en de knop van
+ * de stap. Alles wat de stap in de kop zet (zoekveld, filters, voortgang)
+ * gaat mee dicht, zonder dat de stap ervan hoeft te weten.
+ */
+
+.pantry-list button.pantry-head-toggle {
+	display: inline-flex;
+	align-items: center;
+	align-self: flex-start;
+	gap: 6px;
+	height: auto;
+	min-height: 0;
+	width: auto;
+	max-width: 100%;
+	margin: 0 0 0 -6px;
+	padding: 2px 8px 2px 4px;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-normal);
+	text-align: left;
+	cursor: pointer;
+}
+
+.pantry-list button.pantry-head-toggle:hover {
+	background: var(--background-modifier-hover);
+}
+
+.pantry-list .pantry-head-caret {
+	display: inline-flex;
+	flex: none;
+	color: var(--text-faint);
+}
+
+.pantry-list .pantry-head-caret svg {
+	width: 18px;
+	height: 18px;
+}
+
+.pantry-list .pantry-head.is-folded {
+	padding-top: 8px;
+	padding-bottom: 8px;
+}
+
+.pantry-list .pantry-head.is-folded .pantry-head-inner > :not(.pantry-head-row),
+.pantry-list .pantry-head.is-folded .pantry-head-sub {
+	display: none;
+}
+
+.pantry-list .pantry-head.is-folded .pantry-head-row {
+	align-items: center;
+}
+
+.pantry-list .pantry-head.is-folded h1.pantry-head-title {
+	font-size: 1.05em;
+	letter-spacing: -0.01em;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 /* --- Het overzicht: één rij per lijst --------------------------------- */
 
 .pantry-list-item {

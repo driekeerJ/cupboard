@@ -164,10 +164,7 @@ export class ListView extends ItemView {
 
 		const top = inner.createDiv({ cls: "pantry-head-row" });
 		const titles = top.createDiv({ cls: "pantry-head-titles" });
-		titles.createEl("h1", {
-			cls: "pantry-head-title",
-			text: list ? listLabel(list) : "New shopping list",
-		});
+		this.drawFoldToggle(head, titles, list ? listLabel(list) : "New shopping list");
 		const sub = titles.createDiv({ cls: "pantry-head-sub" });
 		const actions = top.createDiv({ cls: "pantry-head-actions" });
 
@@ -235,6 +232,32 @@ export class ListView extends ItemView {
 		this.shop = new ShopStep(this.plugin, list);
 		this.shop.mount(inner, actions, body, sub);
 		if (scroll > 0) root.scrollTop = scroll;
+	}
+
+	/**
+	 * De titel is de vouwknop. Ingeklapt blijft alleen deze rij over: de
+	 * naam en de knop van de stap. De rest — terug, subregel, stappen,
+	 * zoekveld, filters — gaat via CSS op `is-folded` weg, zodat de stappen
+	 * hun bediening gewoon in `inner` kunnen blijven zetten.
+	 */
+	private drawFoldToggle(head: HTMLElement, titles: HTMLElement, title: string): void {
+		const memory = this.path ? this.plugin.ui.list(this.path) : null;
+		const toggle = titles.createEl("button", { cls: "pantry-head-toggle" });
+		const caret = toggle.createSpan({ cls: "pantry-head-caret" });
+		toggle.createEl("h1", { cls: "pantry-head-title", text: title });
+		const paint = (): void => {
+			const folded = memory?.folded ?? false;
+			head.toggleClass("is-folded", folded);
+			setIcon(caret, folded ? "chevron-right" : "chevron-down");
+			toggle.setAttr("aria-expanded", folded ? "false" : "true");
+			toggle.setAttr("aria-label", folded ? "Show the list header" : "Hide the list header");
+		};
+		paint();
+		if (!memory) return;
+		toggle.onclick = () => {
+			memory.folded = !memory.folded;
+			paint();
+		};
 	}
 
 	private summary(list: ShoppingList): string {
