@@ -60,6 +60,10 @@ export class StockPanel {
 	private bodyEl: HTMLElement | null = null;
 	private countEl: HTMLElement | null = null;
 	private hideEl: HTMLButtonElement | null = null;
+	private foldEl: HTMLButtonElement | null = null;
+	// De plekken in huis die bij de laatste tekenbeurt in beeld stonden; de
+	// knop "Fold all" werkt daarop, niet op alles wat ooit ingeklapt was.
+	private storages: string[] = [];
 
 	// Rows that no longer belong in this list but are being held in place, by
 	// product path. Nothing takes them away on its own: counting is a rhythm —
@@ -87,6 +91,16 @@ export class StockPanel {
 	mount(head: HTMLElement, actions: HTMLElement, body: HTMLElement, countEl: HTMLElement): void {
 		this.bodyEl = body;
 		this.countEl = countEl;
+
+		// Alles dicht of alles open: je loopt de kasten één voor één langs en
+		// wilt de rest niet in beeld. Open je de kast van dit moment, dan
+		// blijft de knop "Fold all" — pas als alles dicht is wordt het "Unfold".
+		this.foldEl = actions.createEl("button", { cls: "pantry-icon-button" });
+		this.foldEl.onclick = () => {
+			if (this.allFolded()) this.memory.collapsed.clear();
+			else this.storages.forEach((storage) => this.memory.collapsed.add(storage));
+			this.drawList();
+		};
 
 		this.hideEl = actions.createEl("button", { cls: "pantry-text-button" });
 		this.hideEl.onclick = () => {
@@ -215,6 +229,23 @@ export class StockPanel {
 		});
 	}
 
+	private allFolded(): boolean {
+		return (
+			this.storages.length > 0 &&
+			this.storages.every((storage) => this.memory.collapsed.has(storage))
+		);
+	}
+
+	private drawFoldButton(): void {
+		const button = this.foldEl;
+		if (!button) return;
+		const folded = this.allFolded();
+		button.toggleClass("is-hidden", this.storages.length === 0);
+		button.empty();
+		setIcon(button, folded ? "chevrons-up-down" : "chevrons-down-up");
+		button.setAttr("aria-label", folded ? "Unfold all places" : "Fold all places");
+	}
+
 	private drawHideButton(): void {
 		const button = this.hideEl;
 		if (!button) return;
@@ -231,6 +262,8 @@ export class StockPanel {
 		const restore = keepScroll(body);
 		body.empty();
 		this.drawHideButton();
+		this.storages = [];
+		this.drawFoldButton();
 
 		const all = this.source.candidates();
 		if (all.length === 0) {
@@ -277,14 +310,14 @@ export class StockPanel {
 			groups.set(key, bucket);
 		});
 
-		[...groups.keys()]
-			.sort((a, b) => (a === UNASSIGNED ? 1 : b === UNASSIGNED ? -1 : a.localeCompare(b)))
-			.forEach((storage) => {
-				const items = (groups.get(storage) ?? []).sort((a, b) =>
-					a.name.localeCompare(b.name)
-				);
-				this.drawGroup(body, storage, items);
-			});
+		this.storages = [...groups.keys()].sort((a, b) =>
+			a === UNASSIGNED ? 1 : b === UNASSIGNED ? -1 : a.localeCompare(b)
+		);
+		this.drawFoldButton();
+		this.storages.forEach((storage) => {
+			const items = (groups.get(storage) ?? []).sort((a, b) => a.name.localeCompare(b.name));
+			this.drawGroup(body, storage, items);
+		});
 
 		if (skipped.length > 0) this.drawSkipped(body, skipped);
 

@@ -2838,7 +2838,9 @@
 	opacity: 0.5;
 }
 
-.pantry-stock button.pantry-text-button.is-hidden {
+/* Hide checked and Fold all, on All stock and on a list's Check stock. */
+.pantry-app .pantry-head-actions .pantry-text-button.is-hidden,
+.pantry-app .pantry-head-actions .pantry-icon-button.is-hidden {
 	display: none;
 }
 
