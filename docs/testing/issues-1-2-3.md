@@ -5,7 +5,7 @@ gebruikers of breekt het makkelijkst. Kom je in tijdnood, stop dan na blok C.
 
 **Voorbereiding**
 - [ ] Obsidian **volledig** herstart (niet alleen plugin uit/aan) en de kluis *Cupboard test* geopend
-- [ ] Instellingen → Cupboard: de regel *Build* toont een tijdstempel van vandaag
+- [ ] Instellingen → Cupboard: onderaan staat het kopje **Shopping** met *Tick boxes on the right*. Dat is het bewijs dat de nieuwe build draait (*Build* zelf toont alleen het versienummer, 1.0.3)
 - [ ] Op de iPhone: dezelfde kluis geopend via iCloud (pakt de build vanzelf mee)
 
 ---
