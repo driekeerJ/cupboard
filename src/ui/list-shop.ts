@@ -5,9 +5,16 @@ import type { Product } from "../products";
 import type { Extra } from "../extras";
 import type { ShopGroup } from "../grouping";
 import { listLabel, type ShoppingList } from "../shopping-list";
-import { emptyState, keepScroll } from "./kit";
+import { emptyState, flip, keepScroll, tapOrHold } from "./kit";
 import { ExtraModal } from "./extra-modal";
 import { ProductSheet } from "./product-sheet";
+
+/**
+ * Zo lang blijft een afgevinkt product op zijn plek staan voordat het naar
+ * onderen zakt. Lang genoeg om te zien dat je de goede rij raakte, kort
+ * genoeg dat de volgende rij al weer bovenaan staat als je verder kijkt.
+ */
+const SETTLE_MS = 900;
 
 /**
  * De derde stap: de lijst die je in de winkel vasthoudt.
@@ -24,6 +31,13 @@ export class ShopStep {
 	private bodyEl: HTMLElement | null = null;
 	private countEl: HTMLElement | null = null;
 	private barEl: HTMLElement | null = null;
+	/**
+	 * Net afgevinkt, nog niet gezakt. Deze rijen sorteren alsof ze nog open
+	 * zijn, zodat ze doorgestreept blijven staan waar je tikte; als de timer
+	 * afloopt glijden ze in één keer naar onderen.
+	 */
+	private settling = new Set<string>();
+	private settleTimer = 0;
 
 	constructor(plugin: PantryPlugin, list: ShoppingList) {
 		this.plugin = plugin;
@@ -111,6 +125,7 @@ export class ShopStep {
 
 		const restore = keepScroll(body);
 		body.empty();
+		body.toggleClass("is-tick-right", this.plugin.settings.tickRight);
 
 		const lists = this.plugin.lists;
 		const { buy, unsure, elsewhere, notHere } = lists.buckets(this.list);
@@ -220,7 +235,7 @@ export class ShopStep {
 		group.shelves.forEach(({ shelf, items, extras }) => {
 			if (group.shelves.length > 1) list.createDiv({ cls: "pantry-shelf", text: shelf });
 			[...items]
-				.sort((a, b) => (this.isDone(a) ? 1 : 0) - (this.isDone(b) ? 1 : 0))
+				.sort((a, b) => (this.sinks(a) ? 1 : 0) - (this.sinks(b) ? 1 : 0))
 				.forEach((product) => this.drawRow(list, product, null));
 			extras.forEach((extra) => this.drawExtraRow(list, extra));
 		});
@@ -228,23 +243,34 @@ export class ShopStep {
 
 	private drawExtraRow(parent: HTMLElement, extra: Extra): void {
 		const row = parent.createDiv({ cls: "pantry-buy-row is-extra" });
+		row.dataset.flip = `extra:${extra.id}`;
 
 		const tick = row.createEl("button", { cls: "pantry-tick" });
 		const glyph = tick.createSpan({ cls: "pantry-tick-glyph" });
 		setIcon(glyph, "check");
 		tick.setAttr("aria-pressed", "false");
 		tick.setAttr("aria-label", `Got ${extra.name}, take it off the list`);
-		tick.onclick = () =>
+		const got = (): void => {
+			if (row.hasClass("is-done")) return;
+			this.showDone(row, tick);
 			guarded(`could not tick ${extra.name} off`, async () => {
-				await this.plugin.lists.removeExtra(this.list, extra.id);
-				this.drawList();
+				try {
+					await this.plugin.lists.removeExtra(this.list, extra.id);
+				} finally {
+					// Gelukt: het regeltje is al weg uit de lijst, de rij blijft
+					// nog even doorgestreept staan en verdwijnt bij het zakken.
+					// Mislukt: het zakken tekent hem gewoon weer open.
+					this.settle();
+				}
 			});
+		};
+		tick.onclick = got;
 
 		const main = row.createDiv({ cls: "pantry-buy-main is-tappable" });
 		main.createDiv({ cls: "pantry-buy-name", text: extra.name });
 		main.setAttr("role", "button");
-		main.setAttr("aria-label", `Edit ${extra.name}`);
-		main.onclick = () => this.editExtra(extra);
+		main.setAttr("aria-label", `Got ${extra.name}. Hold to edit`);
+		tapOrHold(main, got, () => this.editExtra(extra));
 		main.createDiv({ cls: "pantry-buy-meta", text: "loose item" });
 
 		row.createDiv({ cls: "pantry-quantity is-static", text: `${extra.amount}` });
@@ -281,6 +307,7 @@ export class ShopStep {
 
 	private drawRow(parent: HTMLElement, product: Product, meta: string | null): void {
 		const row = parent.createDiv({ cls: "pantry-buy-row" });
+		row.dataset.flip = product.path;
 		const done = this.isDone(product);
 		const editing = this.editing === product.path;
 		row.toggleClass("is-done", done);
@@ -291,14 +318,32 @@ export class ShopStep {
 		setIcon(glyph, "check");
 		tick.setAttr("aria-pressed", done ? "true" : "false");
 		tick.setAttr("aria-label", done ? "Not bought after all" : "In the basket");
-		tick.onclick = () =>
-			guarded(`could not tick ${product.name} off`, () => this.toggle(product));
+		const toggle = (): void => {
+			if (!done) {
+				// Deze rij is al aangetikt en wacht op de schrijfactie.
+				if (row.hasClass("is-done")) return;
+				this.showDone(row, tick);
+			}
+			guarded(`could not tick ${product.name} off`, async () => {
+				try {
+					await this.toggle(product);
+				} catch (error) {
+					// Het vinkje stond er al; laat zien wat er echt staat.
+					this.drawList();
+					throw error;
+				}
+			});
+		};
+		tick.onclick = toggle;
 
 		const main = row.createDiv({ cls: "pantry-buy-main is-tappable" });
 		main.createDiv({ cls: "pantry-buy-name", text: product.name });
 		main.setAttr("role", "button");
-		main.setAttr("aria-label", `Edit ${product.name}`);
-		main.onclick = () => this.edit(product);
+		main.setAttr(
+			"aria-label",
+			`${done ? "Not bought after all" : "In the basket"}: ${product.name}. Hold to edit`
+		);
+		tapOrHold(main, toggle, () => this.edit(product));
 		if (meta) main.createDiv({ cls: "pantry-buy-meta", text: meta });
 
 		const label = this.plugin.lists.amountText(this.list, product);
@@ -339,7 +384,9 @@ export class ShopStep {
 
 	/**
 	 * Standing in the shop and seeing a product under the wrong shelf is the
-	 * moment you can actually fix it, so the name is a button.
+	 * moment you can actually fix it, so holding the name opens the sheet.
+	 * Holding, not tapping: in the shop a tap means "got it", and a sheet
+	 * that slides up every time you reach for a row is in the way.
 	 */
 	private edit(product: Product): void {
 		this.editing = null;
@@ -372,8 +419,47 @@ export class ShopStep {
 	 */
 	private async toggle(product: Product): Promise<void> {
 		this.editing = null;
-		if (this.isDone(product)) await this.plugin.lists.undoBought(this.list, product);
-		else await this.plugin.lists.markBought(this.list, product);
+		if (this.isDone(product)) {
+			await this.plugin.lists.undoBought(this.list, product);
+			// Terug naar waar hij hoort; wie net mistikte, ziet hem terugglijden.
+			this.settling.delete(product.path);
+			this.slide();
+			return;
+		}
+		await this.plugin.lists.markBought(this.list, product);
+		this.settling.add(product.path);
 		this.drawList();
+		this.settle();
+	}
+
+	/** Zakt naar onderen: in het mandje en niet meer net aangetikt. */
+	private sinks(product: Product): boolean {
+		return this.isDone(product) && !this.settling.has(product.path);
+	}
+
+	/**
+	 * Meteen laten zien dat de tik aankwam, nog vóór de schrijfactie klaar
+	 * is. Op een telefoon duurt die soms net lang genoeg om nog eens te
+	 * tikken; een rij die al doorgestreept is negeert die tweede tik tot hij
+	 * opnieuw getekend is.
+	 */
+	private showDone(row: HTMLElement, tick: HTMLElement): void {
+		row.addClass("is-done");
+		tick.setAttr("aria-pressed", "true");
+	}
+
+	/** Start (of verleng) de pauze voordat afgevinkte rijen zakken. */
+	private settle(): void {
+		window.clearTimeout(this.settleTimer);
+		this.settleTimer = window.setTimeout(() => {
+			this.settling.clear();
+			this.slide();
+		}, SETTLE_MS);
+	}
+
+	private slide(): void {
+		const body = this.bodyEl;
+		if (!body?.isConnected) return;
+		flip(body, () => this.drawList());
 	}
 }

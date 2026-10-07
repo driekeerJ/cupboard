@@ -25,6 +25,7 @@ export class AddRecipeModal extends Modal {
 
 		this.list = new RecipeList(this.plugin, this.contentEl.createDiv(), {
 			autoFocus: true,
+			beforeNew: () => this.close(),
 			onPick: (recipe) => {
 				this.close();
 				this.onPick(recipe);

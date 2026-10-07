@@ -3,7 +3,7 @@ import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import { UNASSIGNED, safeProductName } from "../products";
 import { dedupe } from "../text";
-import { chipPicker } from "./kit";
+import { chipPicker, sizeHint } from "./kit";
 
 /** The fields you fill in by tapping a chip. All of them plain strings. */
 /**
@@ -302,7 +302,7 @@ export class NewProductModal extends Modal {
 		const row = block.createDiv({ cls: "pantry-sheet-row" });
 		const input = row.createEl("input", {
 			cls: "pantry-field-input pantry-sheet-input",
-			attr: { type: "text", placeholder: "400 g, 1,5 l, 250 ml…" },
+			attr: { type: "text", placeholder: "400 g, 1.5 l, 12…" },
 		});
 		input.value = this.draft.size;
 		input.addEventListener("input", () => {
@@ -321,6 +321,8 @@ export class NewProductModal extends Modal {
 			this.draft.amountMatters = !this.draft.amountMatters;
 			this.render();
 		};
+
+		sizeHint(block, this.draft.amountMatters);
 	}
 
 	// --------------------------------------------------------------- minimum

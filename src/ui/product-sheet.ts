@@ -3,7 +3,7 @@ import { guarded } from "../guard";
 import { confirm } from "./confirm";
 import type PantryPlugin from "../main";
 import type { NeedIndex, NeedSource } from "../needs";
-import { chipPicker } from "./kit";
+import { chipPicker, sizeHint } from "./kit";
 import { dedupe } from "../text";
 import { parseNumber } from "../number";
 import {
@@ -459,8 +459,9 @@ export class ProductSheet extends Modal {
 
 	/**
 	 * Package size is the one field you cannot tap your way to — 400 g, 1,5 l,
-	 * 12 stuks are all different answers — so it stays a text box, with the
-	 * unit spelled out in the placeholder rather than in a help text.
+	 * 12 stuks are all different answers — so it stays a text box. The unit
+	 * is spelled out in the placeholder; what the field is *for* sits below
+	 * it, because that is the question people actually had.
 	 */
 	private drawSize(parent: HTMLElement): void {
 		const value = this.product.size
@@ -474,7 +475,7 @@ export class ProductSheet extends Modal {
 		const row = block.createDiv({ cls: "pantry-sheet-row" });
 		const input = row.createEl("input", {
 			cls: "pantry-field-input pantry-sheet-input",
-			attr: { type: "text", placeholder: "400 g, 1,5 l, 250 ml…" },
+			attr: { type: "text", placeholder: "400 g, 1.5 l, 12…" },
 		});
 		input.value = value;
 
@@ -504,6 +505,8 @@ export class ProductSheet extends Modal {
 				this.apply({ amount: this.product.amountMatters ? "any" : "" })
 			);
 		};
+
+		sizeHint(block, this.product.amountMatters);
 	}
 
 	/** A stepper, because every real answer here is a single digit. */

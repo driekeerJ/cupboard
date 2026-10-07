@@ -261,6 +261,39 @@
 	font-variant-numeric: tabular-nums;
 }
 
+/* The title and its count stay together on the left; the button takes the
+   right edge, where the + of every other list in the app sits. */
+.pantry-recipes-header .pantry-recipes-count {
+	margin-right: auto;
+}
+
+.pantry-recipes button.pantry-new-recipe {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	align-self: center;
+	height: 28px;
+	min-height: 0;
+	padding: 0 10px 0 8px;
+	border: none;
+	border-radius: 8px;
+	background: var(--background-modifier-hover);
+	color: var(--text-accent);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.pantry-recipes button.pantry-new-recipe .pantry-new-recipe-icon {
+	display: inline-flex;
+}
+
+.pantry-recipes button.pantry-new-recipe svg {
+	width: 14px;
+	height: 14px;
+}
+
 .pantry-search-row {
 	display: flex;
 	align-items: center;
@@ -1224,7 +1257,7 @@
 	left: 0;
 	width: 100%;
 	max-height: 82vh;
-	padding: 14px 16px calc(18px + env(safe-area-inset-bottom));
+	padding: 14px 16px calc(18px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));
 	border-width: 1px 0 0;
 	border-radius: 16px 16px 0 0;
 	overflow-y: auto;
@@ -1883,7 +1916,7 @@
    room to clear it — plus whatever the home indicator takes. */
 .is-mobile .pantry-cook,
 .is-mobile .pantry-planner {
-	padding-bottom: calc(112px + env(safe-area-inset-bottom));
+	padding-bottom: calc(112px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));
 }
 
 .is-mobile .pantry-sheet-backdrop {
@@ -1891,7 +1924,7 @@
 }
 
 .is-mobile .pantry-popover.is-sheet {
-	padding-bottom: calc(24px + env(safe-area-inset-bottom));
+	padding-bottom: calc(24px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));
 }
 
 /* Both header buttons in the eaters panel must be the same square. */
@@ -2547,6 +2580,25 @@
 	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
 }
 
+/* "+ Shop" at the end of the shop chips: an action, not a choice, so it
+   reads in the accent colour and never looks selected. */
+.pantry-app button.pantry-segment-item.is-add {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0 12px 0 10px;
+	color: var(--text-accent);
+}
+
+.pantry-app button.pantry-segment-item.is-add .pantry-segment-icon {
+	display: inline-flex;
+}
+
+.pantry-app button.pantry-segment-item.is-add svg {
+	width: 14px;
+	height: 14px;
+}
+
 /* --- Progress --------------------------------------------------------- */
 
 .pantry-app .pantry-progress {
@@ -2666,6 +2718,7 @@
 
 .pantry-buy-row.is-done {
 	opacity: 0.5;
+	transition: opacity 160ms ease;
 }
 
 .pantry-app button.pantry-tick {
@@ -2718,6 +2771,24 @@
 .pantry-buy-main {
 	flex: 1;
 	min-width: 0;
+}
+
+/* The name is held to edit, so a long press must not start selecting text
+   or open iOS's callout on top of the sheet that is about to slide up. */
+.pantry-app .pantry-buy-row:not(.is-quiet) .pantry-buy-main {
+	-webkit-user-select: none;
+	user-select: none;
+	-webkit-touch-callout: none;
+}
+
+.pantry-app .pantry-buy-main.is-holding {
+	background: var(--background-modifier-hover);
+}
+
+/* "Tick boxes on the right": the tick moves past the amount to the edge a
+   right thumb reaches. Order, not DOM: the row is built once either way. */
+.is-tick-right .pantry-buy-row > .pantry-tick {
+	order: 2;
 }
 
 .pantry-buy-name {
@@ -3989,7 +4060,14 @@
 /* On a phone the sheet takes the whole screen: too many chip rows to fit in
    86vh without the body turning into a peephole. The 12px it keeps on every
    side is the same breathing room the 94vw card had — only the outer frame
-   goes away, not the margins. Head and foot stay put, the blocks scroll. */
+   goes away, not the margins. Head and foot stay put, the blocks scroll.
+
+   The insets come from Obsidian's own --safe-area-inset-* variables, not
+   from env() directly. Android's WebView reports env(safe-area-inset-*) as
+   0 even when the app draws edge to edge (Android 15 forces it), so with
+   three-button navigation the foot — and its Add button — sat under the
+   system bar. Obsidian fills its variables with the real inset on every
+   platform; env() is only the fallback for a build that doesn't. */
 @media (max-width: 640px) {
 	.pantry-sheet-modal {
 		display: flex;
@@ -4005,7 +4083,14 @@
 	.pantry-app.pantry-sheet {
 		flex: 1 1 auto;
 		min-height: 0;
-		padding: 4px 12px calc(4px + env(safe-area-inset-bottom));
+		padding: calc(4px + var(--safe-area-inset-top, env(safe-area-inset-top))) 12px
+			calc(4px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom)));
+	}
+
+	/* Obsidian moves its own close button down for full-height modals; ours
+	   is full height too, so it needs the same nudge past the status bar. */
+	.pantry-sheet-modal .modal-close-button {
+		top: calc(var(--safe-area-inset-top, env(safe-area-inset-top)) + 10px);
 	}
 
 	.pantry-sheet-body {
@@ -4953,4 +5038,12 @@
 	display: flex;
 	justify-content: flex-end;
 	gap: 8px;
+}
+
+/* De naam voor een nieuwe winkel of een nieuw recept. */
+.pantry-app input.pantry-ask-input {
+	width: 100%;
+	height: 38px;
+	margin-bottom: 16px;
+	background: var(--background-modifier-form-field);
 }

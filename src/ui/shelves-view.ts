@@ -98,7 +98,7 @@ export class ShelvesView extends ItemView {
 		const shops = this.plugin.shops.all();
 		if (shops.length > 0) {
 			const active = this.shopOrFirst();
-			segment(
+			const row = segment(
 				inner,
 				shops.map((shop) => ({ value: shop.name, label: shop.name })),
 				active?.name ?? "",
@@ -108,6 +108,21 @@ export class ShelvesView extends ItemView {
 					this.draw();
 				}
 			);
+			// Naast de winkels zelf, waar je een volgende zoekt. Het veld
+			// onderaan de looproute vond niemand: een tester voegde de eerste
+			// winkel toe en kon daarna niet ontdekken hoe er een tweede bij kon.
+			const add = row.createEl("button", { cls: "pantry-segment-item is-add" });
+			setIcon(add.createSpan({ cls: "pantry-segment-icon" }), "plus");
+			add.createSpan({ text: "Shop" });
+			add.setAttr("aria-label", "Add a shop");
+			add.onclick = () =>
+				guarded("could not add the shop", async () => {
+					const file = await this.plugin.addShop();
+					if (!file) return;
+					this.shop = file.basename;
+					this.shelf = "";
+					this.draw();
+				});
 		}
 
 		this.bodyEl = root.createDiv({ cls: "pantry-body" });

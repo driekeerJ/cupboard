@@ -70,6 +70,128 @@ export function keepScroll(body: HTMLElement): () => void {
 	};
 }
 
+/** Hoe lang je vasthoudt voordat een tik een "lang drukken" wordt. */
+const HOLD_MS = 500;
+/** Zoveel mag de vinger schuiven voordat het scrollen is en geen drukken. */
+const HOLD_SLOP = 8;
+
+/**
+ * Tikken doet het ene, vasthouden het andere.
+ *
+ * Voor rijen waar de gewone tik de handeling van het moment is (afvinken in
+ * de winkel) en de tweede handeling er wel moet zijn maar niet in de weg mag
+ * zitten (het product bewerken). Rechtsklik telt als vasthouden, zodat het
+ * op een laptop net zo vindbaar is.
+ *
+ * Tikken luistert op `click` en niet op `pointerup`: een veeg om te scrollen
+ * levert geen click op, dus wie door de lijst bladert vinkt niets per ongeluk
+ * af. Om dezelfde reden breekt een verschoven vinger het vasthouden af.
+ * Android meldt lang drukken zelf ook als `contextmenu`; wie het eerst komt
+ * telt, de ander wordt genegeerd.
+ */
+export function tapOrHold(
+	el: HTMLElement,
+	tap: () => void,
+	hold: () => void
+): void {
+	let timer = 0;
+	let held = false;
+	let startX = 0;
+	let startY = 0;
+
+	const fire = (): void => {
+		window.clearTimeout(timer);
+		el.removeClass("is-holding");
+		if (held) return;
+		held = true;
+		hold();
+	};
+	const cancel = (): void => {
+		window.clearTimeout(timer);
+		el.removeClass("is-holding");
+	};
+
+	el.addEventListener("pointerdown", (event: PointerEvent) => {
+		if (event.button !== 0) return;
+		held = false;
+		startX = event.clientX;
+		startY = event.clientY;
+		el.addClass("is-holding");
+		timer = window.setTimeout(fire, HOLD_MS);
+	});
+	el.addEventListener("pointermove", (event: PointerEvent) => {
+		if (Math.hypot(event.clientX - startX, event.clientY - startY) > HOLD_SLOP) cancel();
+	});
+	el.addEventListener("pointerup", cancel);
+	el.addEventListener("pointerleave", cancel);
+	el.addEventListener("pointercancel", cancel);
+	el.addEventListener("contextmenu", (event: MouseEvent) => {
+		event.preventDefault();
+		fire();
+	});
+	el.addEventListener("click", (event: MouseEvent) => {
+		// De click die op een geslaagd vasthouden volgt, is geen tik.
+		if (held) {
+			held = false;
+			event.preventDefault();
+			return;
+		}
+		tap();
+	});
+}
+
+/**
+ * Laat rijen naar hun nieuwe plek glijden in plaats van te verspringen.
+ *
+ * Elk scherm tekent zijn lijst bij elke wijziging helemaal opnieuw, dus er is
+ * geen element dat "verhuist" — alleen een oude en een nieuwe DOM. Daarom
+ * FLIP: onthoud waar elke rij met `data-flip` stond, teken opnieuw, en speel
+ * per rij het verschil af als een translate die naar nul loopt. Een rij die
+ * van plek wisselt is dan te volgen met het oog; dat is in de winkel het
+ * verschil tussen "die heb ik" en "welke tikte ik nou aan?".
+ */
+export function flip(body: HTMLElement, redraw: () => void): void {
+	const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+	const before = new Map<string, number>();
+	if (!reduce) {
+		body.querySelectorAll<HTMLElement>("[data-flip]").forEach((row) => {
+			const key = row.dataset.flip;
+			if (key) before.set(key, row.getBoundingClientRect().top);
+		});
+	}
+
+	redraw();
+	if (reduce) return;
+
+	body.querySelectorAll<HTMLElement>("[data-flip]").forEach((row) => {
+		const key = row.dataset.flip;
+		const top = key ? before.get(key) : undefined;
+		if (top === undefined) return;
+		const shift = top - row.getBoundingClientRect().top;
+		if (Math.abs(shift) < 1) return;
+		row.animate(
+			[{ transform: `translateY(${shift}px)` }, { transform: "translateY(0)" }],
+			{ duration: 280, easing: "cubic-bezier(0.2, 0.8, 0.3, 1)" }
+		);
+	});
+}
+
+/**
+ * Wat "Package size" en "Amount does not matter" doen, onder het veld zelf.
+ *
+ * Een placeholder zegt hoe je het invult, niet waarom: een nieuwe gebruiker
+ * vroeg wat het veld deed en wat het verschil was tussen de knop en het veld
+ * leeg laten. Het antwoord verandert met de knop, dus de zin ook.
+ */
+export function sizeHint(block: HTMLElement, amountMatters: boolean): void {
+	block.createDiv({
+		cls: "pantry-sheet-hint",
+		text: amountMatters
+			? "What one package holds. Recipes ask for 500 g; this turns that into half a 1 kg bag on your list. Left empty, a recipe that asks in grams or millilitres adds nothing to the list."
+			: "Recipes never add this to your list and cooking never takes it off stock. Only the minimum counts \u2014 for salt, spices and oil.",
+	});
+}
+
 export interface ChipPicker {
 	label: string;
 	/**

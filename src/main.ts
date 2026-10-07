@@ -23,6 +23,8 @@ import { ShopIndex } from "./shops";
 import { SHELVES_VIEW_TYPE, ShelvesView } from "./ui/shelves-view";
 import { PRODUCTS_VIEW_TYPE, ProductsView } from "./ui/products-view";
 import { NewProductModal } from "./ui/new-product-modal";
+import { askName } from "./ui/ask-name";
+import { ensureFolder } from "./notes";
 import { STOCK_VIEW_TYPE, StockView } from "./ui/stock-view";
 import { LISTS_VIEW_TYPE, ListsView } from "./ui/lists-view";
 import { LIST_VIEW_TYPE, ListView } from "./ui/list-view";
@@ -259,6 +261,21 @@ export default class PantryPlugin extends Plugin {
 			callback: () => {
 				new NewProductModal(this, () => this.refreshViews()).open();
 			},
+		});
+
+		// Een winkel en een recept zijn allebei gewoon notities, maar "maak
+		// zelf een notitie in de goede map met de goede frontmatter" is geen
+		// antwoord op een telefoon. Zie `addShop` en `newRecipe`.
+		this.addCommand({
+			id: "new-shop",
+			name: "New shop",
+			callback: () => guarded("could not add the shop", () => this.addShop()),
+		});
+
+		this.addCommand({
+			id: "new-recipe",
+			name: "New recipe",
+			callback: () => guarded("could not create the recipe", () => this.newRecipe()),
 		});
 
 		this.addCommand({
@@ -564,6 +581,81 @@ export default class PantryPlugin extends Plugin {
 	async activateShelves(): Promise<void> {
 		await this.shops.build();
 		await this.activate(SHELVES_VIEW_TYPE);
+	}
+
+	/**
+	 * Asks for a name and writes the shop note. Returns the note, or null when
+	 * the question was cancelled, so a screen can jump to the new shop.
+	 */
+	async addShop(): Promise<TFile | null> {
+		const name = await askName(this.app, {
+			title: "New shop",
+			body: "A shop is a note. It starts with the usual shelves in the usual order \u2014 change them under Shelves \u2192 Walking route.",
+			placeholder: "Shop name",
+			action: "Add shop",
+		});
+		if (!name) return null;
+		const file = await this.shops.createShop(name);
+		if (!file) {
+			new Notice("Cupboard needs a shop name with at least one letter or digit in it.");
+			return null;
+		}
+		await this.shops.build();
+		this.refreshViews();
+		return file;
+	}
+
+	/**
+	 * Asks for a name and opens a fresh recipe note in the recipe folder.
+	 *
+	 * Een recept is een notitie die je zelf schrijft; Cupboard zet alleen de
+	 * kopjes klaar die het leest (Ingredients en Method, zie `cook.ts`) en
+	 * het veld voor het aantal porties. Dat veld blijft leeg: hoeveel mensen
+	 * een recept voedt weet alleen wie het schrijft, en een ingevuld getal
+	 * zou ongemerkt elke boodschappenlijst schalen.
+	 */
+	async newRecipe(): Promise<void> {
+		const name = await askName(this.app, {
+			title: "New recipe",
+			body: "Creates a note in your recipe folder with the headings Cupboard reads. Link each ingredient to its product, like [[Rice]].",
+			placeholder: "Recipe name",
+			action: "Create recipe",
+		});
+		if (!name) return;
+		const safe = name.replace(/[\\/:*?"<>|#^[\]]/g, "").trim();
+		if (safe.length === 0) {
+			new Notice("Cupboard needs a recipe name with at least one letter or digit in it.");
+			return;
+		}
+
+		const folder = normalizePath(this.settings.recipeFolder || "Recipes");
+		const path = normalizePath(`${folder}/${safe}.md`);
+		let file = this.app.vault.getFileByPath(path);
+		if (file) {
+			new Notice(`"${safe}" already exists; opening it.`);
+		} else {
+			await ensureFolder(this.app.vault, path);
+			file = await this.app.vault.create(
+				path,
+				[
+					"---",
+					`${this.settings.servingsField || "servings"}:`,
+					"---",
+					"",
+					`# ${safe}`,
+					"",
+					"## Ingredients",
+					"",
+					"- ",
+					"",
+					"## Method",
+					"",
+					"1. ",
+					"",
+				].join("\n")
+			);
+		}
+		await this.app.workspace.getLeaf(false).openFile(file);
 	}
 
 	/** Shelf order comes from the shop note; unknown shelves fall to the back. */

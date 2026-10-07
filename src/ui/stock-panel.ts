@@ -54,6 +54,17 @@ const LABELS: Record<Filter, string> = {
 
 const ALL_FILTERS: Filter[] = ["all", "check", "buy"];
 
+/**
+ * Wat "To check" laat zien: wat je met de hand gemarkeerd hebt, én wat nog
+ * nooit geteld is. Een product zonder telling is precies zo'n "kijk hier
+ * eens naar" — van de stand weten we niets, en onbekend is geen nul. Zonder
+ * dit verscheen een net aangemaakt product nergens om geteld te worden,
+ * terwijl Home het wel als "never counted" meetelde.
+ */
+function toCheck(product: Product): boolean {
+	return product.check || product.count === null;
+}
+
 export class StockPanel {
 	private source: StockSource;
 	private filtersEl: HTMLElement | null = null;
@@ -167,7 +178,7 @@ export class StockPanel {
 
 	private belongs(product: Product): boolean {
 		if (this.irrelevant(product)) return false;
-		if (this.memory.filter === "check") return product.check;
+		if (this.memory.filter === "check") return toCheck(product);
 		if (this.memory.filter === "buy") {
 			const buy = this.source.buy(product);
 			return buy === null || buy > 0;
@@ -280,7 +291,7 @@ export class StockPanel {
 				skipping++;
 				return;
 			}
-			if (product.check) checking++;
+			if (toCheck(product)) checking++;
 			const buy = this.source.buy(product);
 			if (buy !== null && buy > 0) buying++;
 		});

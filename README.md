@@ -41,7 +41,9 @@ line that does not yet point at a product and helps you fix it in one place.
 ![Cleanup: a recipe ingredient with no product yet, and the ways to resolve it](docs/screenshots/cleanup.png)
 
 **Works on the phone.** Every screen fits a narrow window, so the list you
-made on the desktop is the one you tick off in the shop.
+made on the desktop is the one you tick off in the shop. In the shop, tapping a
+row ticks it off and holding it opens the product; the tick boxes can move to
+the right edge for a one-handed thumb.
 
 <p>
 <img src="docs/screenshots/narrow-home.png" width="30%" alt="Home screen on a phone-sized window">
@@ -54,7 +56,8 @@ made on the desktop is the one you tick off in the shop.
 Cupboard reads and writes ordinary Markdown. Nothing is stored anywhere else,
 and you can edit every note by hand.
 
-- **Recipes** are notes in a folder you choose. Ingredients are a bulleted
+- **Recipes** are notes in a folder you choose; **New recipe** (in the
+  recipe list or the command palette) starts one with the right headings. Ingredients are a bulleted
   list under an `## Ingredients` heading; a `[[wikilink]]` in a line points it
   at a product. A `servings` field in the frontmatter says how many the recipe
   is written for. Any other frontmatter field can be shown on the recipe card
@@ -99,7 +102,8 @@ and you can edit every note by hand.
   `amount: any` instead of a size.
 
 - **Shops** are notes with `pantry: shop` and a list of shelves in the order
-  you walk past them.
+  you walk past them. Add one with **+ Shop** on the Shelves screen or the
+  **New shop** command.
 
 - **Weekly plans** are one note per week. The plan is a `meal-plan` code block
   in the note, and the block renders as the planner itself, so the note and
@@ -141,6 +145,8 @@ different versions cannot lose each other's work.
 | Open shop shelves | Sort products onto shelves, per shop |
 | Open cleanup | Recipe lines that do not yet point at a product |
 | New product | Add a product |
+| New recipe | A recipe note with the headings Cupboard reads |
+| New shop | A shop note with the usual shelves |
 | Create products from recipes | A product note for every linked ingredient that has none |
 | Cook this recipe | Cook mode for the open recipe note |
 | Continue this cooking session | Pick up an open session note |
@@ -151,8 +157,8 @@ different versions cannot lose each other's work.
 Folders for recipes, plans, products, shops, shopping lists and cooking
 sessions; the day the week starts; how many days ahead a shopping list looks;
 the meals you plan; the household and each person's portion factor; which
-recipe fields to show on the cards; and how long finished cooking sessions and
-shopping lists are kept.
+recipe fields to show on the cards; how long finished cooking sessions and
+shopping lists are kept; and which side of a shopping row the tick box sits on.
 
 ## Development
 
