@@ -27,6 +27,12 @@ export interface RecipeListOptions {
 	 * enough to be visible, so dragging from it has to work there too.
 	 */
 	touchDrop?: (recipe: Recipe, date: string, meal: string) => void;
+	/**
+	 * Runs before "New recipe" asks for a name. The picker closes itself
+	 * here: the new note opens behind it, and a picker left on top would
+	 * hide the very note you are about to write.
+	 */
+	beforeNew?: () => void;
 }
 
 /**
@@ -84,6 +90,20 @@ export class RecipeList {
 		const header = this.root.createDiv({ cls: "pantry-recipes-header" });
 		header.createEl("h3", { cls: "pantry-sidebar-title", text: "Recipes" });
 		this.countEl = header.createSpan({ cls: "pantry-recipes-count" });
+
+		// Op een telefoon is dit de enige plek waar recepten verschijnen, en
+		// een recept maken betekende tot nu toe: weten dat het een notitie in
+		// de receptmap is, en die zelf aanmaken.
+		const create = header.createEl("button", {
+			cls: "pantry-new-recipe",
+			attr: { "aria-label": "Create a new recipe note" },
+		});
+		setIcon(create.createSpan({ cls: "pantry-new-recipe-icon" }), "plus");
+		create.createSpan({ text: "New recipe" });
+		create.onclick = () => {
+			this.options.beforeNew?.();
+			guarded("could not create the recipe", () => this.plugin.newRecipe());
+		};
 
 		const searchRow = this.root.createDiv({ cls: "pantry-search-row" });
 
@@ -353,7 +373,7 @@ export class RecipeList {
 		if (all.length === 0) {
 			results.createDiv({
 				cls: "pantry-empty-state",
-				text: `No recipes found. Check the recipe folder in the Cupboard settings — it is set to "${this.plugin.settings.recipeFolder}".`,
+				text: `No recipes yet. Tap New recipe to write one, or check the recipe folder in the Cupboard settings — it is set to "${this.plugin.settings.recipeFolder}".`,
 			});
 			return;
 		}

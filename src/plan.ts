@@ -20,7 +20,7 @@ const BLOCK_LANGUAGE = "meal-plan";
 
 /** Eerlijk zijn over wat er met hand-edits in dit blok gebeurt. */
 const PLAN_BLOCK_NOTE =
-	"# Cupboard herschrijft dit blok bij elke wijziging. Eigen velden en opmerkingen hierin gaan verloren.";
+	"# Cupboard rewrites this block on every change. Your own fields and comments in it will be lost.";
 /** Matches a fenced ```meal-plan block, capturing its body. */
 const BLOCK_PATTERN = /^```meal-plan[ \t]*\r?\n([\s\S]*?)^```[ \t]*$/m;
 

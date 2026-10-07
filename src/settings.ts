@@ -20,6 +20,10 @@ import type {
 	TimerState,
 } from "./types";
 
+const TICK_RIGHT_NAME = "Tick boxes on the right";
+const TICK_RIGHT_DESC =
+	"On the shopping list, put the tick box on the right edge, where a right thumb reaches it.";
+
 export const DEFAULT_SETTINGS: PantrySettings = {
 	recipeFolder: "Recipes",
 	planFolder: "Meal plans",
@@ -41,6 +45,7 @@ export const DEFAULT_SETTINGS: PantrySettings = {
 	cookFolder: "Cook sessions",
 	cookKeepDays: 30,
 	cookTimers: {},
+	tickRight: false,
 };
 
 /**
@@ -130,6 +135,7 @@ export function normaliseSettings(raw: unknown): PantrySettings {
 			.filter(Boolean),
 		setupComplete: stored.setupComplete === true,
 		cookTimers: asTimers(stored.cookTimers),
+		tickRight: stored.tickRight === true,
 	};
 }
 
@@ -237,6 +243,7 @@ export class PantrySettingTab extends PluginSettingTab {
 		this.renderMeals(containerEl);
 		this.renderHousehold(containerEl);
 		this.renderRecipeFields(containerEl);
+		this.renderShopping(containerEl);
 	}
 
 	private async save(): Promise<void> {
@@ -383,6 +390,17 @@ export class PantrySettingTab extends PluginSettingTab {
 					},
 				],
 			},
+			{
+				type: "group",
+				heading: "Shopping",
+				items: [
+					{
+						name: TICK_RIGHT_NAME,
+						desc: TICK_RIGHT_DESC,
+						control: { type: "toggle", key: "tickRight" },
+					},
+				],
+			},
 		];
 	}
 
@@ -472,6 +490,9 @@ export class PantrySettingTab extends PluginSettingTab {
 			case "servingsField":
 				settings.servingsField = text || "servings";
 				break;
+			case "tickRight":
+				settings.tickRight = value === true;
+				break;
 			case "displayFields":
 				settings.displayFields = text
 					.split(",")
@@ -499,6 +520,7 @@ export class PantrySettingTab extends PluginSettingTab {
 				break;
 			case "weekStartDay":
 			case "displayFields":
+			case "tickRight":
 				this.plugin.refreshViews();
 				break;
 		}
@@ -927,5 +949,22 @@ export class PantrySettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.displayFields.join(", "));
 				onCommit(text, (value) => this.setControlValue("displayFields", value));
 			});
+	}
+
+	private renderShopping(containerEl: HTMLElement): void {
+		new Setting(containerEl).setName("Shopping").setHeading();
+
+		new Setting(containerEl)
+			.setName(TICK_RIGHT_NAME)
+			.setDesc(TICK_RIGHT_DESC)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.tickRight)
+					.onChange((value) =>
+						guarded("could not save the setting", () =>
+							this.setControlValue("tickRight", value)
+						)
+					)
+			);
 	}
 }

@@ -11,3 +11,6 @@ _to_delete/
 
 # JetBrains-IDE, staat per machine anders
 .idea/
+
+# Screenshots van mislukte e2e-checks
+tests/e2e-out/

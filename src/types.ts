@@ -66,6 +66,14 @@ export interface PantrySettings {
 	 * onleesbaar en levert bij handmatig bewerken alleen maar onzin op.
 	 */
 	cookTimers: Record<string, Record<string, TimerState>>;
+	/**
+	 * Tick boxes on the right of a shopping row instead of the left.
+	 *
+	 * In the shop you hold the phone in one hand, and for a right-handed
+	 * thumb the left edge is the far side. A preference rather than a fixed
+	 * choice, because a left thumb has exactly the opposite problem.
+	 */
+	tickRight: boolean;
 }
 
 /** A timer as stored: the moment it started, not a countdown. */
