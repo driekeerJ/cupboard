@@ -4067,9 +4067,15 @@
    0 even when the app draws edge to edge (Android 15 forces it), so with
    three-button navigation the foot — and its Add button — sat under the
    system bar. Obsidian fills its variables with the real inset on every
-   platform; env() is only the fallback for a build that doesn't. */
+   platform; env() is only the fallback for a build that doesn't.
+
+   `.is-phone .modal` is Obsidian's own phone rule and caps the height at
+   100vh minus the top inset. It outranks a single class, so the sheet ended
+   up a status bar short and centred, with a gap under the buttons that
+   differed per phone. Hence the doubled class: the insets below are the
+   only spacing, and they are exact. */
 @media (max-width: 640px) {
-	.pantry-sheet-modal {
+	.pantry-sheet-modal.pantry-sheet-modal {
 		display: flex;
 		flex-direction: column;
 		width: 100%;
