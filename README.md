@@ -21,6 +21,17 @@ note, so it survives a restart and syncs to the phone.
 
 ![Cook mode: the ingredients scaled to three servings, ticked off per step](docs/screenshots/cook.png)
 
+**Cook one step at a time.** Tap **Focus** in cook mode and the whole window
+becomes a slide: first each group of ingredients to get ready, then each step
+of the method. Tick everything on a slide and the next one slides in by itself.
+A progress line shows how far you are, and the bottom bar says what comes next.
+Swipe or tap Back and Next on a phone or tablet; use the arrow keys and Esc on
+a computer. Timers work as in the list, and the screen stays on while focus
+mode is open, where the device allows it. Ticks go into the same session note,
+so closing focus mode shows them in the list.
+
+![Focus mode: one group of ingredients filling the window, one already ticked](docs/screenshots/cook-focus.png)
+
 **Shop per trip.** A shopping list is one trip to one or more shops. Pick the
 day and the meals it covers, check what is in the house, then shop. The list is
 sorted in the order you walk through the shop.
@@ -46,9 +57,10 @@ row ticks it off and holding it opens the product; the tick boxes can move to
 the right edge for a one-handed thumb.
 
 <p>
-<img src="docs/screenshots/narrow-home.png" width="30%" alt="Home screen on a phone-sized window">
-<img src="docs/screenshots/narrow-list-shop.png" width="30%" alt="Shopping list on a phone-sized window">
-<img src="docs/screenshots/narrow-cook.png" width="30%" alt="Cook mode on a phone-sized window">
+<img src="docs/screenshots/narrow-home.png" width="23%" alt="Home screen on a phone-sized window">
+<img src="docs/screenshots/narrow-list-shop.png" width="23%" alt="Shopping list on a phone-sized window">
+<img src="docs/screenshots/narrow-cook.png" width="23%" alt="Cook mode on a phone-sized window">
+<img src="docs/screenshots/narrow-cook-focus.png" width="23%" alt="Cook mode in focus on a phone-sized window: one step with its timer">
 </p>
 
 ## Your notes stay yours
@@ -150,6 +162,7 @@ different versions cannot lose each other's work.
 | Create products from recipes | A product note for every linked ingredient that has none |
 | Cook this recipe | Cook mode for the open recipe note |
 | Continue this cooking session | Pick up an open session note |
+| Cook one step at a time (focus mode) | Focus mode for the cook view in front; give it a hotkey |
 | Run setup | The first-run walkthrough, again |
 
 ## Settings
@@ -167,6 +180,7 @@ npm install
 npm run dev            # watch build
 npm run build          # tests, type check, minified main.js
 npm run lint
+npm run e2e            # checks in a second, throwaway Obsidian in phone mode (macOS)
 node scripts/screenshots.mjs   # README screenshots from the demo vault (macOS)
 ```
 

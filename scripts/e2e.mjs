@@ -653,6 +653,86 @@ async function main() {
 		expect(!notes.some((t) => t.includes("herschrijft")), "a plan note still has the Dutch comment");
 	});
 
+	console.log("\nG. Cook mode: focus");
+
+	const overlay = `document.querySelector(".pantry-focus-overlay")`;
+	const slideTitle = () => s.run(`(${overlay})?.querySelector(".pantry-focus-title")?.textContent ?? null`);
+	const kicker = () => s.run(`(${overlay})?.querySelector(".pantry-focus-kicker")?.textContent ?? null`);
+
+	async function swipe(dx) {
+		const y = 420;
+		const x0 = dx < 0 ? 320 : 70;
+		await s.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: x0, y }] });
+		for (let step = 1; step <= 5; step++) {
+			await s.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x0 + (dx * step) / 5, y }] });
+			await sleep(16);
+		}
+		await s.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+	}
+
+	await check("Focus covers the whole window, tabs and bars included", async () => {
+		await s.run(quietly(`${plugin}.openCook("Chickpea curry")`));
+		await until(`!!document.querySelector(".pantry-cook-focus")`, "no Focus button in cook mode", 3000);
+		await tap(`document.querySelector(".pantry-cook-focus")`);
+		await until(`!!(${overlay})?.classList.contains("is-open")`, "the focus layer did not open", 2000);
+		await sleep(400);
+		const covered = await s.run(`(() => {
+			const o = ${overlay};
+			const pts = [[4, 4], [innerWidth - 4, innerHeight - 4], [innerWidth / 2, innerHeight / 2]];
+			return pts.every(([x, y]) => o.contains(document.elementFromPoint(x, y)));
+		})()`);
+		expect(covered, "something of Obsidian shows through the focus layer");
+		expect((await kicker()) === "Ingredients", `first slide is ${await kicker()}, not Ingredients`);
+	});
+
+	await check("ticking every line on a slide moves on by itself", async () => {
+		const before = await slideTitle();
+		const count = await s.run(`(${overlay}).querySelectorAll(".pantry-focus-line").length`);
+		for (let i = 0; i < count; i++) {
+			await tap(`(${overlay}).querySelectorAll(".pantry-focus-line")[${i}]`);
+			await sleep(60);
+		}
+		await until(`(${overlay})?.querySelector(".pantry-focus-title")?.textContent !== ${JSON.stringify(before)}`,
+			"the slide did not move on after the last tick", 1500);
+	});
+
+	await check("the ticks are in the session note", async () => {
+		await sleep(400);
+		const path = await s.run(`app.workspace.getLeavesOfType("pantry-cook")[0]?.view.getState().path`);
+		expect(path, "no cooking session open");
+		const text = await s.run(`e2e.read(${JSON.stringify(path)})`);
+		expect(/- \[x\] /.test(text), "no ticked line in the session note");
+	});
+
+	await check("swiping and Back go between slides", async () => {
+		const here = await slideTitle();
+		await swipe(-200);
+		await sleep(500);
+		const next = await slideTitle();
+		expect(next !== here, "a swipe to the left did not go forward");
+		await tap(`(${overlay}).querySelector(".pantry-focus-nav.is-prev")`);
+		await sleep(500);
+		expect((await slideTitle()) === here, "Back did not return to the slide before");
+	});
+
+	await check("focus buttons sit above the bottom bar", async () => {
+		const bottom = await s.run(`(${overlay}).querySelector(".pantry-focus-nav.is-next").getBoundingClientRect().bottom`);
+		const limit = (await s.run(`innerHeight`)) - (await s.run(`e2e.inset("bottom")`));
+		expect(bottom <= limit, `Next ends at ${Math.round(bottom)}px, the navigation bar starts at ${Math.round(limit)}px`);
+	});
+
+	await check("closing focus leaves the list with the same ticks", async () => {
+		await tap(`(${overlay}).querySelector(".pantry-focus-close")`);
+		await until(`!(${overlay})`, "the focus layer did not close", 1500);
+		const done = await s.run(`e2e.all(".pantry-cook .pantry-check-row.is-done").length`);
+		expect(done > 0, "the list does not show the ticks made in focus mode");
+	});
+
+	await check("focus mode is a command", async () => {
+		const ids = await s.run(`Object.keys(app.commands.commands)`);
+		expect(ids.includes(`${ID}:cook-focus`), "cook-focus missing");
+	});
+
 	console.log("\nF. Console");
 	await check("no errors from Cupboard in the console", async () => {
 		const ours = s.errors.filter((e) => /cupboard|pantry/i.test(e));

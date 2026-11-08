@@ -3,8 +3,8 @@
  *
  * Een kaart midden in de kookweergave liet alles eromheen staan: tabbladen,
  * de linkerbalk, de statusbalk, de knoppen boven het recept. Aan het aanrecht
- * is dat ruis. Deze laag hangt daarom aan `document.body`, boven heel
- * Obsidian, en laat alleen zien wat je nú doet, wat er hierna komt en hoe
+ * is dat ruis. Deze laag hangt daarom aan de `body` van het venster waarin de
+ * kookweergave staat — boven heel Obsidian, en in een los venster dáár, en laat alleen zien wat je nú doet, wat er hierna komt en hoe
  * ver je bent.
  *
  * De laag bezit niets. Vinkjes gaan via de kookweergave naar de notitie
@@ -33,6 +33,8 @@ const ADVANCE_MS = 300;
 const SWIPE_PX = 60;
 
 export interface FocusHost {
+	/** Een element in de kookweergave: bepaalt in welk venster de laag komt. */
+	anchor(): HTMLElement;
 	note(): CookNote;
 	title(): string;
 	/** Zet het vinkje van deze regel in de notitie; de regel is al bijgewerkt. */
@@ -68,10 +70,12 @@ export class FocusOverlay {
 	private advanceTimer: number | null = null;
 	private wakeLock: WakeLockHandle | null = null;
 	private touch: { x: number; y: number } | null = null;
+	private doc: Document = document;
+	private win: Window = window;
 
 	private readonly onKey = (event: KeyboardEvent): void => this.key(event);
 	private readonly onVisible = (): void => {
-		if (document.visibilityState !== "visible") return;
+		if (this.doc.visibilityState !== "visible") return;
 		// Het besturingssysteem liet het slot los toen de app naar de
 		// achtergrond ging; het oude handvat zegt niets meer.
 		this.wakeLock = null;
@@ -89,7 +93,11 @@ export class FocusOverlay {
 	open(): void {
 		if (this.el) return;
 
-		const el = document.body.createDiv({ cls: "pantry-focus-overlay" });
+		// Een kookweergave in een los venster (popout) krijgt de laag in dát
+		// venster, niet in het hoofdvenster waar niemand kijkt.
+		this.doc = this.host.anchor().ownerDocument;
+		this.win = this.doc.defaultView ?? window;
+		const el = this.doc.body.createDiv({ cls: "pantry-focus-overlay" });
 		el.setAttr("role", "dialog");
 		el.setAttr("aria-modal", "true");
 		el.setAttr("aria-label", `Cooking: ${this.host.title()}`);
@@ -132,8 +140,8 @@ export class FocusOverlay {
 		el.addEventListener("touchend", (event) => this.touchEnd(event));
 		el.addEventListener("touchmove", (event) => event.stopPropagation(), { passive: true });
 
-		window.addEventListener("keydown", this.onKey, true);
-		document.addEventListener("visibilitychange", this.onVisible);
+		this.win.addEventListener("keydown", this.onKey, true);
+		this.doc.addEventListener("visibilitychange", this.onVisible);
 
 		this.slide = firstOpenSlide(focusSlides(this.host.note()));
 		this.finished = false;
@@ -142,14 +150,14 @@ export class FocusOverlay {
 
 		// Eén frame later, zodat de laag zichtbaar invloeit in plaats van
 		// ineens over alles heen te staan.
-		window.requestAnimationFrame(() => el.addClass("is-open"));
+		this.win.requestAnimationFrame(() => el.addClass("is-open"));
 	}
 
 	close(): void {
 		if (!this.el) return;
 		this.cancelAdvance();
-		window.removeEventListener("keydown", this.onKey, true);
-		document.removeEventListener("visibilitychange", this.onVisible);
+		this.win.removeEventListener("keydown", this.onKey, true);
+		this.doc.removeEventListener("visibilitychange", this.onVisible);
 		this.release();
 		this.el.remove();
 		this.el = null;
@@ -328,7 +336,7 @@ export class FocusOverlay {
 
 		const from = this.slide;
 		const target = nextOpenSlide(slides, from);
-		this.advanceTimer = window.setTimeout(() => {
+		this.advanceTimer = this.win.setTimeout(() => {
 			this.advanceTimer = null;
 			// Intussen zelf gebladerd? Dan niet alsnog wegspringen.
 			if (!this.el || this.slide !== from || this.finished) return;
@@ -376,7 +384,7 @@ export class FocusOverlay {
 
 	private cancelAdvance(): void {
 		if (this.advanceTimer === null) return;
-		window.clearTimeout(this.advanceTimer);
+		this.win.clearTimeout(this.advanceTimer);
 		this.advanceTimer = null;
 	}
 
@@ -425,7 +433,7 @@ export class FocusOverlay {
 	 */
 	private keepAwake(): void {
 		if (!this.el || this.wakeLock) return;
-		const api = (navigator as Navigator & {
+		const api = (this.win.navigator as Navigator & {
 			wakeLock?: { request(type: "screen"): Promise<WakeLockHandle> };
 		}).wakeLock;
 		if (!api) return;

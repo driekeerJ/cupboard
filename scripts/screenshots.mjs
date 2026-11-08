@@ -273,6 +273,26 @@ async function main() {
 		await s.shot(name);
 	}
 
+	/**
+	 * Cook mode in focus, on the slide whose kicker and title match. Arrow keys
+	 * rather than ticks to get there: a tick on a one-line slide moves on by
+	 * itself and the shot would land somewhere else.
+	 */
+	const focusOn = (kicker, title, tick = 0) => `(async () => {
+		await ${plugin}.openCook("Chickpea curry");
+		await new Promise((r) => setTimeout(r, 600));
+		document.querySelector(".pantry-cook-focus").click();
+		await new Promise((r) => setTimeout(r, 300));
+		const at = () => document.querySelector(".pantry-focus-kicker")?.textContent === ${JSON.stringify(kicker)}
+			&& document.querySelector(".pantry-focus-overlay .pantry-focus-title")?.textContent === ${JSON.stringify(title)};
+		for (let i = 0; i < 30 && !at(); i++) {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
+			await new Promise((r) => setTimeout(r, 80));
+		}
+		const lines = document.querySelectorAll(".pantry-focus-line");
+		for (let i = 0; i < ${tick}; i++) lines[i]?.click();
+	})()`;
+
 	console.log("Desktop:");
 	await size(1280, 820);
 	await screen("home", command("open-home"));
@@ -285,6 +305,7 @@ async function main() {
 	await screen("shelves", command("open-shelves"));
 	await screen("cleanup", command("open-cleanup"));
 	await screen("cook", `${plugin}.openCook("Chickpea curry")`, 1400);
+	await screen("cook-focus", focusOn("Ingredients", "Step 2", 1), 1400);
 	const openNote = (path) =>
 		`app.workspace.getLeaf(false).openFile(app.vault.getFileByPath(${JSON.stringify(path)}), { state: { mode: "preview" } })`;
 	await screen("recipe-note", openNote("Recipes/Chickpea curry.md"), 1200);
@@ -298,6 +319,7 @@ async function main() {
 	await screen("narrow-home", command("open-home"));
 	await screen("narrow-list-shop", `${plugin}.openList(${list}, "shop")`, 1200);
 	await screen("narrow-cook", `${plugin}.openCook("Chickpea curry")`, 1400);
+	await screen("narrow-cook-focus", focusOn("Method", "Step 2"), 1400);
 
 	await size(1280, 820);
 	s.close();

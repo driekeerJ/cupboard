@@ -313,6 +313,19 @@ export default class PantryPlugin extends Plugin {
 			},
 		});
 
+		// Een sneltoets voor de focusmodus: met deeg aan je handen is één toets
+		// fijner dan een knop zoeken.
+		this.addCommand({
+			id: "cook-focus",
+			name: "Cook one step at a time (focus mode)",
+			checkCallback: (checking: boolean) => {
+				const view = this.app.workspace.getActiveViewOfType(CookView);
+				if (!view) return false;
+				if (!checking) view.openFocus();
+				return true;
+			},
+		});
+
 		// Same entry point from the file explorer and the note menu.
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu: Menu, file: TAbstractFile) => {

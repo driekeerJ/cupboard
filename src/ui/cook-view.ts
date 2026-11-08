@@ -52,6 +52,7 @@ export class CookView extends ItemView {
 	/** Timerknoppen op de focuslaag; die leeft en hertekent los van de lijst. */
 	private focusChips: TimerChip[] = [];
 	private focus: FocusOverlay = new FocusOverlay({
+		anchor: () => this.contentEl,
 		note: () => this.note,
 		title: () => this.getDisplayText(),
 		save: (line) => guarded("could not save your ticks", () => this.write(line)),
@@ -126,6 +127,11 @@ export class CookView extends ItemView {
 		return Promise.resolve();
 	}
 
+	/** Eén stap tegelijk, over het hele scherm. Ook bereikbaar als command. */
+	openFocus(): void {
+		if (this.file) this.focus.open();
+	}
+
 	refresh(): void {
 		guarded("could not reload the cooking session", () => this.reload());
 	}
@@ -178,11 +184,11 @@ export class CookView extends ItemView {
 		const actions = top.createDiv({ cls: "pantry-cook-actions" });
 
 		const focus = actions.createEl("button", {
-			cls: "pantry-text-button mod-cta",
+			cls: "pantry-text-button pantry-cook-focus mod-cta",
 			text: "Focus",
 			attr: { "aria-label": "Cook one step at a time, full screen" },
 		});
-		focus.onclick = () => this.focus.open();
+		focus.onclick = () => this.openFocus();
 
 		const openNote = actions.createEl("button", {
 			cls: "pantry-text-button",

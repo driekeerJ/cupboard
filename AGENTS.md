@@ -11,7 +11,8 @@ npm run test          # node --test, draait ook binnen npm run build
 npm run build         # test + tsc -noEmit + esbuild -> main.js
 npm run build:deploy  # build + kopieer main.js/manifest.json/styles.css naar de vault
 npm run lint          # ESLint, type-aware
-npm run typecheck:strict   # de noUncheckedIndexedAccess-achterstand (51 open)
+npm run e2e           # tweede, losse Obsidian in telefoonmodus (macOS)
+npm run screenshots   # README-screenshots uit demo/ (macOS)
 ```
 
 Bouw en typecheck vóórdat je zegt dat iets klaar is. Obsidian pakt een verse
@@ -64,10 +65,10 @@ Verhoog het nummer alleen als een oudere build iets zou weggooien.
 
 **Iets weggooien vraagt eerst.** Done, Delete list en Delete product gaan door
 `confirm()` (`src/ui/confirm.ts`). Done gooit niet weg maar verhuist naar
-`Pantry/Shopping/Done/`; `sweep()` ruimt na `cookKeepDays` op.
+`Cupboard/Shopping/Done/`; `sweep()` ruimt na `cookKeepDays` op.
 
 **Notities zijn de waarheid.** `data.json` is alleen voor wat geen notitie kan
-zijn. Een boodschappenlijst is één notitie in `Pantry/Shopping/`: de keuzes en
+zijn. Een boodschappenlijst is één notitie in `Cupboard/Shopping/` (instelbaar): de keuzes en
 het mandje in de frontmatter, de afvinklijst in de body als spiegel van de
 productnotities. De voorraad zelf staat alleen in de productnotitie.
 
@@ -89,6 +90,14 @@ Obsidian geeft elke `<button>` een vaste hoogte en thema's overschilderen ze.
 Hetzelfde voor `<textarea>`. Nieuwe view-types toevoegen aan de selectorlijst
 boven in `styles.css`, anders parkeert een sticky header onder de padding die
 een thema op `.view-content` zet.
+
+De focusmodus van de kookmodus (`src/ui/cook-focus-overlay.ts`) is een laag
+op de `body` van het venster van de kookweergave, buiten elke view. Daar geldt
+de view-selector niet: knoppen staan als `.pantry-focus-overlay button.x`. De
+laag bezit geen vinkjes; die gaan via `CookView.write` naar de sessienotitie,
+en de indeling in dia's staat los en getest in `src/cook-focus.ts`. Nieuwe
+schermen of commands: ook een check in `scripts/e2e.mjs` en, als het in de
+README hoort, een shot in `scripts/screenshots.mjs`.
 
 Slepen: luisteraars op `window`, gekoppeld op `pointerId`, plus een inline
 `translateY`. Pointer capture sterft zodra het element in de DOM verplaatst
