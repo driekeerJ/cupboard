@@ -325,7 +325,9 @@ async function key(name, code, keyCode) {
 
 async function escapeAll() {
 	for (let i = 0; i < 4; i++) {
-		if (!(await s.run(`!!e2e.modal() || !!document.querySelector(".mod-settings")`))) return;
+		// Alleen bij iets dat je ziet: een dicht instellingenvenster blijft in de
+		// DOM staan, en een Esc daarop sloot de focusmodus van blok G.
+		if (!(await s.run(`e2e.visible(e2e.modal()) || e2e.visible(document.querySelector(".mod-settings"))`))) return;
 		await key("Escape", "Escape", 27);
 		await sleep(200);
 	}
@@ -670,12 +672,26 @@ async function main() {
 		await s.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
 	}
 
-	await check("Focus covers the whole window, tabs and bars included", async () => {
-		await s.run(quietly(`${plugin}.openCook("Chickpea curry")`));
-		await until(`!!document.querySelector(".pantry-cook-focus")`, "no Focus button in cook mode", 3000);
-		await tap(`document.querySelector(".pantry-cook-focus")`);
+	/**
+	 * Elke check begint met een open focuslaag, zodat één mislukte check de
+	 * rest niet meesleept. De vinkjes staan in de sessienotitie en blijven dus
+	 * staan als de laag opnieuw opent.
+	 */
+	async function ensureFocus() {
+		if (await s.run(`!!(${overlay})`)) return;
+		const button = `document.querySelector(".pantry-cook-focus")`;
+		if (!(await s.run(`e2e.visible(${button})`))) {
+			await s.run(quietly(`${plugin}.openCook("Chickpea curry")`));
+		}
+		await until(`e2e.visible(${button})`, "no Focus button in cook mode", 3000);
+		await tap(button);
 		await until(`!!(${overlay})?.classList.contains("is-open")`, "the focus layer did not open", 2000);
 		await sleep(400);
+	}
+
+	await check("Focus covers the whole window, tabs and bars included", async () => {
+		await s.run(quietly(`${plugin}.openCook("Chickpea curry")`));
+		await ensureFocus();
 		const covered = await s.run(`(() => {
 			const o = ${overlay};
 			const pts = [[4, 4], [innerWidth - 4, innerHeight - 4], [innerWidth / 2, innerHeight / 2]];
@@ -686,6 +702,7 @@ async function main() {
 	});
 
 	await check("ticking every line on a slide moves on by itself", async () => {
+		await ensureFocus();
 		const before = await slideTitle();
 		const count = await s.run(`(${overlay}).querySelectorAll(".pantry-focus-line").length`);
 		for (let i = 0; i < count; i++) {
@@ -705,6 +722,7 @@ async function main() {
 	});
 
 	await check("swiping and Back go between slides", async () => {
+		await ensureFocus();
 		const here = await slideTitle();
 		await swipe(-200);
 		await sleep(500);
@@ -716,12 +734,14 @@ async function main() {
 	});
 
 	await check("focus buttons sit above the bottom bar", async () => {
+		await ensureFocus();
 		const bottom = await s.run(`(${overlay}).querySelector(".pantry-focus-nav.is-next").getBoundingClientRect().bottom`);
 		const limit = (await s.run(`innerHeight`)) - (await s.run(`e2e.inset("bottom")`));
 		expect(bottom <= limit, `Next ends at ${Math.round(bottom)}px, the navigation bar starts at ${Math.round(limit)}px`);
 	});
 
 	await check("closing focus leaves the list with the same ticks", async () => {
+		await ensureFocus();
 		await tap(`(${overlay}).querySelector(".pantry-focus-close")`);
 		await until(`!(${overlay})`, "the focus layer did not close", 1500);
 		const done = await s.run(`e2e.all(".pantry-cook .pantry-check-row.is-done").length`);
