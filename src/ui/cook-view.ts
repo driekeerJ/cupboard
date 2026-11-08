@@ -9,6 +9,7 @@ import {
 	timerKey,
 } from "../cook";
 import type { CookLine, CookNote } from "../cook-session";
+import { FocusOverlay } from "./cook-focus-overlay";
 import { withoutLinks } from "../ingredients";
 import { formatServings } from "../plan";
 
@@ -48,6 +49,21 @@ export class CookView extends ItemView {
 	private announced: Set<string> = new Set();
 	private audio: AudioContext | null = null;
 	private lastWrite = 0;
+	/** Timerknoppen op de focuslaag; die leeft en hertekent los van de lijst. */
+	private focusChips: TimerChip[] = [];
+	private focus: FocusOverlay = new FocusOverlay({
+		anchor: () => this.contentEl,
+		note: () => this.note,
+		title: () => this.getDisplayText(),
+		save: (line) => guarded("could not save your ticks", () => this.write(line)),
+		stepText: (host, text, step) => this.drawStepText(host, text, step, this.focusChips),
+		beginSlide: () => {
+			this.focusChips = [];
+		},
+		endSlide: () => this.tick(),
+		// De lijst eronder liep niet mee met de vinkjes in de focuslaag.
+		closed: () => this.draw(),
+	});
 
 	constructor(leaf: WorkspaceLeaf, plugin: PantryPlugin) {
 		super(leaf);
@@ -103,11 +119,17 @@ export class CookView extends ItemView {
 
 	onClose(): Promise<void> {
 		this.chips = [];
+		this.focus.close();
 		// Geluid is versiering: mislukt het sluiten, dan is dat geen boodschap
 		// voor de kok. Wel opvangen, want een losse rejection is geen stijl.
 		this.audio?.close().catch(() => undefined);
 		this.audio = null;
 		return Promise.resolve();
+	}
+
+	/** Eén stap tegelijk, over het hele scherm. Ook bereikbaar als command. */
+	openFocus(): void {
+		if (this.file) this.focus.open();
 	}
 
 	refresh(): void {
@@ -127,6 +149,7 @@ export class CookView extends ItemView {
 
 		this.note = await this.plugin.cook.read(this.file);
 		this.draw();
+		this.focus.refresh();
 	}
 
 	private servings(): number {
@@ -159,6 +182,13 @@ export class CookView extends ItemView {
 		});
 
 		const actions = top.createDiv({ cls: "pantry-cook-actions" });
+
+		const focus = actions.createEl("button", {
+			cls: "pantry-text-button pantry-cook-focus mod-cta",
+			text: "Focus",
+			attr: { "aria-label": "Cook one step at a time, full screen" },
+		});
+		focus.onclick = () => this.openFocus();
 
 		const openNote = actions.createEl("button", {
 			cls: "pantry-text-button",
@@ -329,7 +359,7 @@ export class CookView extends ItemView {
 		body.createSpan({ cls: "pantry-step-number", text: `${line.index + 1}.` });
 
 		const text = body.createSpan({ cls: "pantry-step-text" });
-		this.drawStepText(text, line.text, line.index);
+		this.drawStepText(text, line.text, line.index, this.chips);
 
 		const toggle = (event: MouseEvent): void => {
 			// A tap on a timer must not also tick the step off.
@@ -350,7 +380,12 @@ export class CookView extends ItemView {
 	}
 
 	/** Writes the step out, turning every duration into its own timer button. */
-	private drawStepText(host: HTMLElement, rawLine: string, step: number): void {
+	private drawStepText(
+		host: HTMLElement,
+		rawLine: string,
+		step: number,
+		chips: TimerChip[]
+	): void {
 		// De wikilink-syntax gaat er af vóór het zoeken naar tijdsduren, zodat
 		// de posities die findDurations teruggeeft bij deze tekst horen.
 		const line = withoutLinks(rawLine);
@@ -374,7 +409,7 @@ export class CookView extends ItemView {
 				);
 			};
 
-			this.chips.push({ key, seconds: duration.seconds, el: chip, clockEl: clock });
+			chips.push({ key, seconds: duration.seconds, el: chip, clockEl: clock });
 			cursor = duration.end;
 		});
 
@@ -402,7 +437,7 @@ export class CookView extends ItemView {
 		const now = Date.now();
 		const timers = this.plugin.cook.timers(this.path);
 
-		this.chips.forEach((chip) => {
+		[...this.chips, ...this.focusChips].forEach((chip) => {
 			const timer = timers[chip.key];
 			if (!timer) {
 				chip.el.removeClass("is-running");

@@ -26,10 +26,11 @@
  * Bij een mislukte check komt er een screenshot in `tests/e2e-out/`.
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { SHIFT, shiftVault } from "./demo-dates.mjs";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const WORK = join(tmpdir(), "cupboard-e2e");
@@ -46,36 +47,6 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ---------- 1. The vault: demo/, moved to this week ----------
 
-const DEMO_MONDAY = "2026-09-21"; // demo week 39
-
-function isoDate(date) {
-	return date.toISOString().slice(0, 10);
-}
-
-function mondayOf(date) {
-	const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-	d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
-	return d;
-}
-
-function isoWeek(iso) {
-	const d = new Date(`${iso}T12:00:00Z`);
-	d.setUTCDate(d.getUTCDate() + 3 - ((d.getUTCDay() + 6) % 7));
-	const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-	firstThursday.setUTCDate(firstThursday.getUTCDate() + 3 - ((firstThursday.getUTCDay() + 6) % 7));
-	const week = 1 + Math.round((d - firstThursday) / (7 * 864e5));
-	return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
-}
-
-/** Every demo date moves by whole weeks, so demo week 39 becomes this week. */
-const SHIFT = Math.round((mondayOf(new Date()) - new Date(`${DEMO_MONDAY}T00:00:00Z`)) / 864e5);
-const shiftDate = (iso) => {
-	const d = new Date(`${iso}T12:00:00Z`);
-	d.setUTCDate(d.getUTCDate() + SHIFT);
-	return isoDate(d);
-};
-const shiftAll = (text) => text.replace(/\b20\d\d-\d\d-\d\d\b/g, shiftDate);
-
 function buildVault() {
 	rmSync(WORK, { recursive: true, force: true });
 	cpSync(join(ROOT, "demo"), VAULT, {
@@ -83,22 +54,7 @@ function buildVault() {
 		filter: (src) => !src.includes(".pantry-demo") && !src.endsWith("README.md"),
 	});
 
-	for (const folder of ["Meal plans", "Cupboard/Shopping", "Products"]) {
-		const dir = join(VAULT, folder);
-		for (const name of readdirSync(dir)) {
-			let text = shiftAll(readFileSync(join(dir, name), "utf8"));
-			let renamed = shiftAll(name);
-			const week = text.match(/^weekStart: (\S+)$/m);
-			if (week) {
-				const [oldWeek] = text.match(/\d{4}-W\d\d/);
-				const newWeek = isoWeek(week[1]);
-				text = text.replaceAll(oldWeek, newWeek).replace(/week \d+/, `week ${Number(newWeek.slice(6))}`);
-				renamed = `${newWeek}.md`;
-			}
-			rmSync(join(dir, name));
-			writeFileSync(join(dir, renamed), text);
-		}
-	}
+	shiftVault(VAULT);
 
 	const config = join(VAULT, ".obsidian");
 	const pluginDir = join(config, "plugins", ID);
@@ -325,7 +281,9 @@ async function key(name, code, keyCode) {
 
 async function escapeAll() {
 	for (let i = 0; i < 4; i++) {
-		if (!(await s.run(`!!e2e.modal() || !!document.querySelector(".mod-settings")`))) return;
+		// Alleen bij iets dat je ziet: een dicht instellingenvenster blijft in de
+		// DOM staan, en een Esc daarop sloot de focusmodus van blok G.
+		if (!(await s.run(`e2e.visible(e2e.modal()) || e2e.visible(document.querySelector(".mod-settings"))`))) return;
 		await key("Escape", "Escape", 27);
 		await sleep(200);
 	}
@@ -651,6 +609,104 @@ async function main() {
 		const notes = await s.run(`Promise.all(app.vault.getMarkdownFiles().filter((f) => f.path.startsWith("Meal plans/")).map((f) => app.vault.read(f)))`);
 		expect(notes.some((t) => t.includes("# Cupboard rewrites this block on every change.")), "no plan note with the English comment");
 		expect(!notes.some((t) => t.includes("herschrijft")), "a plan note still has the Dutch comment");
+	});
+
+	console.log("\nG. Cook mode: focus");
+
+	const overlay = `document.querySelector(".pantry-focus-overlay")`;
+	const slideTitle = () => s.run(`(${overlay})?.querySelector(".pantry-focus-title")?.textContent ?? null`);
+	const kicker = () => s.run(`(${overlay})?.querySelector(".pantry-focus-kicker")?.textContent ?? null`);
+
+	async function swipe(dx) {
+		const y = 420;
+		const x0 = dx < 0 ? 320 : 70;
+		await s.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: x0, y }] });
+		for (let step = 1; step <= 5; step++) {
+			await s.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x0 + (dx * step) / 5, y }] });
+			await sleep(16);
+		}
+		await s.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+	}
+
+	/**
+	 * Elke check begint met een open focuslaag, zodat één mislukte check de
+	 * rest niet meesleept. De vinkjes staan in de sessienotitie en blijven dus
+	 * staan als de laag opnieuw opent.
+	 */
+	async function ensureFocus() {
+		if (await s.run(`!!(${overlay})`)) return;
+		const button = `document.querySelector(".pantry-cook-focus")`;
+		if (!(await s.run(`e2e.visible(${button})`))) {
+			await s.run(quietly(`${plugin}.openCook("Chickpea curry")`));
+		}
+		await until(`e2e.visible(${button})`, "no Focus button in cook mode", 3000);
+		await tap(button);
+		await until(`!!(${overlay})?.classList.contains("is-open")`, "the focus layer did not open", 2000);
+		await sleep(400);
+	}
+
+	await check("Focus covers the whole window, tabs and bars included", async () => {
+		await s.run(quietly(`${plugin}.openCook("Chickpea curry")`));
+		await ensureFocus();
+		const covered = await s.run(`(() => {
+			const o = ${overlay};
+			const pts = [[4, 4], [innerWidth - 4, innerHeight - 4], [innerWidth / 2, innerHeight / 2]];
+			return pts.every(([x, y]) => o.contains(document.elementFromPoint(x, y)));
+		})()`);
+		expect(covered, "something of Obsidian shows through the focus layer");
+		expect((await kicker()) === "Ingredients", `first slide is ${await kicker()}, not Ingredients`);
+	});
+
+	await check("ticking every line on a slide moves on by itself", async () => {
+		await ensureFocus();
+		const before = await slideTitle();
+		const count = await s.run(`(${overlay}).querySelectorAll(".pantry-focus-line").length`);
+		for (let i = 0; i < count; i++) {
+			await tap(`(${overlay}).querySelectorAll(".pantry-focus-line")[${i}]`);
+			await sleep(60);
+		}
+		await until(`(${overlay})?.querySelector(".pantry-focus-title")?.textContent !== ${JSON.stringify(before)}`,
+			"the slide did not move on after the last tick", 1500);
+	});
+
+	await check("the ticks are in the session note", async () => {
+		await sleep(400);
+		const path = await s.run(`app.workspace.getLeavesOfType("pantry-cook")[0]?.view.getState().path`);
+		expect(path, "no cooking session open");
+		const text = await s.run(`e2e.read(${JSON.stringify(path)})`);
+		expect(/- \[x\] /.test(text), "no ticked line in the session note");
+	});
+
+	await check("swiping and Back go between slides", async () => {
+		await ensureFocus();
+		const here = await slideTitle();
+		await swipe(-200);
+		await sleep(500);
+		const next = await slideTitle();
+		expect(next !== here, "a swipe to the left did not go forward");
+		await tap(`(${overlay}).querySelector(".pantry-focus-nav.is-prev")`);
+		await sleep(500);
+		expect((await slideTitle()) === here, "Back did not return to the slide before");
+	});
+
+	await check("focus buttons sit above the bottom bar", async () => {
+		await ensureFocus();
+		const bottom = await s.run(`(${overlay}).querySelector(".pantry-focus-nav.is-next").getBoundingClientRect().bottom`);
+		const limit = (await s.run(`innerHeight`)) - (await s.run(`e2e.inset("bottom")`));
+		expect(bottom <= limit, `Next ends at ${Math.round(bottom)}px, the navigation bar starts at ${Math.round(limit)}px`);
+	});
+
+	await check("closing focus leaves the list with the same ticks", async () => {
+		await ensureFocus();
+		await tap(`(${overlay}).querySelector(".pantry-focus-close")`);
+		await until(`!(${overlay})`, "the focus layer did not close", 1500);
+		const done = await s.run(`e2e.all(".pantry-cook .pantry-check-row.is-done").length`);
+		expect(done > 0, "the list does not show the ticks made in focus mode");
+	});
+
+	await check("focus mode is a command", async () => {
+		const ids = await s.run(`Object.keys(app.commands.commands)`);
+		expect(ids.includes(`${ID}:cook-focus`), "cook-focus missing");
 	});
 
 	console.log("\nF. Console");

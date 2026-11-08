@@ -2008,6 +2008,478 @@
 }
 
 /* ------------------------------------------------------------------ *
+ * Focus mode — full screen, one slide at a time
+ * ------------------------------------------------------------------ *
+ * Hangs on <body>, outside every view, so it covers tabs, ribbon and
+ * status bar. Below --layer-notice so a finished timer still shows.
+ */
+
+.pantry-focus-overlay {
+	--pantry-focus-ease: cubic-bezier(0.22, 1, 0.36, 1);
+	--pantry-focus-inset-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+	--pantry-focus-inset-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+	position: fixed;
+	inset: 0;
+	z-index: var(--layer-modal, 50);
+	display: flex;
+	flex-direction: column;
+	padding-top: var(--pantry-focus-inset-top);
+	padding-bottom: var(--pantry-focus-inset-bottom);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	opacity: 0;
+	transform: scale(0.985);
+	transition: opacity 220ms var(--pantry-focus-ease), transform 320ms var(--pantry-focus-ease);
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+.pantry-focus-overlay.is-open {
+	opacity: 1;
+	transform: none;
+}
+
+/* Progress: a hairline across the top that fills as slides get done. */
+.pantry-focus-progress {
+	flex: 0 0 auto;
+	height: 3px;
+	background: var(--background-modifier-border);
+}
+
+.pantry-focus-progress-bar {
+	width: 0;
+	height: 100%;
+	border-radius: 0 3px 3px 0;
+	background: var(--interactive-accent);
+	transition: width 420ms var(--pantry-focus-ease);
+}
+
+.pantry-focus-top {
+	flex: 0 0 auto;
+	display: grid;
+	grid-template-columns: 1fr auto 1fr;
+	align-items: center;
+	gap: 16px;
+	padding: 14px clamp(16px, 4vw, 40px);
+}
+
+.pantry-focus-recipe {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	font-weight: 500;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.pantry-focus-counter {
+	color: var(--text-faint);
+	font-size: var(--font-ui-small);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0.02em;
+}
+
+.pantry-focus-overlay button.pantry-focus-close {
+	justify-self: end;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	min-height: 0;
+	padding: 0;
+	border: none;
+	border-radius: 50%;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	font-size: 24px;
+	font-weight: 300;
+	line-height: 1;
+	box-shadow: none;
+	cursor: pointer;
+	transition: background-color 150ms ease, color 150ms ease;
+}
+
+.pantry-focus-overlay button.pantry-focus-close:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+/* The slide itself: centred, generous, readable from across the counter. */
+.pantry-focus-stage {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	overflow-y: auto;
+	overflow-x: hidden;
+	-webkit-overflow-scrolling: touch;
+}
+
+.pantry-focus-slide {
+	width: 100%;
+	max-width: 760px;
+	margin: auto;
+	padding: 24px clamp(20px, 5vw, 48px) 40px;
+}
+
+.pantry-focus-slide.is-enter-next {
+	animation: pantry-focus-in-next 380ms var(--pantry-focus-ease);
+}
+
+.pantry-focus-slide.is-enter-prev {
+	animation: pantry-focus-in-prev 380ms var(--pantry-focus-ease);
+}
+
+@keyframes pantry-focus-in-next {
+	from {
+		opacity: 0;
+		transform: translateX(36px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@keyframes pantry-focus-in-prev {
+	from {
+		opacity: 0;
+		transform: translateX(-36px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.pantry-focus-kicker {
+	margin-bottom: 8px;
+	color: var(--interactive-accent);
+	font-size: var(--font-ui-smaller);
+	font-weight: 700;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+}
+
+.pantry-focus-overlay .pantry-focus-title {
+	margin: 0 0 28px;
+	color: var(--text-normal);
+	font-size: clamp(1.8rem, 4.2vw, 2.6rem);
+	font-weight: 700;
+	letter-spacing: -0.025em;
+	line-height: 1.1;
+}
+
+.pantry-focus-lines {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.pantry-focus-line {
+	display: flex;
+	align-items: flex-start;
+	gap: 18px;
+	padding: 18px 20px;
+	border-radius: 16px;
+	background: var(--background-secondary);
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+	transition: background-color 200ms ease, transform 120ms ease;
+}
+
+/* Touch screens keep :hover after a tap; only a real pointer gets it. */
+@media (hover: hover) {
+	.pantry-focus-line:hover {
+		background: var(--background-modifier-hover);
+	}
+}
+
+.pantry-focus-line:active {
+	transform: scale(0.99);
+}
+
+.pantry-focus-line:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+.pantry-focus-box {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	margin-top: 1px;
+	border: 2px solid var(--text-faint);
+	border-radius: 50%;
+	transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+.pantry-focus-tick {
+	color: var(--text-on-accent);
+	font-size: 17px;
+	font-weight: 700;
+	line-height: 1;
+	opacity: 0;
+	transform: scale(0.4);
+	transition: opacity 160ms ease, transform 260ms var(--pantry-focus-ease);
+}
+
+.pantry-focus-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	padding-top: 2px;
+	font-size: clamp(1.15rem, 2.3vw, 1.45rem);
+	line-height: 1.45;
+	transition: color 200ms ease;
+}
+
+.pantry-focus-line.is-done .pantry-focus-box {
+	border-color: var(--interactive-accent);
+	background: var(--interactive-accent);
+}
+
+.pantry-focus-line.is-done .pantry-focus-tick {
+	opacity: 1;
+	transform: none;
+}
+
+.pantry-focus-line.is-done .pantry-focus-text {
+	color: var(--text-faint);
+	text-decoration: line-through;
+	text-decoration-thickness: 1px;
+}
+
+/* Timers inside a step, at the size of the text around them. */
+.pantry-focus-overlay button.pantry-timer {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 6px;
+	width: auto;
+	height: auto;
+	min-height: 0;
+	margin: 0 2px;
+	padding: 2px 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: 0.85em;
+	font-weight: 600;
+	line-height: 1.5;
+	box-shadow: none;
+	cursor: pointer;
+	vertical-align: 0.05em;
+}
+
+.pantry-focus-overlay button.pantry-timer.is-running {
+	border-color: transparent;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.pantry-focus-overlay button.pantry-timer.is-finished {
+	background: var(--text-error);
+	color: var(--text-on-accent);
+}
+
+.pantry-focus-line.is-done .pantry-timer {
+	text-decoration: none;
+}
+
+/* The end: a quiet badge, not a fanfare. */
+.pantry-focus-slide.is-finished {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+}
+
+.pantry-focus-badge {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 72px;
+	height: 72px;
+	margin-bottom: 24px;
+	border-radius: 50%;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-size: 34px;
+	font-weight: 700;
+}
+
+.pantry-focus-badge.is-open {
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	font-size: 28px;
+}
+
+.pantry-focus-slide.is-finished .pantry-focus-title {
+	margin-bottom: 10px;
+}
+
+.pantry-focus-subtitle {
+	margin-bottom: 28px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-medium);
+}
+
+.pantry-focus-empty {
+	color: var(--text-muted);
+	text-align: center;
+}
+
+/* Bottom bar: back, what comes next, forward. */
+.pantry-focus-bottom {
+	flex: 0 0 auto;
+	display: grid;
+	grid-template-columns: auto 1fr auto;
+	align-items: center;
+	gap: 20px;
+	padding: 16px clamp(16px, 4vw, 40px) 20px;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.pantry-focus-next {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	min-width: 0;
+	text-align: center;
+}
+
+.pantry-focus-next-label {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.pantry-focus-next-text {
+	max-width: 100%;
+	overflow: hidden;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.pantry-focus-overlay button.pantry-focus-nav,
+.pantry-focus-overlay button.pantry-focus-done {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 120px;
+	height: 48px;
+	min-height: 0;
+	padding: 0 22px;
+	border: none;
+	border-radius: 999px;
+	font-size: var(--font-ui-medium);
+	font-weight: 600;
+	white-space: pre;
+	box-shadow: none;
+	cursor: pointer;
+	transition: background-color 150ms ease, opacity 150ms ease, transform 120ms ease;
+}
+
+.pantry-focus-overlay button.pantry-focus-nav.is-prev {
+	background: var(--background-secondary);
+	color: var(--text-normal);
+}
+
+.pantry-focus-overlay button.pantry-focus-nav.is-next,
+.pantry-focus-overlay button.pantry-focus-done {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.pantry-focus-overlay button.pantry-focus-nav.is-prev:hover {
+	background: var(--background-modifier-hover);
+}
+
+.pantry-focus-overlay button.pantry-focus-nav.is-next:hover,
+.pantry-focus-overlay button.pantry-focus-done:hover {
+	background: var(--interactive-accent-hover);
+}
+
+.pantry-focus-overlay button.pantry-focus-nav:active,
+.pantry-focus-overlay button.pantry-focus-done:active {
+	transform: scale(0.97);
+}
+
+.pantry-focus-overlay button.pantry-focus-nav:disabled {
+	opacity: 0.35;
+	cursor: default;
+	transform: none;
+}
+
+/* Phone: "Up next" on its own line above two wide thumb buttons. */
+@media (max-width: 640px) {
+	.pantry-focus-top {
+		padding: 10px 16px;
+	}
+
+	.pantry-focus-counter {
+		display: none;
+	}
+
+	.pantry-focus-top {
+		grid-template-columns: 1fr auto;
+	}
+
+	.pantry-focus-slide {
+		padding: 16px 18px 28px;
+	}
+
+	.pantry-focus-overlay .pantry-focus-title {
+		margin-bottom: 20px;
+	}
+
+	.pantry-focus-line {
+		gap: 14px;
+		padding: 16px;
+	}
+
+	.pantry-focus-bottom {
+		grid-template-columns: 1fr 1fr;
+		gap: 10px 12px;
+		padding: 12px 16px 14px;
+	}
+
+	.pantry-focus-next {
+		grid-column: 1 / -1;
+		grid-row: 1;
+	}
+
+	.pantry-focus-overlay button.pantry-focus-nav {
+		width: 100%;
+		min-width: 0;
+		height: 52px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.pantry-focus-overlay,
+	.pantry-focus-progress-bar,
+	.pantry-focus-tick,
+	.pantry-focus-line {
+		transition: none;
+	}
+
+	.pantry-focus-slide.is-enter-next,
+	.pantry-focus-slide.is-enter-prev {
+		animation: none;
+	}
+}
+
+/* ------------------------------------------------------------------ *
  * Products — the base list
  * ------------------------------------------------------------------ */
 
