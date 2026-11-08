@@ -8,14 +8,8 @@ import {
 	remaining,
 	timerKey,
 } from "../cook";
-import {
-	firstOpenSlide,
-	focusSlides,
-	isSlideDone,
-	nextOpenSlide,
-	type FocusSlide,
-} from "../cook-focus";
 import type { CookLine, CookNote } from "../cook-session";
+import { FocusOverlay } from "./cook-focus-overlay";
 import { withoutLinks } from "../ingredients";
 import { formatServings } from "../plan";
 
@@ -31,18 +25,9 @@ const SERVINGS_STEP = 0.5;
  */
 const OWN_WRITE_MS = 1200;
 
-/**
- * Hoe lang een afgevinkte dia nog blijft staan voordat de volgende komt. Lang
- * genoeg om het vinkje te zien landen — en om een misser terug te tikken
- * voordat de dia wegschuift — kort genoeg om niet te wachten.
- */
-const ADVANCE_MS = 700;
-
 export interface CookViewState {
 	/** Pad van de kooksessie-notitie, niet van het recept. */
 	path: string;
-	/** Eén dia tegelijk in plaats van de hele lijst. */
-	focus?: boolean;
 }
 
 interface TimerChip {
@@ -64,15 +49,20 @@ export class CookView extends ItemView {
 	private announced: Set<string> = new Set();
 	private audio: AudioContext | null = null;
 	private lastWrite = 0;
-	private focus = false;
-	/** De dia die in focusmodus op het scherm staat. */
-	private slide = 0;
-	/**
-	 * Of `slide` al gekozen is. Bij het openen van een sessie die al in
-	 * focusmodus stond moet je terugkomen bij je werk, niet bij dia één.
-	 */
-	private slideChosen = false;
-	private advanceTimer: number | null = null;
+	/** Timerknoppen op de focuslaag; die leeft en hertekent los van de lijst. */
+	private focusChips: TimerChip[] = [];
+	private focus: FocusOverlay = new FocusOverlay({
+		note: () => this.note,
+		title: () => this.getDisplayText(),
+		save: (line) => guarded("could not save your ticks", () => this.write(line)),
+		stepText: (host, text, step) => this.drawStepText(host, text, step, this.focusChips),
+		beginSlide: () => {
+			this.focusChips = [];
+		},
+		endSlide: () => this.tick(),
+		// De lijst eronder liep niet mee met de vinkjes in de focuslaag.
+		closed: () => this.draw(),
+	});
 
 	constructor(leaf: WorkspaceLeaf, plugin: PantryPlugin) {
 		super(leaf);
@@ -92,16 +82,12 @@ export class CookView extends ItemView {
 	}
 
 	getState(): Record<string, unknown> {
-		return { path: this.path, focus: this.focus };
+		return { path: this.path };
 	}
 
 	async setState(state: unknown, result: ViewStateResult): Promise<void> {
 		const incoming = state as Partial<CookViewState> | null;
-		if (incoming?.path && incoming.path !== this.path) {
-			this.path = incoming.path;
-			this.slideChosen = false;
-		}
-		if (typeof incoming?.focus === "boolean") this.focus = incoming.focus;
+		if (incoming?.path) this.path = incoming.path;
 		await super.setState(state, result);
 		await this.reload();
 	}
@@ -125,9 +111,6 @@ export class CookView extends ItemView {
 				guarded("could not reload the cooking session", () => this.reload());
 			})
 		);
-		// Pijltjestoetsen bladeren op de computer. Alleen als dit scherm voor
-		// staat en je niet in een tekstveld zit.
-		this.registerDomEvent(window, "keydown", (event) => this.onKey(event));
 		// Half a second keeps the seconds flipping over cleanly without churn.
 		this.registerInterval(window.setInterval(() => this.tick(), 500));
 		await this.reload();
@@ -135,7 +118,7 @@ export class CookView extends ItemView {
 
 	onClose(): Promise<void> {
 		this.chips = [];
-		this.cancelAdvance();
+		this.focus.close();
 		// Geluid is versiering: mislukt het sluiten, dan is dat geen boodschap
 		// voor de kok. Wel opvangen, want een losse rejection is geen stijl.
 		this.audio?.close().catch(() => undefined);
@@ -159,11 +142,8 @@ export class CookView extends ItemView {
 		}
 
 		this.note = await this.plugin.cook.read(this.file);
-		if (this.focus && !this.slideChosen) {
-			this.slide = firstOpenSlide(focusSlides(this.note));
-			this.slideChosen = true;
-		}
 		this.draw();
+		this.focus.refresh();
 	}
 
 	private servings(): number {
@@ -178,16 +158,11 @@ export class CookView extends ItemView {
 		const root = this.contentEl;
 		root.empty();
 		root.addClass("pantry-cook");
-		root.toggleClass("is-focus", this.focus);
 		this.chips = [];
 
 		this.drawHeader(root);
-		if (this.focus) {
-			this.drawFocus(root);
-		} else {
-			this.drawIngredients(root);
-			this.drawSteps(root);
-		}
+		this.drawIngredients(root);
+		this.drawSteps(root);
 		this.tick();
 	}
 
@@ -202,16 +177,12 @@ export class CookView extends ItemView {
 
 		const actions = top.createDiv({ cls: "pantry-cook-actions" });
 
-		const mode = actions.createEl("button", {
-			cls: "pantry-text-button",
-			text: this.focus ? "List" : "Focus",
-			attr: {
-				"aria-label": this.focus
-					? "Show the whole recipe as a list"
-					: "Show one step at a time",
-			},
+		const focus = actions.createEl("button", {
+			cls: "pantry-text-button mod-cta",
+			text: "Focus",
+			attr: { "aria-label": "Cook one step at a time, full screen" },
 		});
-		mode.onclick = () => this.setFocus(!this.focus);
+		focus.onclick = () => this.focus.open();
 
 		const openNote = actions.createEl("button", {
 			cls: "pantry-text-button",
@@ -246,10 +217,6 @@ export class CookView extends ItemView {
 			text: "Start over",
 		});
 		reset.onclick = () => guarded("could not start over", () => this.reset());
-
-		// Porties wijzig je vóór het koken; in focusmodus is het alleen ruis
-		// boven de stap waar je mee bezig bent.
-		if (this.focus) return;
 
 		const row = header.createDiv({ cls: "pantry-servings-row" });
 
@@ -305,9 +272,6 @@ export class CookView extends ItemView {
 		this.announced.clear();
 		this.lastWrite = Date.now();
 		await this.plugin.cook.restart(this.file, this.servings());
-		this.cancelAdvance();
-		this.slide = 0;
-		this.slideChosen = true;
 		await this.reload();
 		new Notice("Cooking session started over.");
 	}
@@ -340,7 +304,7 @@ export class CookView extends ItemView {
 		}
 	}
 
-	private drawIngredient(host: HTMLElement, line: CookLine, after?: () => void): void {
+	private drawIngredient(host: HTMLElement, line: CookLine): void {
 		const row = host.createEl("button", { cls: "pantry-check-row" });
 		row.toggleClass("is-done", line.done);
 		row.setAttr("aria-pressed", `${line.done}`);
@@ -360,7 +324,6 @@ export class CookView extends ItemView {
 			row.setAttr("aria-pressed", `${line.done}`);
 			box.setText(line.done ? "✓" : "");
 			guarded("could not save your ticks", () => this.write(line));
-			after?.();
 		};
 	}
 
@@ -379,7 +342,7 @@ export class CookView extends ItemView {
 		this.note.steps.forEach((line) => this.drawStep(section, line));
 	}
 
-	private drawStep(section: HTMLElement, line: CookLine, after?: () => void): void {
+	private drawStep(section: HTMLElement, line: CookLine): void {
 		const row = section.createDiv({ cls: "pantry-step" });
 		row.toggleClass("is-done", line.done);
 
@@ -390,7 +353,7 @@ export class CookView extends ItemView {
 		body.createSpan({ cls: "pantry-step-number", text: `${line.index + 1}.` });
 
 		const text = body.createSpan({ cls: "pantry-step-text" });
-		this.drawStepText(text, line.text, line.index);
+		this.drawStepText(text, line.text, line.index, this.chips);
 
 		const toggle = (event: MouseEvent): void => {
 			// A tap on a timer must not also tick the step off.
@@ -399,128 +362,9 @@ export class CookView extends ItemView {
 			row.toggleClass("is-done", line.done);
 			box.setText(line.done ? "✓" : "");
 			guarded("could not save your ticks", () => this.write(line));
-			after?.();
 		};
 		box.onclick = toggle;
 		body.onclick = toggle;
-	}
-
-	private setFocus(on: boolean): void {
-		this.cancelAdvance();
-		this.focus = on;
-		if (on) {
-			this.slide = firstOpenSlide(focusSlides(this.note));
-			this.slideChosen = true;
-		}
-		this.contentEl.scrollTop = 0;
-		this.draw();
-		// Zodat een herstart van Obsidian in dezelfde modus terugkomt.
-		this.app.workspace.requestSaveLayout();
-	}
-
-	/** Eén dia, met pijlen ernaast en de teller eronder. */
-	private drawFocus(root: HTMLElement): void {
-		const slides = focusSlides(this.note);
-		if (slides.length === 0) {
-			root.createDiv({
-				cls: "pantry-settings-hint",
-				text: "This session has nothing to tick off. Use Start over to build it from the recipe again.",
-			});
-			return;
-		}
-
-		this.slide = Math.min(Math.max(0, this.slide), slides.length - 1);
-		const slide = slides[this.slide];
-		if (!slide) return;
-
-		const stage = root.createDiv({ cls: "pantry-focus" });
-
-		const prev = stage.createEl("button", {
-			cls: "pantry-focus-nav",
-			text: "‹",
-			attr: { "aria-label": "Previous step" },
-		});
-		prev.disabled = this.slide === 0;
-		prev.onclick = () => this.goTo(this.slide - 1);
-
-		const card = stage.createDiv({ cls: "pantry-focus-card" });
-		card.toggleClass("is-done", isSlideDone(slide));
-		card.createDiv({
-			cls: "pantry-cook-heading",
-			text: slide.kind === "ingredients" ? "Ingredients" : "Method",
-		});
-		if (slide.label) card.createDiv({ cls: "pantry-focus-title", text: slide.label });
-
-		const lines = card.createDiv({ cls: "pantry-focus-lines" });
-		const after = (): void => this.afterFocusTick(slide, slides);
-		slide.lines.forEach((line) => {
-			if (slide.kind === "ingredients") this.drawIngredient(lines, line, after);
-			else this.drawStep(lines, line, after);
-		});
-
-		const next = stage.createEl("button", {
-			cls: "pantry-focus-nav",
-			text: "›",
-			attr: { "aria-label": "Next step" },
-		});
-		next.disabled = this.slide >= slides.length - 1;
-		next.onclick = () => this.goTo(this.slide + 1);
-
-		const footer = root.createDiv({ cls: "pantry-focus-footer" });
-		footer.createSpan({ text: `${this.slide + 1} / ${slides.length}` });
-		if (slides.every((each) => isSlideDone(each))) {
-			footer.createSpan({ cls: "pantry-focus-finished", text: "Everything is ticked off." });
-		}
-	}
-
-	/**
-	 * Na elk vinkje in focusmodus: is de dia nu af, dan schuift de volgende
-	 * open dia er vanzelf in. Tik je in de tussentijd iets weer uit, dan
-	 * blijft hij staan.
-	 */
-	private afterFocusTick(slide: FocusSlide, slides: FocusSlide[]): void {
-		this.cancelAdvance();
-		if (!isSlideDone(slide)) return;
-
-		const target = nextOpenSlide(slides, this.slide);
-		if (target === null) {
-			// Alles af: niets om heen te gaan, wel de afsluiter laten zien.
-			this.draw();
-			return;
-		}
-		const from = this.slide;
-		this.advanceTimer = window.setTimeout(() => {
-			this.advanceTimer = null;
-			// Intussen zelf gebladerd? Dan niet alsnog wegspringen.
-			if (this.focus && this.slide === from) this.goTo(target);
-		}, ADVANCE_MS);
-	}
-
-	private goTo(index: number): void {
-		this.cancelAdvance();
-		const count = focusSlides(this.note).length;
-		const next = Math.min(Math.max(0, index), Math.max(0, count - 1));
-		if (next === this.slide) return;
-		this.slide = next;
-		this.contentEl.scrollTop = 0;
-		this.draw();
-	}
-
-	private cancelAdvance(): void {
-		if (this.advanceTimer === null) return;
-		window.clearTimeout(this.advanceTimer);
-		this.advanceTimer = null;
-	}
-
-	private onKey(event: KeyboardEvent): void {
-		if (!this.focus) return;
-		if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-		if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-		if (this.app.workspace.getActiveViewOfType(CookView) !== this) return;
-		const target = event.target as HTMLElement | null;
-		if (target?.closest("input, textarea, [contenteditable='true']")) return;
-		event.preventDefault();
-		this.goTo(this.slide + (event.key === "ArrowLeft" ? -1 : 1));
 	}
 
 	private async write(line: CookLine): Promise<void> {
@@ -530,7 +374,12 @@ export class CookView extends ItemView {
 	}
 
 	/** Writes the step out, turning every duration into its own timer button. */
-	private drawStepText(host: HTMLElement, rawLine: string, step: number): void {
+	private drawStepText(
+		host: HTMLElement,
+		rawLine: string,
+		step: number,
+		chips: TimerChip[]
+	): void {
 		// De wikilink-syntax gaat er af vóór het zoeken naar tijdsduren, zodat
 		// de posities die findDurations teruggeeft bij deze tekst horen.
 		const line = withoutLinks(rawLine);
@@ -554,7 +403,7 @@ export class CookView extends ItemView {
 				);
 			};
 
-			this.chips.push({ key, seconds: duration.seconds, el: chip, clockEl: clock });
+			chips.push({ key, seconds: duration.seconds, el: chip, clockEl: clock });
 			cursor = duration.end;
 		});
 
@@ -582,7 +431,7 @@ export class CookView extends ItemView {
 		const now = Date.now();
 		const timers = this.plugin.cook.timers(this.path);
 
-		this.chips.forEach((chip) => {
+		[...this.chips, ...this.focusChips].forEach((chip) => {
 			const timer = timers[chip.key];
 			if (!timer) {
 				chip.el.removeClass("is-running");
