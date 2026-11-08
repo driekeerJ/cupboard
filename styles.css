@@ -2007,6 +2007,127 @@
 	line-height: 1;
 }
 
+/* --- Focus mode: one slide at a time ------------------------------ */
+
+.pantry-focus {
+	display: flex;
+	align-items: stretch;
+	gap: 8px;
+}
+
+.pantry-focus-card {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 50vh;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 22px 20px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 16px;
+	background: var(--background-primary);
+	transition: border-color 160ms ease;
+}
+
+.pantry-focus-card.is-done {
+	border-color: var(--interactive-accent);
+}
+
+.pantry-focus-title {
+	margin-bottom: 10px;
+	font-size: 1.35em;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+}
+
+.pantry-focus-lines {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+/* Read from arm's length, across the counter. */
+.pantry-cook.is-focus .pantry-check-text,
+.pantry-cook.is-focus .pantry-step-body {
+	font-size: 1.25em;
+	line-height: 1.45;
+}
+
+.pantry-cook.is-focus .pantry-check-box {
+	width: 30px;
+	height: 30px;
+	font-size: 18px;
+}
+
+/* The slide already says which step this is. */
+.pantry-cook.is-focus .pantry-step-number {
+	display: none;
+}
+
+.pantry-cook button.pantry-focus-nav {
+	flex: 0 0 44px;
+	width: 44px;
+	height: auto;
+	min-height: 0;
+	padding: 0;
+	border: none;
+	border-radius: 12px;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: 2.2em;
+	font-weight: 300;
+	line-height: 1;
+	cursor: pointer;
+	box-shadow: none;
+}
+
+.pantry-cook button.pantry-focus-nav:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.pantry-cook button.pantry-focus-nav:disabled {
+	opacity: 0.2;
+	cursor: default;
+	background: transparent;
+}
+
+.pantry-focus-footer {
+	display: flex;
+	justify-content: center;
+	gap: 12px;
+	margin-top: 14px;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+.pantry-focus-finished {
+	color: var(--interactive-accent);
+	font-weight: 600;
+}
+
+@media (max-width: 640px) {
+	.pantry-focus {
+		gap: 2px;
+	}
+
+	.pantry-focus-card {
+		padding: 16px 12px;
+	}
+
+	.pantry-cook button.pantry-focus-nav {
+		flex-basis: 30px;
+		width: 30px;
+		font-size: 1.8em;
+	}
+
+	.pantry-cook.is-focus .pantry-check-text,
+	.pantry-cook.is-focus .pantry-step-body {
+		font-size: 1.12em;
+	}
+}
+
 /* ------------------------------------------------------------------ *
  * Products — the base list
  * ------------------------------------------------------------------ */
