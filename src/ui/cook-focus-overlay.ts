@@ -390,8 +390,11 @@ export class FocusOverlay {
 
 	private key(event: KeyboardEvent): void {
 		if (event.metaKey || event.ctrlKey || event.altKey) return;
-		const target = event.target as HTMLElement | null;
-		if (target?.closest("input, textarea, [contenteditable='true']")) return;
+		// Het doel kan ook het venster zelf zijn, en dat heeft geen `closest`.
+		// Geen `instanceof Element`: in een los venster is dat een andere
+		// Element-klasse en zou de vergelijking altijd mislukken.
+		const target = event.target as Partial<Element> | null;
+		if (target?.closest?.("input, textarea, [contenteditable='true']")) return;
 
 		if (event.key === "Escape") {
 			event.preventDefault();

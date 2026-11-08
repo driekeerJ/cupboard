@@ -26,10 +26,11 @@
  * Bij een mislukte check komt er een screenshot in `tests/e2e-out/`.
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { SHIFT, shiftVault } from "./demo-dates.mjs";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const WORK = join(tmpdir(), "cupboard-e2e");
@@ -46,36 +47,6 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // ---------- 1. The vault: demo/, moved to this week ----------
 
-const DEMO_MONDAY = "2026-09-21"; // demo week 39
-
-function isoDate(date) {
-	return date.toISOString().slice(0, 10);
-}
-
-function mondayOf(date) {
-	const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-	d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
-	return d;
-}
-
-function isoWeek(iso) {
-	const d = new Date(`${iso}T12:00:00Z`);
-	d.setUTCDate(d.getUTCDate() + 3 - ((d.getUTCDay() + 6) % 7));
-	const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-	firstThursday.setUTCDate(firstThursday.getUTCDate() + 3 - ((firstThursday.getUTCDay() + 6) % 7));
-	const week = 1 + Math.round((d - firstThursday) / (7 * 864e5));
-	return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
-}
-
-/** Every demo date moves by whole weeks, so demo week 39 becomes this week. */
-const SHIFT = Math.round((mondayOf(new Date()) - new Date(`${DEMO_MONDAY}T00:00:00Z`)) / 864e5);
-const shiftDate = (iso) => {
-	const d = new Date(`${iso}T12:00:00Z`);
-	d.setUTCDate(d.getUTCDate() + SHIFT);
-	return isoDate(d);
-};
-const shiftAll = (text) => text.replace(/\b20\d\d-\d\d-\d\d\b/g, shiftDate);
-
 function buildVault() {
 	rmSync(WORK, { recursive: true, force: true });
 	cpSync(join(ROOT, "demo"), VAULT, {
@@ -83,22 +54,7 @@ function buildVault() {
 		filter: (src) => !src.includes(".pantry-demo") && !src.endsWith("README.md"),
 	});
 
-	for (const folder of ["Meal plans", "Cupboard/Shopping", "Products"]) {
-		const dir = join(VAULT, folder);
-		for (const name of readdirSync(dir)) {
-			let text = shiftAll(readFileSync(join(dir, name), "utf8"));
-			let renamed = shiftAll(name);
-			const week = text.match(/^weekStart: (\S+)$/m);
-			if (week) {
-				const [oldWeek] = text.match(/\d{4}-W\d\d/);
-				const newWeek = isoWeek(week[1]);
-				text = text.replaceAll(oldWeek, newWeek).replace(/week \d+/, `week ${Number(newWeek.slice(6))}`);
-				renamed = `${newWeek}.md`;
-			}
-			rmSync(join(dir, name));
-			writeFileSync(join(dir, renamed), text);
-		}
-	}
+	shiftVault(VAULT);
 
 	const config = join(VAULT, ".obsidian");
 	const pluginDir = join(config, "plugins", ID);

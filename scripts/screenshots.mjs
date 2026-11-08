@@ -28,6 +28,7 @@ import {
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { shiftPath, shiftVault } from "./demo-dates.mjs";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const VAULT = process.env.PANTRY_DEMO_VAULT ?? join(homedir(), "Obsidian", "pantry-demo");
@@ -52,6 +53,9 @@ function buildVault() {
 		filter: (src) => !src.includes(join("demo", ".pantry-demo")) && !src.endsWith("README.md"),
 	});
 	writeFileSync(join(VAULT, MARKER), "Made by scripts/screenshots.mjs. Safe to delete.\n");
+	// Cupboard opens on this week: demo week 39 has to become this week, or
+	// the planner and home shots show an empty week.
+	shiftVault(VAULT);
 
 	const config = join(VAULT, ".obsidian");
 	const pluginDir = join(config, "plugins", ID);
@@ -246,7 +250,8 @@ async function main() {
 
 	const plugin = `app.plugins.plugins[${JSON.stringify(ID)}]`;
 	const command = (name) => `app.commands.executeCommandById(${JSON.stringify(`${ID}:${name}`)})`;
-	const list = JSON.stringify("Cupboard/Shopping/2026-09-23 Supermarket.md");
+	const listPath = shiftPath("Cupboard/Shopping/2026-09-23 Supermarket.md");
+	const list = JSON.stringify(listPath);
 
 	// Wrapped so nothing DOM-shaped travels back over the wire: CDP refuses to
 	// serialise a returned view or modal ("object reference chain is too long").
@@ -256,7 +261,12 @@ async function main() {
 	// and no status bar with a sync icon in the corner.
 	await s.run(quietly(`(() => {
 		const style = document.createElement("style");
-		style.textContent = ".status-bar { display: none !important; }";
+		// The focus layer fades and slides in. A window driven over CDP is not
+		// in front, so its animation frames can stall halfway and the shot
+		// catches a see-through layer. A photo wants the end state.
+		style.textContent = ".status-bar { display: none !important; }"
+			+ ".pantry-focus-overlay, .pantry-focus-overlay * { transition: none !important; animation: none !important; }"
+			+ ".pantry-focus-overlay { opacity: 1 !important; transform: none !important; }";
 		document.head.appendChild(style);
 	})()`));
 
@@ -289,6 +299,7 @@ async function main() {
 			window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
 			await new Promise((r) => setTimeout(r, 80));
 		}
+		if (!at()) throw new Error("focus mode did not reach " + ${JSON.stringify(kicker)} + " / " + ${JSON.stringify(title)});
 		const lines = document.querySelectorAll(".pantry-focus-line");
 		for (let i = 0; i < ${tick}; i++) lines[i]?.click();
 	})()`;
@@ -309,8 +320,8 @@ async function main() {
 	const openNote = (path) =>
 		`app.workspace.getLeaf(false).openFile(app.vault.getFileByPath(${JSON.stringify(path)}), { state: { mode: "preview" } })`;
 	await screen("recipe-note", openNote("Recipes/Chickpea curry.md"), 1200);
-	await screen("plan-note", openNote("Meal plans/2026-W39.md"), 1400);
-	await screen("list-note", openNote("Cupboard/Shopping/2026-09-23 Supermarket.md"), 1200);
+	await screen("plan-note", openNote(shiftPath("Meal plans/2026-W39.md")), 1400);
+	await screen("list-note", openNote(listPath), 1200);
 	await screen("setup", `${plugin}.runSetup()`, 800);
 	await escape();
 
