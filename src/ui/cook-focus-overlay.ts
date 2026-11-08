@@ -27,7 +27,7 @@ import { withoutLinks } from "../ingredients";
  * genoeg om het vinkje te zien landen — en om een misser terug te tikken
  * voordat de dia wegschuift — kort genoeg om niet te wachten.
  */
-const ADVANCE_MS = 700;
+const ADVANCE_MS = 300;
 
 /** Zo ver moet een vinger horizontaal schuiven voordat het een veeg is. */
 const SWIPE_PX = 60;
