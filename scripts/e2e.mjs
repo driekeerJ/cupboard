@@ -709,7 +709,7 @@ async function main() {
 		expect(ids.includes(`${ID}:cook-focus`), "cook-focus missing");
 	});
 
-	console.log("\nF. Another shop's standard groceries, bought here");
+	console.log("\nH. Another shop's standard groceries, bought here");
 	await check("Standard groceries is its own choice on the setup step", async () => {
 		await s.run(quietly(command("new-shopping-list")));
 		await until(`e2e.all("button.pantry-pick-staple").some(e2e.visible)`, "no Standard groceries rows on the setup step", 2500);
@@ -753,7 +753,7 @@ async function main() {
 		await s.run(quietly(`${plugin}.lists.discard(${plugin}.lists.byPath(${JSON.stringify(path)}))`));
 	});
 
-	console.log("\nG. Console");
+	console.log("\nF. Console");
 	await check("no errors from Cupboard in the console", async () => {
 		const ours = s.errors.filter((e) => /cupboard|pantry/i.test(e));
 		expect(ours.length === 0, ours.slice(0, 3).join("\n      "));
