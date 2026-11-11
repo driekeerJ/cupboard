@@ -36,15 +36,23 @@ so closing focus mode shows them in the list.
 day and the meals it covers, check what is in the house, then shop. The list is
 sorted in the order you walk through the shop.
 
-Where you go and whose standard groceries come along are two choices. Skipping
-a shop this week? Add its standard groceries to the trip you do make, and you
-check your stock once instead of once per list. Whatever has no shelf at the
-shop you are in sits at the bottom under **No shelf at …**, with a **Shelf**
-button that puts it on that shop's route for next time.
-
 ![Checking stock before a trip: the counter per product, what to buy in red](docs/screenshots/list-stock.png)
 
 ![The shopping step: products grouped by shelf, in walking order](docs/screenshots/list-shop.png)
+
+**Skip a shop without skipping its groceries.** Where you go and whose standard
+groceries come along are two separate choices. No time for the market this
+week? Add its standard groceries to the supermarket trip. You check your stock
+in one round instead of once per list, and everything is on one list.
+
+![Setting up a trip: going to the supermarket, with the farmers market's standard groceries along](docs/screenshots/list-setup.png)
+
+A product keeps its usual shelf wherever the shop has a shelf by that name.
+Whatever has no shelf at the shop you are in sits at the bottom under **No
+shelf at …**. Tap **Shelf** and pick one: it is on that shop's route from then
+on, and still where it was at its own shop.
+
+![The shopping step at another shop: placed products on the route, the rest under No shelf at Supermarket with a Shelf button](docs/screenshots/list-no-shelf.png)
 
 **Know what is in the house.** Each product is a note: how it is bought, where
 it lives, how many to keep in stock. Counting is a tap. Tick a meal as eaten
@@ -141,6 +149,17 @@ and you can edit every note by hand.
 - **Shopping lists** are one note per trip in `Cupboard/Shopping/`. The choices
   go in the frontmatter; the body is the checklist, kept in step with the
   product notes. Tick a box in the note and the product counts as full again.
+
+  `shops` is where you go. `staples` appears only when the standard groceries
+  come from other shops than those:
+
+  ```yaml
+  shops:
+    - "[[Supermarket]]"
+  staples:
+    - "[[Supermarket]]"
+    - "[[Farmers market]]"
+  ```
 
 Every note Cupboard writes carries a `format` number. A device running an older
 build reads newer notes but never overwrites them, so two devices on
