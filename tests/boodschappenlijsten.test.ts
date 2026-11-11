@@ -41,7 +41,7 @@ test("het minimum telt alleen voor de winkels op de lijst", async () => {
 	// zonder maaltijden heeft die niets te zoeken — niet in de check, niet op
 	// de lijst. Ui ligt bij de Lidl en zit onder zijn minimum: die wel.
 	const h = await run();
-	const lidl = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], meals: [] });
+	const lidl = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], staples: ["Lidl"], meals: [] });
 	assert.ok(lidl);
 
 	assert.equal(h.plugin.lists.minimumOf(lidl, product(h, "Olijfolie")), 0);
@@ -59,7 +59,7 @@ test("het minimum telt alleen voor de winkels op de lijst", async () => {
 
 test("een lijst zonder winkels vraagt alleen wat de maaltijden vragen", async () => {
 	const h = await run();
-	const list = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: [], meals: [DINNER] });
+	const list = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: [], staples: [], meals: [DINNER] });
 	assert.ok(list);
 
 	// Ui: minimum 2 telt niet, het recept vraagt 1 (0,75 omhoog), in huis 0.
@@ -73,7 +73,7 @@ test("een lijst zonder winkels vraagt alleen wat de maaltijden vragen", async ()
 
 test("een maaltijd zit in hooguit één lijst", async () => {
 	const h = await run();
-	const first = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], meals: [DINNER] });
+	const first = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], staples: ["Lidl"], meals: [DINNER] });
 	assert.ok(first);
 
 	const claimed = h.plugin.lists.claimedMeals();
@@ -91,8 +91,8 @@ test("wat al op een eerdere lijst staat, staat op de latere als herinnering", as
 	// niet mee zolang de Lidl-lijst hem nog niet heeft.
 	const h = await run();
 	await h.plugin.products.update(product(h, "Ui"), { shops: ["Lidl", "AH"] });
-	const lidl = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], meals: [DINNER] });
-	const ah = await h.plugin.lists.create({ date: "2026-08-26", arrival: null, shops: ["AH"], meals: [] });
+	const lidl = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], staples: ["Lidl"], meals: [DINNER] });
+	const ah = await h.plugin.lists.create({ date: "2026-08-26", arrival: null, shops: ["AH"], staples: ["AH"], meals: [] });
 	assert.ok(lidl && ah);
 
 	const before = h.plugin.lists.buckets(ah);
@@ -120,7 +120,7 @@ test("een ingrediënt dat niet in deze winkels ligt is een waarschuwing", async 
 	// Passata ligt alleen bij de Lidl. Op een AH-lijst met de maaltijd erop
 	// staat hij niet op de lijst, maar apart eronder.
 	const h = await run();
-	const ah = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["AH"], meals: [DINNER] });
+	const ah = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["AH"], staples: ["AH"], meals: [DINNER] });
 	assert.ok(ah);
 
 	const buckets = h.plugin.lists.buckets(ah);
@@ -134,7 +134,7 @@ test("wat niet in deze winkels ligt wordt wél geteld", async () => {
 	// de AH gaat, verandert niets aan de vraag of je hem nog hebt. Blijkt van
 	// wel, dan valt de waarschuwing weg.
 	const h = await run();
-	const ah = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["AH"], meals: [DINNER] });
+	const ah = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["AH"], staples: ["AH"], meals: [DINNER] });
 	assert.ok(ah);
 
 	assert.equal(h.plugin.lists.relevant(ah, product(h, "Passata")), true);
@@ -158,8 +158,8 @@ test("deze keer overslaan: niet tellen, niet kopen, en de volgende lijst mag hem
 	// overgeslagen is niet gehaald.
 	const h = await run();
 	await h.plugin.products.update(product(h, "Ui"), { shops: ["Lidl", "AH"] });
-	const lidl = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], meals: [DINNER] });
-	const ah = await h.plugin.lists.create({ date: "2026-08-26", arrival: null, shops: ["AH"], meals: [] });
+	const lidl = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], staples: ["Lidl"], meals: [DINNER] });
+	const ah = await h.plugin.lists.create({ date: "2026-08-26", arrival: null, shops: ["AH"], staples: ["AH"], meals: [] });
 	assert.ok(lidl && ah);
 	const buying = (list: typeof lidl) =>
 		h.plugin.lists.buckets(list).buy.map((item) => item.name);
@@ -195,7 +195,7 @@ test("overslaan wat hier toch al niet ligt haalt ook de waarschuwing weg", async
 	// dus onder "Not at these shops". Sla je hem over, dan is dat de keuze
 	// en hoeft de lijst er niet meer over te beginnen.
 	const h = await run();
-	const ah = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["AH"], meals: [DINNER] });
+	const ah = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["AH"], staples: ["AH"], meals: [DINNER] });
 	assert.ok(ah);
 	assert.match(h.note(ah), /## Not at these shops\n\n- \[\[Passata\]\]/);
 
@@ -206,7 +206,7 @@ test("overslaan wat hier toch al niet ligt haalt ook de waarschuwing weg", async
 
 test("de lijst verhuist mee met haar winkels en datum, met het mandje", async () => {
 	const h = await run();
-	const list = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], meals: [] });
+	const list = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], staples: ["Lidl"], meals: [] });
 	assert.ok(list);
 	await h.plugin.lists.markBought(list, product(h, "Ui"));
 	const was = list.path;
@@ -215,6 +215,7 @@ test("de lijst verhuist mee met haar winkels en datum, met het mandje", async ()
 		date: "2026-08-27",
 		arrival: { meal: "Dinner", when: "after" },
 		shops: ["Lidl", "AH"],
+		staples: ["Lidl", "AH"],
 		meals: [],
 	});
 
@@ -234,7 +235,7 @@ test("de lijst verhuist mee met haar winkels en datum, met het mandje", async ()
 
 test("klaar laat het boodschappenmoment staan; een verstreken datum valt op", async () => {
 	const h = await run();
-	const list = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], meals: [] });
+	const list = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], staples: ["Lidl"], meals: [] });
 	assert.ok(list);
 	assert.equal(isOverdue(list, new Date(2026, 7, 25)), false, "vandaag is niet te laat");
 	assert.equal(isOverdue(list, new Date(2026, 7, 26)), true);
@@ -248,7 +249,7 @@ test("klaar laat het boodschappenmoment staan; een verstreken datum valt op", as
 
 test("een maaltijd die je met de hand in de frontmatter zet telt mee", async () => {
 	const h = await run();
-	const list = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], meals: [] });
+	const list = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], staples: ["Lidl"], meals: [] });
 	assert.ok(list);
 	assert.equal(h.plugin.lists.amount(list, product(h, "Passata")), 0);
 
@@ -266,7 +267,7 @@ test("een maaltijd die je met de hand in de frontmatter zet telt mee", async () 
 
 test("een gegeten maaltijd is geen maaltijd meer op de lijst", async () => {
 	const h = await run();
-	const list = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: [], meals: [DINNER] });
+	const list = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: [], staples: [], meals: [DINNER] });
 	assert.ok(list);
 	assert.equal(h.plugin.lists.amount(list, product(h, "Ui")), 1);
 
@@ -289,7 +290,7 @@ test("een vlag zonder vraag hoort niet in de voorraadcheck van een lijst", async
 	// De vlag blijft op het product staan tot het er wél toe doet.
 	const h = await run();
 	await h.plugin.products.update(product(h, "Passata"), { count: "plus", check: true });
-	const lidl = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], meals: [] });
+	const lidl = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], staples: ["Lidl"], meals: [] });
 	assert.ok(lidl);
 
 	assert.equal(h.plugin.lists.relevant(lidl, product(h, "Passata")), false);
@@ -303,7 +304,7 @@ test("een gevlagd product dat de maaltijd vraagt staat onder Check first, ook op
 	// antwoord, niet "niets nodig".
 	const h = await run();
 	await h.plugin.products.update(product(h, "Passata"), { count: "plus", check: true });
-	const lidl = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], meals: [DINNER] });
+	const lidl = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], staples: ["Lidl"], meals: [DINNER] });
 	assert.ok(lidl);
 
 	assert.equal(h.plugin.lists.relevant(lidl, product(h, "Passata")), true);

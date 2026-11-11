@@ -709,7 +709,51 @@ async function main() {
 		expect(ids.includes(`${ID}:cook-focus`), "cook-focus missing");
 	});
 
-	console.log("\nF. Console");
+	console.log("\nF. Another shop's standard groceries, bought here");
+	await check("Standard groceries is its own choice on the setup step", async () => {
+		await s.run(quietly(command("new-shopping-list")));
+		await until(`e2e.all("button.pantry-pick-staple").some(e2e.visible)`, "no Standard groceries rows on the setup step", 2500);
+		// Until you pull them apart, the standard lists follow the shops.
+		await tap(`e2e.all("button.pantry-pick-row:not(.pantry-pick-staple)").find((b) => b.textContent.includes("Supermarket"))`);
+		await until(
+			`e2e.all("button.pantry-pick-staple").find((b) => b.textContent.includes("Supermarket"))?.getAttribute("aria-pressed") === "true"`,
+			"picking a shop did not take its standard groceries along",
+			1500
+		);
+	});
+
+	await check("a product with no shelf at this shop gets one in a tap", async () => {
+		// The farmers market's list, bought at the supermarket: carrots lie at
+		// "Vegetables" there, and the supermarket has no such shelf.
+		const path = await s.run(`(async () => {
+			const list = await ${plugin}.lists.create({
+				date: "2099-01-01", arrival: null,
+				shops: ["Supermarket"], staples: ["Farmers market"], meals: [],
+			});
+			return list?.path ?? "";
+		})()`);
+		expect(path, "the list was not created");
+		await s.run(quietly(`${plugin}.openList(${JSON.stringify(path)}, "shop")`));
+		await until(
+			`e2e.all(".pantry-shelf").some((el) => el.textContent === "No shelf at Supermarket")`,
+			"no 'No shelf at Supermarket' heading",
+			2500
+		);
+		const row = `e2e.row("Products/Carrots.md")`;
+		await until(`!!${row}?.querySelector("button.pantry-place")`, "no Shelf button on the carrots row", 1500);
+		await tap(`${row}.querySelector("button.pantry-place")`);
+		await until(`e2e.modal()?.querySelector(".pantry-sheet-name")?.textContent === "Carrots"`, "Shelf did not open the picker", 1500);
+		await tap(`Array.from(e2e.modal().querySelectorAll("button.pantry-sheet-option")).find((b) => b.textContent.trim() === "Fruit & vegetables")`);
+		await until(`!e2e.modal()`, "the picker did not close", 1500);
+		await until(`!!${row} && !${row}.querySelector("button.pantry-place")`, "carrots still have no shelf", 2500);
+		const note = await s.run(`e2e.read("Products/Carrots.md")`);
+		expect(/^shelf: Vegetables$/m.test(note), "the farmers market shelf was overwritten");
+		expect(/^shelves:\n\s+Supermarket: Fruit & vegetables$/m.test(note), "no shelf for the supermarket in the note");
+		expect(!/Supermarket/.test(note.match(/^shop:.*$/m)?.[0] ?? ""), "the supermarket became one of the product's shops");
+		await s.run(quietly(`${plugin}.lists.discard(${plugin}.lists.byPath(${JSON.stringify(path)}))`));
+	});
+
+	console.log("\nG. Console");
 	await check("no errors from Cupboard in the console", async () => {
 		const ours = s.errors.filter((e) => /cupboard|pantry/i.test(e));
 		expect(ours.length === 0, ours.slice(0, 3).join("\n      "));

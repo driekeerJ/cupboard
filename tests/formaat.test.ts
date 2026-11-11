@@ -7,7 +7,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { startOfWeek } from "../src/date";
-import { PANTRY_FORMAT } from "../src/format";
+import { PANTRY_FORMAT, WIDE_FORMAT } from "../src/format";
 import { setNote } from "../src/plan";
 import { loadFixture } from "./harness/fixtures";
 import { makeHarness } from "./harness/plugin";
@@ -35,7 +35,7 @@ test("een weekplan van een nieuwere Cupboard wordt gelezen als onbekend en niet 
 test("een eigen weekplan krijgt het formaatnummer mee", async () => {
 	const h = makeHarness(loadFixture("week-basis"));
 	await h.plugin.plans.update(WEEK, (fresh) => setNote(fresh, "2026-08-26", "hoi"));
-	assert.match(h.vault.read(PLAN), new RegExp(`\`\`\`meal-plan\\n#[^\\n]*\\nformat: ${PANTRY_FORMAT}\\n`));
+	assert.match(h.vault.read(PLAN), new RegExp(`\`\`\`meal-plan\\n#[^\\n]*\\nformat: ${WIDE_FORMAT}\\n`));
 	const plan = await h.plugin.plans.load(WEEK);
 	assert.equal(plan.unreadable, undefined);
 });
@@ -45,11 +45,11 @@ test("een lijst van een nieuwere Cupboard staat op slot", async () => {
 		household: [{ id: "jeroen", name: "Jeroen", portionFactor: 1 }],
 	});
 	await h.rebuild(WEEK);
-	const list = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], meals: [] });
+	const list = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], staples: ["Lidl"], meals: [] });
 	assert.ok(list);
 	assert.equal(list.frozen, null);
 
-	const note = h.note(list).replace(`format: ${PANTRY_FORMAT}`, `format: ${NEWER}`);
+	const note = h.note(list).replace(`format: ${WIDE_FORMAT}`, `format: ${NEWER}`);
 	h.vault.write(list.path, note);
 	await h.plugin.lists.refreshAll();
 

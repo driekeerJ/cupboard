@@ -9,7 +9,7 @@ import {
 	replaceRegion,
 	warnOnce,
 } from "./notes";
-import { toBuy, type Product } from "./products";
+import { shelfAt, toBuy, type Product } from "./products";
 import { DEFAULT_EXTRA_AMOUNT, extraLabel, newExtraId, type Extra } from "./extras";
 import { groupForShopping, NO_SHOP } from "./grouping";
 import { fromISODate, startOfWeek, toISODate } from "./date";
@@ -55,7 +55,7 @@ const SIGNATURE =
 	"*Kept up to date by Cupboard. Tick a box and that product counts as full again.*";
 
 /** De sleutels die de plugin zelf beheert in de frontmatter van een lijst. */
-const OWN_KEYS = ["pantry", "format", "date", "arrives", "shops", "meals", "basket", "nudge", "skipped", "extras"];
+const OWN_KEYS = ["pantry", "format", "date", "arrives", "shops", "staples", "meals", "basket", "nudge", "skipped", "extras"];
 
 /** Wat een lijst deze keer te zeggen heeft over elk product. */
 export interface ListBuckets {
@@ -80,6 +80,7 @@ function adopt(into: ShoppingList, from: ShoppingList): void {
 	into.date = from.date;
 	into.arrival = from.arrival;
 	into.shops = from.shops;
+	into.staples = from.staples;
 	into.meals = from.meals;
 	into.basket = from.basket;
 	into.nudge = from.nudge;
@@ -258,13 +259,22 @@ export class ShoppingLists {
 	 */
 	atShops(list: ShoppingList, product: Product): boolean {
 		if (list.shops.length === 0 || product.shops.length === 0) return true;
-		return product.shops.some((shop) => hasShop(list.shops, shop));
+		// Ook wat via een standaardlijst meekomt: wie de Lidl-lijst meeneemt
+		// naar de AH heeft gezegd dat hij dat spul dáár haalt.
+		return product.shops.some(
+			(shop) => hasShop(list.shops, shop) || hasShop(list.staples, shop)
+		);
 	}
 
 	/**
 	 * In welke winkel van deze lijst dit product ligt: de eerste voorkeur van
 	 * het product die op de lijst staat. Zonder winkels op de lijst wint de
 	 * eerste voorkeur; zonder winkel bij het product blijft het leeg.
+	 *
+	 * Komt het product mee via een standaardlijst van een winkel waar je deze
+	 * keer niet heen gaat, dan haal je het in een winkel waar je wél heen
+	 * gaat: de eerste waar het een schap heeft, en anders de eerste. Daar
+	 * staat het dan onder "No shelf at …" tot iemand zegt waar het ligt.
 	 */
 	shopFor(list: ShoppingList, product: Product): string {
 		const preferred = product.shops.map((shop) => shop.trim()).filter(Boolean);
@@ -273,7 +283,12 @@ export class ShoppingLists {
 			const known = list.shops.find((candidate) => sameName(candidate, shop));
 			if (known) return known;
 		}
-		return "";
+		if (!preferred.some((shop) => hasShop(list.staples, shop))) return "";
+		return (
+			list.shops.find((shop) => this.plugin.shops.hasShelf(shop, shelfAt(product, shop))) ??
+			list.shops[0] ??
+			""
+		);
 	}
 
 	minimumOf(list: ShoppingList, product: Product): number {
@@ -450,6 +465,7 @@ export class ShoppingLists {
 			date: draft.date,
 			arrival: draft.arrival,
 			shops: [...draft.shops],
+			staples: [...draft.staples],
 			meals: draft.meals.map((ref) => ({ ...ref })),
 			basket: new Map(),
 			nudge: new Map(),
@@ -481,6 +497,7 @@ export class ShoppingLists {
 			fresh.date = draft.date;
 			fresh.arrival = draft.arrival;
 			fresh.shops = [...draft.shops];
+			fresh.staples = [...draft.staples];
 			fresh.meals = draft.meals.map((ref) => ({ ...ref }));
 		});
 
@@ -968,8 +985,8 @@ export class ShoppingLists {
 
 		this.groups(list, buy).forEach((group) => {
 			lines.push(`## ${group.shop}`, "");
-			group.shelves.forEach(({ shelf, items, extras }) => {
-				if (group.shelves.length > 1) lines.push(`### ${shelf}`, "");
+			group.shelves.forEach(({ shelf, items, extras, unplaced }) => {
+				if (group.shelves.length > 1 || unplaced) lines.push(`### ${shelf}`, "");
 				items.forEach((product) => lines.push(this.line(list, product, false)));
 				extras.forEach((extra) => lines.push(`- [ ] ${extraLabel(extra)}`));
 				lines.push("");

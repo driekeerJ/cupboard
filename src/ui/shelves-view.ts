@@ -1,7 +1,7 @@
 import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import { guarded } from "../guard";
 import type PantryPlugin from "../main";
-import type { Product } from "../products";
+import { placeAt, shelfAt, type Product } from "../products";
 import type { Shop } from "../shops";
 import { emptyState, segment } from "./kit";
 import { enableRowDrag } from "./reorder";
@@ -275,7 +275,7 @@ export class ShelvesView extends ItemView {
 				.all()
 				.filter(
 					(product) =>
-						product.shelf.toLowerCase() === shelf.toLowerCase() &&
+						shelfAt(product, shop.name).toLowerCase() === shelf.toLowerCase() &&
 						this.sameShop(product, shop)
 				).length;
 			row.createDiv({ cls: "pantry-route-count", text: `${count}` });
@@ -339,7 +339,11 @@ export class ShelvesView extends ItemView {
 		const current = this.plugin.shops.find(shop.name) ?? shop;
 		const still = this.plugin.products
 			.all()
-			.filter((product) => product.shelf.toLowerCase() === shelf.toLowerCase());
+			.filter(
+				(product) =>
+					shelfAt(product, shop.name).toLowerCase() === shelf.toLowerCase() &&
+					this.sameShop(product, shop)
+			);
 		await this.plugin.shops.setShelves(
 			current,
 			current.shelves.filter((item) => item !== shelf)
@@ -397,15 +401,21 @@ export class ShelvesView extends ItemView {
 			.all()
 			.filter(
 				(product) =>
-					product.shelf.toLowerCase() === current.toLowerCase() &&
+					shelfAt(product, shop.name).toLowerCase() === current.toLowerCase() &&
 					this.sameShop(product, shop)
 			)
 			.sort((a, b) => a.name.localeCompare(b.name));
 
+		// Wat in déze winkel nog geen plek heeft: geen schap, of een schap dat
+		// alleen een andere winkel kent. Het schap is per winkel — zie
+		// `shelfAt` — dus "Brood" bij de Lidl zegt hier niets als deze winkel
+		// geen "Brood" op de route heeft.
 		const pool = this.plugin.products
 			.all()
 			.filter(
-				(product) => product.shelf.length === 0 && this.sameShop(product, shop)
+				(product) =>
+					this.sameShop(product, shop) &&
+					!this.plugin.shops.hasShelf(shop.name, shelfAt(product, shop.name))
 			)
 			.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -435,7 +445,12 @@ export class ShelvesView extends ItemView {
 				)
 					? product.shops
 					: [...product.shops, shop.name];
-				await this.plugin.products.update(product, { shops, shelf: current });
+				// Het gewone schap als het product er nog geen heeft, anders een
+				// uitzondering voor deze winkel: zie `placeAt`.
+				await this.plugin.products.update(product, {
+					shops,
+					...placeAt(product, shop.name, current),
+				});
 				this.drawBody();
 			})
 		);
@@ -460,7 +475,16 @@ export class ShelvesView extends ItemView {
 		const doneList = done.createDiv({ cls: "pantry-section-body" });
 		onShelf.forEach((product) =>
 			this.drawPick(doneList, product, true, async () => {
-				await this.plugin.products.update(product, { shelf: "" });
+				// Lag het hier via een uitzondering, dan gaat alleen die weg en
+				// houdt de andere winkel haar schap. Anders is het het gewone
+				// schap dat leeg raakt.
+				const own = Object.keys(product.shelfOverrides).some(
+					(name) => name.toLowerCase() === shop.name.toLowerCase()
+				);
+				await this.plugin.products.update(
+					product,
+					own ? { shelfAt: { shop: shop.name, shelf: "" } } : { shelf: "" }
+				);
 				this.drawBody();
 			})
 		);

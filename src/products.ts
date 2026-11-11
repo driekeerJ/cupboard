@@ -56,6 +56,23 @@ export interface Product {
 	storage: string;
 	/** Which shelf it sits on, for the walking route. */
 	shelf: string;
+	/**
+	 * Waar het ligt in een winkel waar dat anders is dan `shelf`, per winkel.
+	 *
+	 * `shelf` blijft het antwoord voor elke winkel die hier niet in staat:
+	 * brood ligt bijna overal bij het brood, en wie een tweede winkel erbij
+	 * neemt wil niet elk product opnieuw indelen. Alleen de uitzondering staat
+	 * hier — bij de ene winkel bij het brood, bij de andere bij de koekjes.
+	 *
+	 * Een winkel die hier staat hoeft níét in `shops` te staan. `shops` zegt
+	 * waar je dit gewoonlijk haalt en bepaalt bij welke standaardlijst het
+	 * hoort; dit zegt alleen waar het ligt áls je het daar haalt. Zou een
+	 * schap toewijzen de winkel aan `shops` toevoegen, dan stond na één drukke
+	 * week elk Lidl-product ook op de standaardlijst van de AH.
+	 *
+	 * Vraag het schap altijd op met `shelfAt()`, nooit hier rechtstreeks.
+	 */
+	shelfOverrides: Record<string, string>;
 	aliases: string[];
 	/**
 	 * Where to find this product at the shop, as a full URL.
@@ -93,6 +110,10 @@ export interface ProductPatch {
 	shops?: string[];
 	storage?: string;
 	shelf?: string;
+	/** Het schap in één winkel; "" haalt de uitzondering weg. Zie `placeAt()`. */
+	shelfAt?: { shop: string; shelf: string };
+	/** Alle uitzonderingen in één keer vervangen; alleen voor hernoemen. */
+	shelfOverrides?: Record<string, string>;
 	aliases?: string[];
 	/** Full URL to the product at the shop; "" clears it. */
 	url?: string;
@@ -290,6 +311,7 @@ export class ProductIndex {
 			shops: list(frontmatter.shop).map((name) => linkTarget(name)),
 			storage: text(frontmatter.storage) || UNASSIGNED,
 			shelf: text(frontmatter.shelf) || text(frontmatter.aisle),
+			shelfOverrides: parseShelfOverrides(frontmatter[SHELVES_KEY]),
 			aliases: list(frontmatter.aliases),
 			url: text(frontmatter.url),
 			count: parseCount(frontmatter.count),
@@ -374,6 +396,16 @@ export class ProductIndex {
 					// "aisle" was the old name; drop it so there is one truth.
 					delete frontmatter.aisle;
 				}
+				const overrides = patchedOverrides(
+					parseShelfOverrides(frontmatter[SHELVES_KEY]),
+					patch
+				);
+				if (overrides) {
+					// Alleen een veld als het iets zegt: een product zonder
+					// uitzonderingen houdt precies de notitie die het had.
+					if (Object.keys(overrides).length > 0) frontmatter[SHELVES_KEY] = overrides;
+					else delete frontmatter[SHELVES_KEY];
+				}
 				if (patch.aliases !== undefined) frontmatter.aliases = patch.aliases;
 				if (patch.url !== undefined) frontmatter.url = patch.url;
 				if (patch.check !== undefined) frontmatter.check = patch.check;
@@ -431,6 +463,8 @@ export class ProductIndex {
 			product.storage = patch.storage || UNASSIGNED;
 		}
 		if (patch.shelf !== undefined) product.shelf = patch.shelf;
+		const overrides = patchedOverrides(product.shelfOverrides, patch);
+		if (overrides) product.shelfOverrides = overrides;
 		if (patch.aliases !== undefined) product.aliases = [...patch.aliases];
 		if (patch.url !== undefined) product.url = patch.url;
 		if (patch.check !== undefined) product.check = patch.check;
@@ -490,16 +524,29 @@ export class ProductIndex {
 
 		let changed = 0;
 		for (const product of this.products) {
-			if (!product.shops.some((shop) => shop.trim().toLowerCase() === from)) {
-				continue;
-			}
-			// Op zijn plek in de lijst laten staan: de volgorde is de
-			// voorkeursvolgorde, en een hernoeming is geen herrangschikking.
-			await this.update(product, {
-				shops: product.shops.map((shop) =>
+			const patch: ProductPatch = {};
+			if (product.shops.some((shop) => shop.trim().toLowerCase() === from)) {
+				// Op zijn plek in de lijst laten staan: de volgorde is de
+				// voorkeursvolgorde, en een hernoeming is geen herrangschikking.
+				patch.shops = product.shops.map((shop) =>
 					shop.trim().toLowerCase() === from ? to : shop
-				),
-			});
+				);
+			}
+			// De sleutels van `shelves` zijn kale winkelnamen, geen links:
+			// die werkt Obsidian nooit zelf bij. Los van `shops` nakijken,
+			// want een schap bij een winkel maakt hem nog geen vaste winkel.
+			const stale = Object.keys(product.shelfOverrides).filter(
+				(shop) => shop.trim().toLowerCase() === from
+			);
+			if (stale.length > 0) {
+				const renamed: Record<string, string> = {};
+				for (const [shop, shelf] of Object.entries(product.shelfOverrides)) {
+					renamed[shop.trim().toLowerCase() === from ? to : shop] = shelf;
+				}
+				patch.shelfOverrides = renamed;
+			}
+			if (patch.shops === undefined && patch.shelfOverrides === undefined) continue;
+			await this.update(product, patch);
 			changed++;
 		}
 		return changed;
@@ -593,6 +640,92 @@ export function todayISO(): string {
 }
 
 
+
+/** De frontmatter-sleutel voor het schap per winkel; zie `Product.shelfOverrides`. */
+export const SHELVES_KEY = "shelves";
+
+/**
+ * Leest `shelves: { AH: Koekjes }` uit de frontmatter.
+ *
+ * Tolerant, want dit is een notitie: een winkel als `[[AH]]` telt, een lege
+ * waarde of iets dat geen tekst is niet. Alles wat geen map is levert niets op.
+ */
+export function parseShelfOverrides(raw: unknown): Record<string, string> {
+	const out: Record<string, string> = {};
+	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+	for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+		const shop = linkTarget(key).trim();
+		const shelf = typeof value === "string" || typeof value === "number" ? `${value}`.trim() : "";
+		if (shop.length > 0 && shelf.length > 0) out[shop] = shelf;
+	}
+	return out;
+}
+
+function sameShopName(a: string, b: string): boolean {
+	return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/**
+ * Op welk schap dit product in déze winkel ligt: de uitzondering voor die
+ * winkel, en anders het gewone schap. Leeg betekent dat niemand het gezegd
+ * heeft.
+ *
+ * De enige plek die weet hoe het schap per winkel is opgeslagen. De looproute,
+ * het schapscherm en de boodschappenlijst vragen het hier.
+ */
+export function shelfAt(
+	product: Pick<Product, "shelf" | "shelfOverrides">,
+	shop: string
+): string {
+	for (const [name, shelf] of Object.entries(product.shelfOverrides)) {
+		if (sameShopName(name, shop)) return shelf;
+	}
+	return product.shelf;
+}
+
+/**
+ * De wijziging die een product in één winkel op een schap legt.
+ *
+ * Heeft het product nog nergens een schap, dan wordt dit het gewone schap: dan
+ * ligt het meteen in elke winkel goed die dat schap ook heeft. Is het gelijk
+ * aan het gewone schap, dan is er geen uitzondering nodig. Alleen wat echt
+ * afwijkt wordt een uitzondering voor die winkel.
+ */
+export function placeAt(
+	product: Pick<Product, "shelf" | "shelfOverrides">,
+	shop: string,
+	shelf: string
+): ProductPatch {
+	const wanted = shelf.trim();
+	if (wanted.length === 0) return { shelfAt: { shop, shelf: "" } };
+	if (product.shelf.trim().length === 0) return { shelf: wanted, shelfAt: { shop, shelf: "" } };
+	if (product.shelf.trim().toLowerCase() === wanted.toLowerCase()) {
+		return { shelfAt: { shop, shelf: "" } };
+	}
+	return { shelfAt: { shop, shelf: wanted } };
+}
+
+/** De uitzonderingen ná deze wijziging, of null als de wijziging ze niet raakt. */
+function patchedOverrides(
+	current: Record<string, string>,
+	patch: ProductPatch
+): Record<string, string> | null {
+	if (patch.shelfOverrides === undefined && patch.shelfAt === undefined) return null;
+	const next: Record<string, string> = { ...(patch.shelfOverrides ?? current) };
+	if (patch.shelfAt) {
+		const { shop, shelf } = patch.shelfAt;
+		for (const name of Object.keys(next)) {
+			if (sameShopName(name, shop)) delete next[name];
+		}
+		if (shelf.trim().length > 0 && shop.trim().length > 0) next[shop.trim()] = shelf.trim();
+	}
+	// Niets veranderd: dan ook niets schrijven, zodat een notitie zonder
+	// uitzonderingen geen leeg veld krijgt.
+	const same =
+		Object.keys(next).length === Object.keys(current).length &&
+		Object.entries(next).every(([shop, shelf]) => current[shop] === shelf);
+	return same ? null : next;
+}
 
 /**
  * What a product must say before the app can plan and shop with it. `minimum`

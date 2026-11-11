@@ -13,7 +13,28 @@
  * verkeerd zou lezen of iets zou weggooien. Een extra optioneel veld is geen
  * reden; een veld dat van betekenis verandert wel.
  */
-export const PANTRY_FORMAT = 2;
+export const PANTRY_FORMAT = 3;
+
+/**
+ * Het formaat dat elke build sinds de formaatcontrole leest: weekplannen, en
+ * boodschappenlijsten waarvan de standaardlijsten met de winkels meegaan.
+ *
+ * Een notitie draagt het láágste nummer dat hem goed leest, niet het hoogste
+ * dat deze build kent. Formaat 3 bracht alleen `staples` op de lijst; een
+ * weekplan en een gewone lijst zijn er niet door veranderd. Kregen die toch
+ * een 3, dan bevroor een telefoon die nog niet bijgewerkt is op élke notitie,
+ * voor een veld dat er niet eens in staat — en werd elke bestaande notitie
+ * herschreven zonder dat er iets aan veranderd was.
+ */
+export const WIDE_FORMAT = 2;
+
+/**
+ * Een lijst met eigen `staples`: standaardlijsten van andere winkels dan waar
+ * je heen gaat. Een oudere build bewaart het veld wel, maar rekent zonder —
+ * en toont dan een kortere lijst dan je thuis hebt geteld. Dat is verkeerd
+ * lezen, dus die build mag er niet aan komen.
+ */
+export const STAPLES_FORMAT = 3;
 
 /** De frontmatter-sleutel (lijsten) en YAML-sleutel (planblok) voor het formaat. */
 export const FORMAT_KEY = "format";

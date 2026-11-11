@@ -114,7 +114,7 @@ test("het boodschappenmoment van een lijst landt in de notitie zoals hij nu is",
 	await h.rebuild(WEEK);
 	h.vault.write(PATH, GESYNCT.replace("shopping:\n      - shop: Lidl\n        before: Dinner\n    ", ""));
 
-	const list = await h.plugin.lists.create({ date: "2026-08-27", arrival: null, shops: ["Lidl"], meals: [] });
+	const list = await h.plugin.lists.create({ date: "2026-08-27", arrival: null, shops: ["Lidl"], staples: ["Lidl"], meals: [] });
 	assert.ok(list);
 
 	const after = await h.plugin.plans.load(WEEK);

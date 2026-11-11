@@ -103,6 +103,9 @@ export function makeHarness(
 				shops,
 				meals,
 				...options,
+				// De standaardlijsten gaan met de winkels mee, tenzij een test
+				// ze met opzet uit elkaar trekt.
+				staples: options.staples ?? options.shops ?? shops,
 			});
 			if (!created) throw new Error("the list was not created");
 			return created;

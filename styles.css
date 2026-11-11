@@ -3310,6 +3310,31 @@
 	cursor: default;
 }
 
+/* "Shelf": on a row that has no shelf in this shop yet. Outlined, so it reads
+   as something to settle rather than as the amount next to it. */
+.pantry-app button.pantry-place {
+	flex: none;
+	height: 30px;
+	min-height: 0;
+	padding: 0 12px;
+	display: inline-flex;
+	align-items: center;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	white-space: nowrap;
+	box-shadow: none;
+	cursor: pointer;
+}
+
+.pantry-app button.pantry-place:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
 .pantry-quantity-edit {
 	flex: none;
 	display: inline-flex;

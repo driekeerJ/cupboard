@@ -89,6 +89,7 @@ test("een Lidl-lijst voor woensdag: rijst erop, tahini als waarschuwing", async 
 		date: "2026-09-02",
 		arrival: null,
 		shops: ["Lidl"],
+		staples: ["Lidl"],
 		meals: [{ date: "2026-09-02", meal: "Dinner", recipe: "Rijstschotel" }],
 	});
 	assert.ok(list);

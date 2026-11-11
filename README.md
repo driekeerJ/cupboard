@@ -36,6 +36,12 @@ so closing focus mode shows them in the list.
 day and the meals it covers, check what is in the house, then shop. The list is
 sorted in the order you walk through the shop.
 
+Where you go and whose standard groceries come along are two choices. Skipping
+a shop this week? Add its standard groceries to the trip you do make, and you
+check your stock once instead of once per list. Whatever has no shelf at the
+shop you are in sits at the bottom under **No shelf at …**, with a **Shelf**
+button that puts it on that shop's route for next time.
+
 ![Checking stock before a trip: the counter per product, what to buy in red](docs/screenshots/list-stock.png)
 
 ![The shopping step: products grouped by shelf, in walking order](docs/screenshots/list-shop.png)
@@ -112,6 +118,15 @@ and you can edit every note by hand.
 
   Something you never run out of and never measure, such as salt, gets
   `amount: any` instead of a size.
+
+  `shelf` holds for every shop that has a shelf by that name. Where a shop
+  keeps it somewhere else, that shop gets its own line:
+
+  ```yaml
+  shelf: Bread
+  shelves:
+    Corner shop: Biscuits
+  ```
 
 - **Shops** are notes with `pantry: shop` and a list of shelves in the order
   you walk past them. Add one with **+ Shop** on the Shelves screen or the
