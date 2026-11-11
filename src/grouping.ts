@@ -1,9 +1,22 @@
 import type PantryPlugin from "./main";
-import type { Product } from "./products";
+import { shelfAt, type Product } from "./products";
 import type { Extra } from "./extras";
 
 export const NO_SHOP = "Anywhere";
 export const NO_CATEGORY = "Other";
+
+/**
+ * De kop boven wat in deze winkel nog geen schap heeft.
+ *
+ * Een product kan in een winkel terechtkomen waar zijn schap niet bestaat:
+ * de standaardlijst van de Lidl die je deze keer bij de AH haalt, of een
+ * schapnaam die alleen de andere winkel kent. Dat hoort niet ergens tussen de
+ * schappen te verdwijnen maar onderaan bij elkaar te staan, met de winkel in
+ * de kop — daar wijs je het in één tik een schap toe.
+ */
+export function noShelfLabel(shop: string): string {
+	return `No shelf at ${shop}`;
+}
 
 /** Eén winkel met haar schappen, in de volgorde waarin je erlangs loopt. */
 export interface ShopGroup {
@@ -15,7 +28,13 @@ export interface ShopGroup {
 	 * is een pak batterijen net zo goed iets dat op een schap ligt.
 	 */
 	extras: Extra[];
-	shelves: { shelf: string; items: Product[]; extras: Extra[] }[];
+	shelves: {
+		shelf: string;
+		items: Product[];
+		extras: Extra[];
+		/** Producten die in deze winkel nog geen schap hebben; zie `noShelfLabel`. */
+		unplaced: boolean;
+	}[];
 }
 
 /**
@@ -82,8 +101,15 @@ export function groupForShopping(
 		.sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name))
 		.map((shop) => {
 			const byShelf = new Map<string, Bucket>();
+			// Alleen een winkel met een looproute kan zeggen dat een schap er
+			// niet is. Zonder route, en voor "Anywhere", blijft het zoals het
+			// was: het schap van het product, of "Other".
+			const routed = shop.name !== NO_SHOP && plugin.shops.shelves(shop.name).length > 0;
+			const unplaced: Product[] = [];
 			for (const product of shop.items) {
-				bucketOf(byShelf, product.shelf || NO_CATEGORY).items.push(product);
+				const shelf = routed ? shelfAt(product, shop.name) : product.shelf;
+				if (routed && !plugin.shops.hasShelf(shop.name, shelf)) unplaced.push(product);
+				else bucketOf(byShelf, shelf || NO_CATEGORY).items.push(product);
 			}
 			for (const extra of shop.extras) {
 				bucketOf(byShelf, extra.shelf.trim() || NO_CATEGORY).extras.push(extra);
@@ -95,7 +121,18 @@ export function groupForShopping(
 					shelf: shelf.name,
 					items: [...shelf.items].sort((a, b) => a.name.localeCompare(b.name)),
 					extras: [...shelf.extras].sort((a, b) => a.name.localeCompare(b.name)),
+					unplaced: false,
 				}));
+			// Altijd achteraan, ook na "Other": de route loop je eerst, en wat
+			// geen plek heeft zoek je daarna.
+			if (unplaced.length > 0) {
+				shelves.push({
+					shelf: noShelfLabel(shop.name),
+					items: unplaced.sort((a, b) => a.name.localeCompare(b.name)),
+					extras: [],
+					unplaced: true,
+				});
+			}
 
 			return { shop: shop.name, items: shop.items, extras: shop.extras, shelves };
 		});

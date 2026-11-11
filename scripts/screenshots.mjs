@@ -28,7 +28,7 @@ import {
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { shiftPath, shiftVault } from "./demo-dates.mjs";
+import { shiftDate, shiftPath, shiftVault } from "./demo-dates.mjs";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const VAULT = process.env.PANTRY_DEMO_VAULT ?? join(homedir(), "Obsidian", "pantry-demo");
@@ -311,6 +311,33 @@ async function main() {
 	await screen("shopping-lists", command("open-shopping-lists"));
 	await screen("list-stock", `${plugin}.openList(${list}, "stock")`, 1200);
 	await screen("list-shop", `${plugin}.openList(${list}, "shop")`, 1200);
+	// A trip to the supermarket that takes the farmers market's standard
+	// groceries along. Made here and thrown away again, not kept in `demo/`:
+	// a second list in the vault would turn up in every other shot. Two
+	// products get a supermarket shelf first, so the shot shows both halves —
+	// what is on the route, and what still waits under "No shelf at …".
+	const away = JSON.stringify(await s.run(`(async () => {
+		const p = ${plugin};
+		for (const name of ["Apples", "Carrots"]) {
+			const product = p.products.byPath("Products/" + name + ".md");
+			await p.products.update(product, { shelfAt: { shop: "Supermarket", shelf: "Fruit & vegetables" } });
+		}
+		const made = await p.lists.create({
+			date: ${JSON.stringify(shiftDate("2026-09-26"))}, arrival: null,
+			shops: ["Supermarket"], staples: ["Supermarket", "Farmers market"], meals: [],
+		});
+		return made.path;
+	})()`));
+	await screen("list-setup", `${plugin}.openList(${away}, "setup")`, 1200);
+	// Only the market's groceries on the shopping shot: with the supermarket's
+	// own list above them, "No shelf at …" would be below the fold.
+	await s.run(quietly(`(async () => {
+		const p = ${plugin};
+		const made = p.lists.byPath(${away});
+		await p.lists.update(made, { date: made.date, arrival: null, shops: ["Supermarket"], staples: ["Farmers market"], meals: [] });
+	})()`));
+	await screen("list-no-shelf", `${plugin}.openList(${away}, "shop")`, 1200);
+	await s.run(quietly(`${plugin}.lists.discard(${plugin}.lists.byPath(${away}))`));
 	await screen("stock", command("open-stock"));
 	await screen("products", command("open-products"));
 	await screen("shelves", command("open-shelves"));

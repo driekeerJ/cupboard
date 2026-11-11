@@ -25,7 +25,7 @@ async function run() {
 		household: [{ id: "jeroen", name: "Jeroen", portionFactor: 1 }],
 	});
 	await h.rebuild(WEEK);
-	const list = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], meals: [DINNER] });
+	const list = await h.plugin.lists.create({ date: "2026-08-25", arrival: null, shops: ["Lidl"], staples: ["Lidl"], meals: [DINNER] });
 	assert.ok(list);
 	return { h, list };
 }

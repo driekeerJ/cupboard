@@ -208,9 +208,11 @@ export class NeedIndex {
 	 *
 	 * Voor het hele plan (All stock, de planner) is dat gewoon het minimum van
 	 * het product. Voor een boodschappenlijst telt het minimum alleen voor een
-	 * product uit een winkel die op de lijst staat: dat is wat "de standaard
-	 * boodschappen van de Lidl" betekent. Een lijst zonder winkels heeft dus
-	 * geen minimums — alleen wat de gekozen maaltijden vragen.
+	 * product uit een winkel waarvan de lijst de standaard boodschappen
+	 * meeneemt (`list.staples`): dat is wat "de standaard boodschappen van de
+	 * Lidl" betekent. Meestal zijn dat de winkels waar je heen gaat, maar niet
+	 * altijd — zie `ShoppingList.staples`. Een lijst zonder standaardlijsten
+	 * heeft geen minimums — alleen wat de gekozen maaltijden vragen.
 	 */
 	minimumOf(product: Product): number {
 		if (this.scopeShops === null) return product.minimum;
@@ -288,7 +290,7 @@ export class NeedIndex {
 
 	/**
 	 * Rekent voor één boodschappenlijst: alleen de maaltijden die erop staan,
-	 * en alleen de minimums van de winkels die erop staan.
+	 * en alleen de minimums van de standaardlijsten die erop staan.
 	 *
 	 * Geen boodschappenmomenten: de lijst ís het moment, en binnen één lijst
 	 * is elke winkel op tijd. Welke winkel een product krijgt beslist de lijst
@@ -299,7 +301,7 @@ export class NeedIndex {
 		this.moments = new Map();
 		this.slots = new Map();
 		this.shopArrivals = new Map();
-		this.scopeShops = new Set(list.shops.map((shop) => shop.trim().toLowerCase()));
+		this.scopeShops = new Set(list.staples.map((shop) => shop.trim().toLowerCase()));
 
 		const raw = new Map<string, number>();
 		const wanted = new Set(list.meals.map(mealKey));

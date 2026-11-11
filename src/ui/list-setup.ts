@@ -14,6 +14,7 @@ import {
 	listLabel,
 	mealKey,
 	sameName,
+	staplesFollowShops,
 	type Arrival,
 	type ListDraft,
 	type MealRef,
@@ -71,6 +72,7 @@ export class SetupStep {
 			date: list.date,
 			arrival: list.arrival ? { ...list.arrival } : null,
 			shops: [...list.shops],
+			staples: [...list.staples],
 			meals: list.meals.map((ref) => ({ ...ref })),
 		};
 	}
@@ -138,6 +140,7 @@ export class SetupStep {
 
 		this.drawWhen(body);
 		this.drawShops(body);
+		this.drawStaples(body);
 		this.drawMeals(body);
 		this.drawFoot(body);
 		restore();
@@ -219,6 +222,57 @@ export class SetupStep {
 
 		for (const shop of shops) {
 			const active = hasShop(this.draft.shops, shop);
+			const row = list.createEl("button", { cls: "pantry-pick-row" });
+			row.toggleClass("is-active", active);
+			row.setAttr("aria-pressed", active ? "true" : "false");
+			SetupStep.drawTick(row, active);
+			const main = row.createDiv({ cls: "pantry-pick-main" });
+			main.createDiv({ cls: "pantry-pick-name", text: shop });
+			row.onclick = () => {
+				this.touched = true;
+				// Zolang de standaardlijsten met de winkels meegaan, blijven
+				// ze dat doen: de gewone week is één tik. Wie ze uit elkaar
+				// heeft getrokken, heeft dat met opzet gedaan.
+				const follows = staplesFollowShops(this.draft);
+				if (active) {
+					this.draft.shops = this.draft.shops.filter((known) => !sameName(known, shop));
+				} else {
+					this.draft.shops.push(shop);
+				}
+				if (follows) this.draft.staples = [...this.draft.shops];
+				this.drawBody();
+			};
+		}
+	}
+
+	// ----------------------------------------------------- standaardlijsten
+
+	/**
+	 * Van welke winkels de standaard boodschappen meegaan.
+	 *
+	 * Een eigen vraag, los van waar je heen gaat: in een drukke week sla je de
+	 * Lidl over en haal je haar lijst bij de AH. Dan tel je thuis alles in één
+	 * ronde, in plaats van twee lijsten na elkaar langs dezelfde kast.
+	 */
+	private drawStaples(parent: HTMLElement): void {
+		const shops = this.shopNames();
+		if (shops.length === 0) return;
+
+		const section = parent.createDiv({ cls: "pantry-section" });
+		const heading = section.createDiv({ cls: "pantry-section-head is-static" });
+		heading.createSpan({ cls: "pantry-section-name", text: "Standard groceries" });
+		if (this.draft.staples.length > 0) {
+			heading.createSpan({ cls: "pantry-section-count", text: `${this.draft.staples.length}` });
+		}
+
+		const list = section.createDiv({ cls: "pantry-section-body" });
+		list.createDiv({
+			cls: "pantry-pick-intro",
+			text: "Whose usual groceries come along. Add a shop you are skipping this time to buy its list where you do go.",
+		});
+
+		for (const shop of shops) {
+			const active = hasShop(this.draft.staples, shop);
 			const standard = this.plugin.products
 				.all()
 				.filter(
@@ -228,25 +282,29 @@ export class SetupStep {
 						product.shops.some((known) => sameName(known, shop))
 				).length;
 
-			const row = list.createEl("button", { cls: "pantry-pick-row" });
+			const row = list.createEl("button", { cls: "pantry-pick-row pantry-pick-staple" });
 			row.toggleClass("is-active", active);
 			row.setAttr("aria-pressed", active ? "true" : "false");
 			SetupStep.drawTick(row, active);
 			const main = row.createDiv({ cls: "pantry-pick-main" });
 			main.createDiv({ cls: "pantry-pick-name", text: shop });
+			const count =
+				standard === 0
+					? "no products with a minimum"
+					: `${standard} product${standard === 1 ? "" : "s"} with a minimum`;
+			// Zeg het erbij als dit een winkel is waar je niet heen gaat: dat
+			// is de uitzondering, en die moet je in één blik terugzien.
+			const away = active && this.draft.shops.length > 0 && !hasShop(this.draft.shops, shop);
 			main.createDiv({
 				cls: "pantry-pick-meta",
-				text:
-					standard === 0
-						? "no products with a minimum"
-						: `${standard} product${standard === 1 ? "" : "s"} with a minimum`,
+				text: away ? `${count} · bought at ${this.draft.shops.join(" · ")}` : count,
 			});
 			row.onclick = () => {
 				this.touched = true;
 				if (active) {
-					this.draft.shops = this.draft.shops.filter((known) => !sameName(known, shop));
+					this.draft.staples = this.draft.staples.filter((known) => !sameName(known, shop));
 				} else {
-					this.draft.shops.push(shop);
+					this.draft.staples.push(shop);
 				}
 				this.drawBody();
 			};

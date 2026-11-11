@@ -1,7 +1,7 @@
 import { TFile, normalizePath, parseYaml, stringifyYaml } from "obsidian";
 import type PantryPlugin from "./main";
 import { Refusal } from "./guard";
-import { FORMAT_KEY, PANTRY_FORMAT, isNewer, newerMessage } from "./format";
+import { FORMAT_KEY, WIDE_FORMAT, isNewer, newerMessage } from "./format";
 import { addDays, startOfWeek, toISODate, weekId } from "./date";
 import { markdownIn } from "./folder";
 import { capturePreviewScroll, viewsFor, writeThroughEditor } from "./plan-note-write";
@@ -287,7 +287,7 @@ export class PlanStore {
 
 	serialise(plan: WeekPlan): string {
 		const clean = {
-			[FORMAT_KEY]: PANTRY_FORMAT,
+			[FORMAT_KEY]: WIDE_FORMAT,
 			weekStart: plan.weekStart,
 			days: plan.days
 				.map((day) => ({

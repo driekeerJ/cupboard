@@ -134,6 +134,20 @@ export class ShopIndex {
 		return this.find(shopName)?.shelves ?? [];
 	}
 
+	/**
+	 * Staat dit schap op de looproute van deze winkel?
+	 *
+	 * Een winkel zonder route (geen notitie, of een lege) zegt overal ja op:
+	 * daar valt niets in te delen, en dan is elk schap zo goed als een ander.
+	 * Een leeg schap is in een winkel mét route nooit een plek.
+	 */
+	hasShelf(shopName: string, shelf: string): boolean {
+		const shelves = this.shelves(shopName);
+		if (shelves.length === 0) return true;
+		const key = shelf.trim().toLowerCase();
+		return key.length > 0 && shelves.some((item) => item.toLowerCase() === key);
+	}
+
 	/** Where to look this product name up, or null if the shop never said. */
 	searchFor(shopName: string, query: string): string | null {
 		const shop = this.find(shopName);

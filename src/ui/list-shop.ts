@@ -8,6 +8,7 @@ import { listLabel, type ShoppingList } from "../shopping-list";
 import { emptyState, flip, keepScroll, tapOrHold } from "./kit";
 import { ExtraModal } from "./extra-modal";
 import { ProductSheet } from "./product-sheet";
+import { PlaceModal } from "./place-modal";
 
 /**
  * Zo lang blijft een afgevinkt product op zijn plek staan voordat het naar
@@ -232,11 +233,15 @@ export class ShopStep {
 		// notitie schrijft — anders lopen het scherm en de notitie uit elkaar.
 		// Wat hier bovenop komt is van dit scherm alleen: wat in het mandje
 		// ligt zakt naar onderen.
-		group.shelves.forEach(({ shelf, items, extras }) => {
-			if (group.shelves.length > 1) list.createDiv({ cls: "pantry-shelf", text: shelf });
+		group.shelves.forEach(({ shelf, items, extras, unplaced }) => {
+			// "No shelf at …" krijgt altijd zijn kop, ook als het de enige is:
+			// zonder kop zou je niet zien dát er iets in te delen valt.
+			if (group.shelves.length > 1 || unplaced) {
+				list.createDiv({ cls: "pantry-shelf", text: shelf });
+			}
 			[...items]
 				.sort((a, b) => (this.sinks(a) ? 1 : 0) - (this.sinks(b) ? 1 : 0))
-				.forEach((product) => this.drawRow(list, product, null));
+				.forEach((product) => this.drawRow(list, product, null, unplaced ? group.shop : null));
 			extras.forEach((extra) => this.drawExtraRow(list, extra));
 		});
 	}
@@ -305,7 +310,17 @@ export class ShopStep {
 		});
 	}
 
-	private drawRow(parent: HTMLElement, product: Product, meta: string | null): void {
+	/**
+	 * `placeAt` is de winkel waarin dit product nog geen schap heeft. De rij
+	 * krijgt dan een knop om er één te kiezen: dit is het moment waarop je
+	 * weet waar het ligt, en na één tik staat het de volgende keer goed.
+	 */
+	private drawRow(
+		parent: HTMLElement,
+		product: Product,
+		meta: string | null,
+		placeAt: string | null = null
+	): void {
 		const row = parent.createDiv({ cls: "pantry-buy-row" });
 		row.dataset.flip = product.path;
 		const done = this.isDone(product);
@@ -345,6 +360,21 @@ export class ShopStep {
 		);
 		tapOrHold(main, toggle, () => this.edit(product));
 		if (meta) main.createDiv({ cls: "pantry-buy-meta", text: meta });
+
+		if (placeAt && !done) {
+			const where = product.shelf
+				? `${product.shelf}${product.shops.length > 0 ? ` at ${product.shops.join(", ")}` : ""}`
+				: "no shelf yet";
+			main.createDiv({ cls: "pantry-buy-meta", text: where });
+			const place = row.createEl("button", { cls: "pantry-place", text: "Shelf" });
+			place.setAttr("aria-label", `Choose a shelf for ${product.name} at ${placeAt}`);
+			place.onclick = () => {
+				this.editing = null;
+				new PlaceModal(this.plugin, product, placeAt, () =>
+					guarded("could not refresh your shopping list", () => this.reload())
+				).open();
+			};
+		}
 
 		const label = this.plugin.lists.amountText(this.list, product);
 		if (done || meta) {

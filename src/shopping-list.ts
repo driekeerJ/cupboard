@@ -31,7 +31,7 @@ import { parseExtras, type Extra } from "./extras";
 import { asText } from "./text";
 import { fromISODate, toISODate, WEEKDAY_NAMES } from "./date";
 import { safeFileName } from "./cook-session";
-import { FORMAT_KEY, PANTRY_FORMAT, isNewer, newerMessage } from "./format";
+import { FORMAT_KEY, STAPLES_FORMAT, WIDE_FORMAT, isNewer, newerMessage } from "./format";
 
 /** De frontmatter-sleutel die een notitie als boodschappenlijst merkt. */
 export const LIST_MARK = "pantry";
@@ -83,6 +83,19 @@ export interface ShoppingList {
 	arrival: Arrival | null;
 	/** Winkelnamen zoals de winkelnotities heten, in de gekozen volgorde. */
 	shops: string[];
+	/**
+	 * Van welke winkels de standaard boodschappen meegaan.
+	 *
+	 * Meestal precies `shops`: je gaat naar de Lidl en neemt de standaardlijst
+	 * van de Lidl mee. Maar "waar ga ik heen" en "welke standaardlijsten" zijn
+	 * twee vragen. In een drukke week ga je alleen naar de AH en haal je de
+	 * Lidl-boodschappen daar ook; dan staat de Lidl hier wél en in `shops`
+	 * niet. Zo tel je thuis alles in één ronde, en hoef je niet twee lijsten
+	 * na elkaar langs dezelfde kast.
+	 *
+	 * Mag leeg zijn: dan gaan alleen de gekozen maaltijden mee.
+	 */
+	staples: string[];
 	meals: MealRef[];
 	/** Afgevinkt, gesleuteld op productpad. */
 	basket: Map<string, BasketEntry>;
@@ -128,18 +141,20 @@ export interface ListDraft {
 	date: string;
 	arrival: Arrival | null;
 	shops: string[];
+	/** Zie ShoppingList.staples. */
+	staples: string[];
 	meals: MealRef[];
 }
 
 export function emptyDraft(date: string): ListDraft {
-	return { date, arrival: null, shops: [], meals: [] };
+	return { date, arrival: null, shops: [], staples: [], meals: [] };
 }
 
-/** Nul maaltijden én nul winkels is geen lijst: er valt niets te halen. */
+/** Nul maaltijden, nul winkels én nul standaardlijsten is geen lijst: er valt niets te halen. */
 export function isValidDraft(draft: ListDraft): boolean {
 	return (
 		fromISODate(draft.date) !== null &&
-		(draft.shops.length > 0 || draft.meals.length > 0)
+		(draft.shops.length > 0 || draft.staples.length > 0 || draft.meals.length > 0)
 	);
 }
 
@@ -149,6 +164,19 @@ export function sameName(a: string, b: string): boolean {
 
 export function hasShop(shops: readonly string[], shop: string): boolean {
 	return shops.some((known) => sameName(known, shop));
+}
+
+/** Dezelfde winkels, in welke volgorde dan ook. */
+export function sameShops(a: readonly string[], b: readonly string[]): boolean {
+	return a.length === b.length && a.every((shop) => hasShop(b, shop));
+}
+
+/**
+ * Gaan de standaardlijsten gewoon met de winkels mee? Dan staat `staples` niet
+ * in de notitie, en is hij te lezen door elke build die lijsten kent.
+ */
+export function staplesFollowShops(list: Pick<ListDraft, "shops" | "staples">): boolean {
+	return sameShops(list.shops, list.staples);
 }
 
 /** De sleutel van een geplande maaltijd, zodat twee lijsten hem niet allebei nemen. */
@@ -270,6 +298,18 @@ export function parseList(frontmatter: Record<string, unknown>): ParsedList | nu
 		if (shop.length > 0 && !hasShop(shops, shop)) shops.push(shop);
 	}
 
+	// Zonder het veld gaan de standaardlijsten met de winkels mee: zo las elke
+	// lijst van vóór dit veld, en zo blijft hij lezen. Een leeg veld is een
+	// antwoord — "deze keer geen standaard boodschappen" — en geen ontbreken.
+	let staples: string[] = [...shops];
+	if (Array.isArray(frontmatter.staples)) {
+		staples = [];
+		for (const value of frontmatter.staples) {
+			const shop = linkTarget(asText(value));
+			if (shop.length > 0 && !hasShop(staples, shop)) staples.push(shop);
+		}
+	}
+
 	const meals: MealRef[] = [];
 	for (const value of asArray(frontmatter.meals)) {
 		const record = asRecord(value);
@@ -318,6 +358,7 @@ export function parseList(frontmatter: Record<string, unknown>): ParsedList | nu
 			date,
 			arrival: parseArrival(frontmatter.arrives),
 			shops,
+			staples,
 			meals,
 		},
 		frozen: isNewer(frontmatter[FORMAT_KEY]) ? newerMessage(frontmatter[FORMAT_KEY]) : null,
@@ -343,12 +384,14 @@ export function serialiseList(
 ): Record<string, unknown> {
 	const out: Record<string, unknown> = {
 		[LIST_MARK]: LIST_MARK_VALUE,
-		[FORMAT_KEY]: PANTRY_FORMAT,
+		// Het laagste nummer dat deze notitie goed leest: zie format.ts.
+		[FORMAT_KEY]: staplesFollowShops(list) ? WIDE_FORMAT : STAPLES_FORMAT,
 		date: list.date,
 	};
 	const arrives = serialiseArrival(list.arrival);
 	if (arrives) out.arrives = arrives;
 	if (list.shops.length > 0) out.shops = list.shops.map((shop) => toLink(shop));
+	if (!staplesFollowShops(list)) out.staples = list.staples.map((shop) => toLink(shop));
 	if (list.meals.length > 0) {
 		out.meals = list.meals.map((ref) => ({
 			date: ref.date,

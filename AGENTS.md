@@ -58,10 +58,24 @@ geeft een `Refusal` met de reden in de melding.
 niet bestaat blijft op naam bewaard (`list.unresolved`) en gaat ongewijzigd mee
 bij het schrijven.
 
-**Formaatnummer.** Elke notitie die Pantry schrijft draagt `format:
-PANTRY_FORMAT` (`src/format.ts`). Een build die een hoger nummer tegenkomt leest
-wel, schrijft niet, en Home zegt dat het apparaat bijgewerkt moet worden.
-Verhoog het nummer alleen als een oudere build iets zou weggooien.
+**Formaatnummer.** Elke notitie die Pantry schrijft draagt een `format`
+(`src/format.ts`): het **laagste** nummer dat hem goed leest, niet het hoogste
+dat de build kent. `PANTRY_FORMAT` is wat deze build maximaal leest. Een build
+die een hoger nummer tegenkomt leest wel, schrijft niet, en Home zegt dat het
+apparaat bijgewerkt moet worden. Verhoog het nummer alleen als een oudere build
+iets zou weggooien of verkeerd zou lezen, en geef het alleen mee aan notities
+die het nieuwe ook echt gebruiken (zie `STAPLES_FORMAT`).
+
+**Waar je heen gaat ≠ welke standaardlijsten.** Een lijst heeft `shops` (waar
+je heen gaat: de groepen, de looproute, het boodschappenmoment) en `staples`
+(van welke winkels de minimums meetellen). Meestal gelijk; dan staat `staples`
+niet in de notitie. Minimums lopen altijd via `staples`, nooit via `shops`.
+
+**Het schap is per winkel.** Vraag het op met `shelfAt(product, winkel)`, nooit
+`product.shelf` rechtstreeks als je een winkel weet. `shelf` is het gewone
+schap, `shelves` de uitzonderingen per winkel; schrijven gaat via `placeAt()`.
+Een schap in een winkel maakt die winkel géén vaste winkel van het product:
+`shop` bepaalt bij welke standaardlijst het hoort.
 
 **Iets weggooien vraagt eerst.** Done, Delete list en Delete product gaan door
 `confirm()` (`src/ui/confirm.ts`). Done gooit niet weg maar verhuist naar
