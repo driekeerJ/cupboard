@@ -89,11 +89,11 @@ export function enableTouchDrag(card: HTMLElement, spec: TouchDragSpec): void {
 	};
 
 	const highlight = (x: number, y: number): void => {
-		const under = document.elementFromPoint(x, y);
-		const slot =
-			under instanceof Element
-				? under.closest<HTMLElement>(".pantry-slot")
-				: null;
+		// Het document van de kaart zelf: alleen dáár liggen de vakken waar hij
+		// in kan vallen. `elementFromPoint` geeft een `Element` of `null`; meer
+		// dan dat hoeft hier niet gecontroleerd te worden.
+		const under = card.doc.elementFromPoint(x, y);
+		const slot = under?.closest<HTMLElement>(".pantry-slot") ?? null;
 		if (slot === target) return;
 		target?.removeClass("is-drop-target");
 		target = slot;
@@ -113,7 +113,7 @@ export function enableTouchDrag(card: HTMLElement, spec: TouchDragSpec): void {
 		window.addEventListener("touchcancel", cancelDrag);
 		card.addClass("is-touch-dragging");
 		scroller = scrollParent(card);
-		ghost = document.body.createDiv({
+		ghost = card.doc.body.createDiv({
 			cls: "pantry-drag-ghost",
 			text: spec.label(),
 		});

@@ -48,6 +48,10 @@ export function installDom(): void {
 	const w = window as unknown as Patched;
 	g.window = window;
 	g.document = window.document;
+	// Obsidian houdt deze bij als het venster dat het laatst de focus had. In
+	// een test is er maar één venster.
+	g.activeWindow = window;
+	g.activeDocument = window.document;
 	for (const name of [
 		"HTMLElement", "HTMLInputElement", "HTMLButtonElement", "HTMLTextAreaElement",
 		"Element", "Node", "Event", "MouseEvent", "KeyboardEvent", "PointerEvent",
@@ -97,6 +101,25 @@ export function installDom(): void {
 	node.detach = function (this: Node) {
 		this.parentNode?.removeChild(this);
 	};
+	// Obsidians `instanceof` over vensters heen: in een los venster heeft elk
+	// element de klassen van dat venster. Hier is er één venster, dus is het
+	// gewoon `instanceof`.
+	node.instanceOf = function (this: Node, type: new () => unknown) {
+		return this instanceof type;
+	};
+	// Het document en venster waar een element in staat; een document is
+	// zijn eigen document.
+	const docOf = (n: Node): Document => n.ownerDocument ?? (n as Document);
+	Object.defineProperty(node, "doc", {
+		get(this: Node) {
+			return docOf(this);
+		},
+	});
+	Object.defineProperty(node, "win", {
+		get(this: Node) {
+			return docOf(this).defaultView;
+		},
+	});
 
 	const element = (w.Element as { prototype: Patched }).prototype;
 	const classes = (names: string[]): string[] =>

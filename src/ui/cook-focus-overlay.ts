@@ -70,7 +70,12 @@ export class FocusOverlay {
 	private advanceTimer: number | null = null;
 	private wakeLock: WakeLockHandle | null = null;
 	private touch: { x: number; y: number } | null = null;
-	private doc: Document = document;
+	/**
+	 * Alleen een beginwaarde. `open()` neemt het document van de kookweergave
+	 * zelf (`anchor().ownerDocument`), niet `activeDocument`: staat de
+	 * kookweergave in een los venster, dan hoeft dat niet het actieve te zijn.
+	 */
+	private doc: Document = activeDocument;
 	private win: Window = window;
 
 	private readonly onKey = (event: KeyboardEvent): void => this.key(event);

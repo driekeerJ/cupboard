@@ -4660,6 +4660,10 @@
 
 .pantry-planner textarea.pantry-day-note-input {
 	width: 100%;
+	/* De code meet scrollHeight en zet de hoogte inline; daarvoor haalt hij die
+	 * eerst weg, en dan moet het veld hierop terugvallen, niet op de vaste
+	 * hoogte die Obsidian of een thema een textarea geeft. */
+	height: auto;
 	min-height: 28px;
 	padding: 5px 8px;
 	border: 1px solid transparent;
