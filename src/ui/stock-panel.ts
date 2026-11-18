@@ -29,6 +29,8 @@ export interface StockSource {
 	buy(product: Product): number | null;
 	/** Iets anders dan "buy 2" rechts van de naam, als er iets bijzonders is. */
 	note?(product: Product): string | null;
+	/** Zie StockRowContext.tag. */
+	tag?(product: Product): { text: string; kind: "list" | "late" } | null;
 	/**
 	 * Welke filterknoppen boven de lijst staan. All stock heeft ze alle drie;
 	 * de voorraadcheck van een lijst laat "To buy" weg — wat je koopt is de
@@ -384,6 +386,9 @@ export class StockPanel {
 				change: (item, patch) => this.change(item, patch),
 				leaving: (item) => this.leaving.has(item.path),
 				redraw: () => this.drawList(),
+				...(this.source.tag
+					? { tag: (item: Product) => this.source.tag?.(item) ?? null }
+					: {}),
 				...(this.source.setSkipped
 					? { skip: (item: Product) => this.setSkipped(item, true) }
 					: {}),

@@ -27,6 +27,7 @@ import { askName } from "./ui/ask-name";
 import { ensureFolder } from "./notes";
 import { STOCK_VIEW_TYPE, StockView } from "./ui/stock-view";
 import { LISTS_VIEW_TYPE, ListsView } from "./ui/lists-view";
+import { ROUND_VIEW_TYPE, RoundView } from "./ui/round-view";
 import { LIST_VIEW_TYPE, ListView } from "./ui/list-view";
 import { CLEANUP_VIEW_TYPE, CleanupView } from "./ui/cleanup-view";
 import { CleanupIndex } from "./cleanup";
@@ -60,6 +61,7 @@ const SCREENS: { type: string; command?: string; name: string }[] = [
 	// Eén lijst heeft een pad nodig; het palet kan die niet kiezen. Het
 	// scherm staat hier voor registerView en refreshViews, zonder commando.
 	{ type: LIST_VIEW_TYPE, name: "Open shopping list" },
+	{ type: ROUND_VIEW_TYPE, command: "check-stock", name: "Check stock for all shopping lists" },
 	{ type: STOCK_VIEW_TYPE, command: "open-stock", name: "Open all stock" },
 	{ type: SHELVES_VIEW_TYPE, command: "open-shelves", name: "Open shop shelves" },
 	{ type: CLEANUP_VIEW_TYPE, command: "open-cleanup", name: "Open cleanup" },
@@ -200,6 +202,11 @@ export default class PantryPlugin extends Plugin {
 		this.registerView(
 			LIST_VIEW_TYPE,
 			(leaf: WorkspaceLeaf) => new ListView(leaf, this)
+		);
+
+		this.registerView(
+			ROUND_VIEW_TYPE,
+			(leaf: WorkspaceLeaf) => new RoundView(leaf, this)
 		);
 
 		this.registerView(

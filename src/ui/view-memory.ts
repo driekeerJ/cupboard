@@ -50,6 +50,9 @@ export class ViewMemory {
 	/** Het All stock-scherm. */
 	stock: StockMemory = freshStock();
 
+	/** De telronde over alle open lijsten samen. */
+	round: StockMemory = freshStock();
+
 	/** Per lijst, op pad. Een lijst die weg is neemt haar geheugen mee. */
 	private lists: Map<string, ListMemory> = new Map();
 

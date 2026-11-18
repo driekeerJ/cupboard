@@ -27,6 +27,12 @@ export interface StockRowContext {
 	need(product: Product): number;
 	/** Wat er rechts van de naam staat. */
 	status(product: Product): { text: string; kind: "quiet" | "buy" | "ok" };
+	/**
+	 * Een label vóór de status: op welke lijst dit terechtkomt. Alleen de
+	 * telronde over alle lijsten heeft dat; binnen één lijst is het antwoord
+	 * altijd "deze", en dat hoeft er niet bij te staan.
+	 */
+	tag?: (product: Product) => { text: string; kind: "list" | "late" } | null;
 	/** Writes a change made from a row and redraws. */
 	change(product: Product, patch: ProductPatch): void;
 	/** Held in place after a change took it off the list; see StockView.leaving. */
@@ -61,6 +67,9 @@ export function drawStockRow(
 	if (product.unit) {
 		name.createSpan({ cls: "pantry-stock-unit", text: product.unit });
 	}
+
+	const tag = ctx.tag?.(product);
+	if (tag) top.createDiv({ cls: `pantry-status-tag is-${tag.kind}`, text: tag.text });
 
 	const status = ctx.status(product);
 	top.createDiv({ cls: `pantry-status is-${status.kind}`, text: status.text });

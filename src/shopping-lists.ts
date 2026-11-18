@@ -37,6 +37,7 @@ import {
 	type ShoppingList,
 } from "./shopping-list";
 import { Refusal } from "./guard";
+import { arrivesInTime, earliest, stopMoment, type Moment } from "./arrival";
 
 /** Waar de lijsten staan als er niets is ingesteld. */
 export const DEFAULT_SHOPPING_FOLDER = "Cupboard/Shopping";
@@ -63,10 +64,27 @@ export interface ListBuckets {
 	buy: Product[];
 	/** Kan nog niet gezegd worden: nooit geteld, of bewust "even kijken". */
 	unsure: Product[];
-	/** Staat al op een eerdere lijst die nog niet gedaan is. */
+	/** Een andere open lijst haalt dit; hier alleen ter herinnering. */
 	elsewhere: { product: Product; list: ShoppingList }[];
-	/** Een gekozen maaltijd vraagt erom, maar het ligt niet in deze winkels. */
+	/** Een gekozen maaltijd vraagt erom, maar geen lijst kan het op tijd halen. */
 	notHere: Product[];
+}
+
+/** Zie `ShoppingLists.placement`. */
+export interface Placement {
+	/** De lijst die het haalt; null als geen enkele lijst erom vraagt of het kan. */
+	owner: ShoppingList | null;
+	/**
+	 * Er gaat wel een lijst naar een winkel waar dit ligt, maar geen enkele is
+	 * er op tijd mee. Wie het dan toch houdt, heeft het te laat in huis.
+	 */
+	late: boolean;
+	/** Het minimum plus de maaltijden van alle open lijsten samen. */
+	need: number;
+	/** Hoeveel er samen gekocht moet worden; null als de telling ontbreekt. */
+	amount: number | null;
+	/** Vraagt er nu een lijst om: iets te kopen, of iets na te kijken? */
+	wanted: boolean;
 }
 
 /** Minstens één, altijd heel: een halve zak batterijen bestaat niet. */
@@ -295,14 +313,141 @@ export class ShoppingLists {
 		return this.needsOf(list).minimumOf(product);
 	}
 
-	/** Wat de lijst van dit product vraagt: het minimum plus de maaltijden. */
-	need(list: ShoppingList, product: Product): number {
+	/** Wat déze lijst zelf vraagt: haar minimum plus haar eigen maaltijden. */
+	private ownNeed(list: ShoppingList, product: Product): number {
 		return this.minimumOf(list, product) + this.needsOf(list).get(product);
+	}
+
+	/** Vanaf wanneer het spul van deze lijst in huis is. */
+	private tripMoment(list: ShoppingList): Moment {
+		return stopMoment(
+			{ ...this.stopFor("", list.arrival), date: list.date },
+			this.plugin.settings.meals
+		);
+	}
+
+	/**
+	 * Wat de open lijsten sámen van dit product vragen, en welke lijst het
+	 * haalt.
+	 *
+	 * Lijsten zijn winkelbezoeken, en die horen bij elkaar: woensdag naar de
+	 * Lidl, vrijdag naar de AH, één keer tellen. Tot 1.4 pakte de vroegste
+	 * lijst alles wat ze kon krijgen. Olijfolie die je bij de AH wilt halen
+	 * stond dan op de Lidl-lijst, alleen omdat die eerder was; en tortilla's
+	 * voor zaterdag, die alleen de Lidl heeft, waren op de AH-lijst een
+	 * waarschuwing terwijl je woensdag gewoon bij de Lidl stond.
+	 *
+	 * De regel is die van het weekplan (`assignShop` in arrival.ts): de
+	 * voorkeursvolgorde van het product, en de eerste winkel die op tijd is
+	 * wint. Hier is "een winkel" een open lijst die erheen gaat, en "op tijd"
+	 * het moment waarop die lijst in huis is. Een lijst die de standaard
+	 * boodschappen van een winkel meeneemt zonder erheen te gaan telt ook,
+	 * maar pas na een lijst die er wél heen gaat.
+	 *
+	 * Is geen enkele lijst op tijd, dan verhuist er niets: de lijst die erom
+	 * vraagt houdt het zelf als ze het kan kopen, en anders is het een
+	 * waarschuwing. Het stil ergens anders neerzetten maakt het niet op tijd.
+	 *
+	 * De hoeveelheid is van alle lijsten samen. Wie het haalt, haalt het voor
+	 * iedereen: afvinken zet de voorraad op "+", en daarna vraagt geen lijst
+	 * er meer om.
+	 */
+	placement(product: Product): Placement {
+		// Wie het al in het mandje heeft of deze keer overslaat doet niet mee:
+		// niet als vrager, en niet als lijst die het zou kunnen halen.
+		const pool = this.all().filter(
+			(list) => !list.basket.has(product.path) && !this.isSkipped(list, product)
+		);
+
+		let meals = 0;
+		let minimum = 0;
+		let deadline: Moment | null = null;
+		for (const list of pool) {
+			const index = this.needsOf(list);
+			const asked = index.get(product);
+			meals += asked;
+			minimum = Math.max(minimum, index.minimumOf(product));
+			if (asked > 0) deadline = earliest(deadline, index.momentFor(product));
+		}
+
+		const need = minimum + meals;
+		const amount = toBuy(product, meals, minimum);
+		const out: Placement = { owner: null, late: false, need, amount, wanted: false };
+		if (product.ignored) return out;
+
+		// Een telling ontbreekt of is gevlagd als onzeker: dan is de vraag
+		// "heb je het?" en telt wat er nodig is. Anders telt wat je zou kopen
+		// — en "+" is dan genoeg. Zonder de vlag hier zou een product waar je
+		// mee gekookt hebt terwijl het op "+" stond, stil van de lijst blijven.
+		const wanted = amount === null || product.check ? need > 0 : amount > 0;
+		if (!wanted) return out;
+		out.wanted = true;
+
+		const preferred = product.shops.map((shop) => shop.trim()).filter(Boolean);
+		for (const shop of preferred) {
+			const going = pool.filter((list) => hasShop(list.shops, shop));
+			const carrying = pool.filter(
+				(list) =>
+					list.shops.length > 0 &&
+					!preferred.some((known) => hasShop(list.shops, known)) &&
+					hasShop(list.staples, shop)
+			);
+			for (const trip of [...going, ...carrying]) {
+				out.late = true;
+				if (!arrivesInTime(this.tripMoment(trip), deadline)) continue;
+				return { ...out, owner: trip, late: false };
+			}
+		}
+
+		// Niemand op tijd, of geen lijst naar een winkel van dit product: de
+		// eerste lijst die er zelf om vraagt en het kan kopen houdt het.
+		out.owner =
+			pool.find((list) => this.ownNeed(list, product) > 0 && this.atShops(list, product)) ??
+			null;
+		return out;
+	}
+
+	/**
+	 * Hoort dit product in de telronde over alle open lijsten?
+	 *
+	 * Alles wat een lijst in haar eigen voorraadcheck zou tonen, één keer.
+	 */
+	inRound(product: Product): boolean {
+		return this.all().some((list) => this.relevant(list, product));
+	}
+
+	/**
+	 * Tot welk getal de telronde voor dit product loopt: het minimum plus de
+	 * maaltijden van álle open lijsten. Ook van een lijst die het al in het
+	 * mandje heeft — anders stond een net gekocht product er als "no minimum
+	 * set" in plaats van als "enough".
+	 */
+	roundNeed(product: Product): number {
+		let meals = 0;
+		let minimum = 0;
+		for (const list of this.all()) {
+			meals += this.needsOf(list).get(product);
+			minimum = Math.max(minimum, this.minimumOf(list, product));
+		}
+		return minimum + meals;
+	}
+
+	/**
+	 * Wat de lijst van dit product vraagt: het minimum plus de maaltijden.
+	 * Voor de lijst die het haalt is dat de vraag van alle lijsten samen.
+	 */
+	need(list: ShoppingList, product: Product): number {
+		const placed = this.placement(product);
+		return placed.owner === list ? placed.need : this.ownNeed(list, product);
 	}
 
 	/** Hoeveel je hiervan koopt, met de ± aanpassing van deze lijst erbij. */
 	amount(list: ShoppingList, product: Product): number | null {
-		const base = toBuy(product, this.needsOf(list).get(product), this.minimumOf(list, product));
+		const placed = this.placement(product);
+		const base =
+			placed.owner === list
+				? placed.amount
+				: toBuy(product, this.needsOf(list).get(product), this.minimumOf(list, product));
 		if (base === null) return null;
 		return Math.max(0, base + (list.nudge.get(product.path) ?? 0));
 	}
@@ -314,7 +459,8 @@ export class ShoppingLists {
 	 * deze winkels ligt telt mee: tellen doe je thuis, in één ronde langs je
 	 * kasten, en juist daar blijkt dat je van de hummus nog drie bakjes hebt.
 	 * Blijkt er genoeg te zijn, dan valt hij vanzelf uit de waarschuwing "Not
-	 * at these shops" — hij hoefde nooit gehaald te worden.
+	 * at these shops" — hij hoefde nooit gehaald te worden. En wat deze lijst
+	 * voor een andere lijst haalt hoort er ook bij: je koopt het hier.
 	 *
 	 * De check-vlag maakt een product hier níét relevant. Een kooksessie zet
 	 * hem op alles wat op "+" stond (zie consume.ts), en de meeste van die
@@ -322,11 +468,11 @@ export class ShoppingLists {
 	 * dan toch in de check, en wie de vlag daar uitzette zag de regel
 	 * verdwijnen. De vlag blijft op het product staan en doet zijn werk zodra
 	 * een lijst het product wél vraagt: dan staat het onder "Check first" in
-	 * plaats van als "genoeg" — zie `wanted()`.
+	 * plaats van als "genoeg" — zie `placement()`.
 	 */
 	relevant(list: ShoppingList, product: Product): boolean {
 		if (product.ignored) return false;
-		return this.need(list, product) > 0;
+		return this.ownNeed(list, product) > 0 || this.placement(product).owner === list;
 	}
 
 	/** Deze keer bewust niet: niet tellen, niet kopen, niet waarschuwen. */
@@ -334,36 +480,26 @@ export class ShoppingLists {
 		return list.skipped.has(product.path);
 	}
 
-	/** De lijst die dit product al op zich heeft genomen, als die eerder valt. */
+	/** De ándere lijst die dit product haalt, als deze lijst er ook om vraagt. */
 	ownerOf(list: ShoppingList, product: Product): ShoppingList | null {
-		for (const other of this.all()) {
-			if (other.path === list.path || !precedes(other, list)) continue;
-			if (this.claims(other, product)) return other;
-		}
-		return null;
-	}
-
-	/** Staat het op die lijst om te kopen of te checken, en is het daar nog niet afgevinkt? */
-	private claims(list: ShoppingList, product: Product): boolean {
-		if (product.ignored || list.basket.has(product.path)) return false;
-		// Overgeslagen is niet gehaald: de volgende lijst mag hem hebben.
-		if (this.isSkipped(list, product)) return false;
-		if (!this.atShops(list, product)) return false;
-		return this.wanted(list, product);
+		if (list.basket.has(product.path) || this.isSkipped(list, product)) return null;
+		const { owner } = this.placement(product);
+		if (!owner || owner === list || this.ownNeed(list, product) <= 0) return null;
+		return this.covers(owner, list, product) ? owner : null;
 	}
 
 	/**
-	 * Vraagt deze lijst dit product, als regel om te kopen of om na te kijken?
+	 * Is wat `owner` haalt op tijd voor wat `list` er zelf mee wil?
 	 *
-	 * Een telling ontbreekt of is gevlagd als onzeker: dan is de vraag "heb je
-	 * het?" en telt wat de lijst nodig heeft. Anders telt wat je zou kopen —
-	 * en "+" is dan genoeg. Zonder de vlag hier zou een product waar je mee
-	 * gekookt hebt terwijl het op "+" stond, stil van de lijst blijven.
+	 * Bijna altijd ja: dat is waarom die lijst het kreeg. Niet als geen
+	 * enkele lijst op tijd was en een latere het toch houdt — feta voor
+	 * donderdag, die pas vrijdag bij de AH op de lijst staat. Dan is "staat
+	 * al op een andere lijst" een geruststelling die niet klopt.
 	 */
-	private wanted(list: ShoppingList, product: Product): boolean {
-		const amount = this.amount(list, product);
-		if (amount === null || product.check) return this.need(list, product) > 0;
-		return amount > 0;
+	private covers(owner: ShoppingList, list: ShoppingList, product: Product): boolean {
+		const index = this.needsOf(list);
+		if (index.get(product) <= 0) return true;
+		return arrivesInTime(this.tripMoment(owner), index.momentFor(product));
 	}
 
 	/** Dezelfde verdeling voor het scherm en de notitie, zodat die nooit verschillen. */
@@ -378,29 +514,33 @@ export class ShoppingLists {
 			// hem niet haalt was juist de keuze.
 			if (this.isSkipped(list, product)) continue;
 
-			if (!this.atShops(list, product)) {
-				// Een maaltijd vraagt erom, maar het ligt niet waar je heen gaat.
-				// Dat is een waarschuwing, geen regel op de lijst — en alleen als
-				// je het niet al in huis hebt, want dan valt er niets te halen.
-				const asked = this.needsOf(list).get(product);
-				const short = toBuy(product, asked, 0);
-				if (asked > 0 && (short === null || short > 0)) out.notHere.push(product);
+			const placed = this.placement(product);
+			if (placed.owner === list) {
+				if (placed.amount === null || product.check) out.unsure.push(product);
+				else out.buy.push(product);
 				continue;
 			}
 
-			if (!this.wanted(list, product)) continue;
-
+			// Niet van ons om te halen. Dan staat het hier alleen als deze
+			// lijst er zelf om vraagt: als herinnering dat een andere lijst
+			// het haalt, of als waarschuwing dat niemand dat op tijd kan.
+			if (this.ownNeed(list, product) <= 0) continue;
 			const owner = this.ownerOf(list, product);
 			if (owner) {
 				out.elsewhere.push({ product, list: owner });
 				continue;
 			}
-			if (this.amount(list, product) === null || product.check) out.unsure.push(product);
-			else out.buy.push(product);
+			// Een maaltijd vraagt erom, maar het ligt niet waar je heen gaat —
+			// of pas als het te laat is. Dat is een waarschuwing, geen regel op
+			// de lijst, en alleen als je het niet al in huis hebt.
+			const asked = this.needsOf(list).get(product);
+			const short = toBuy(product, asked, 0);
+			if (asked > 0 && (short === null || short > 0)) out.notHere.push(product);
 		}
 
 		return out;
 	}
+
 
 	boughtProducts(list: ShoppingList): Product[] {
 		return [...list.basket.keys()]
@@ -941,7 +1081,11 @@ export class ShoppingLists {
 		const existing = this.frontmatterOf(current);
 		for (const key of OWN_KEYS) delete existing[key];
 		const frontmatter = {
-			...serialiseList(list, (path) => this.plugin.products.byPath(path)?.name ?? null),
+			...serialiseList(
+				list,
+				(path) => this.plugin.products.byPath(path)?.name ?? null,
+				this.lists.size > 1
+			),
 			...existing,
 		};
 		const yaml = stringifyYaml(frontmatter).trimEnd();

@@ -1,0 +1,6 @@
+# Lidl
+
+## Looproute
+
+- Groente
+- Droogwaren

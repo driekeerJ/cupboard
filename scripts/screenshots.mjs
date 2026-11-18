@@ -121,7 +121,15 @@ async function quitObsidian() {
 
 async function startDebugObsidian() {
 	registerVault();
-	execFileSync("open", ["-a", "Obsidian", "--args", `--remote-debugging-port=${PORT}`]);
+	// Same switches as scripts/e2e.mjs: a window that is not in front is
+	// treated as hidden, and its animations and timers stall mid-shot.
+	execFileSync("open", [
+		"-a", "Obsidian", "--args",
+		`--remote-debugging-port=${PORT}`,
+		"--disable-renderer-backgrounding",
+		"--disable-backgrounding-occluded-windows",
+		"--disable-background-timer-throttling",
+	]);
 	for (let i = 0; i < 60; i++) {
 		if (await targets()) return;
 		await sleep(500);
@@ -338,6 +346,21 @@ async function main() {
 	})()`));
 	await screen("list-no-shelf", `${plugin}.openList(${away}, "shop")`, 1200);
 	await s.run(quietly(`${plugin}.lists.discard(${plugin}.lists.byPath(${away}))`));
+	// One stock check for two trips: the supermarket list from the demo plus
+	// the farmers market a day earlier. Made here and thrown away again, for
+	// the same reason as the list above.
+	const market = JSON.stringify(await s.run(`(async () => {
+		const p = ${plugin};
+		const made = await p.lists.create({
+			date: ${JSON.stringify(shiftDate("2026-09-22"))}, arrival: null,
+			shops: ["Farmers market"], staples: ["Farmers market"], meals: [],
+		});
+		await p.lists.refreshAll();
+		return made.path;
+	})()`));
+	await screen("stock-round", command("check-stock"), 1400);
+	await s.run(quietly(`${plugin}.lists.discard(${plugin}.lists.byPath(${market}))`));
+	await s.run(quietly(`${plugin}.lists.refreshAll()`));
 	await screen("stock", command("open-stock"));
 	await screen("products", command("open-products"));
 	await screen("shelves", command("open-shelves"));
