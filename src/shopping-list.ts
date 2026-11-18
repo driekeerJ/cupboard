@@ -31,7 +31,7 @@ import { parseExtras, type Extra } from "./extras";
 import { asText } from "./text";
 import { fromISODate, toISODate, WEEKDAY_NAMES } from "./date";
 import { safeFileName } from "./cook-session";
-import { FORMAT_KEY, STAPLES_FORMAT, WIDE_FORMAT, isNewer, newerMessage } from "./format";
+import { FORMAT_KEY, ROUND_FORMAT, STAPLES_FORMAT, WIDE_FORMAT, isNewer, newerMessage } from "./format";
 
 /** De frontmatter-sleutel die een notitie als boodschappenlijst merkt. */
 export const LIST_MARK = "pantry";
@@ -380,12 +380,18 @@ export function parseList(frontmatter: Record<string, unknown>): ParsedList | nu
  */
 export function serialiseList(
 	list: ShoppingList,
-	nameOf: (path: string) => string | null
+	nameOf: (path: string) => string | null,
+	/** Staan er meer lijsten open? Dan verdelen ze hun boodschappen samen. */
+	shared = false
 ): Record<string, unknown> {
 	const out: Record<string, unknown> = {
 		[LIST_MARK]: LIST_MARK_VALUE,
 		// Het laagste nummer dat deze notitie goed leest: zie format.ts.
-		[FORMAT_KEY]: staplesFollowShops(list) ? WIDE_FORMAT : STAPLES_FORMAT,
+		[FORMAT_KEY]: shared
+			? ROUND_FORMAT
+			: staplesFollowShops(list)
+				? WIDE_FORMAT
+				: STAPLES_FORMAT,
 		date: list.date,
 	};
 	const arrives = serialiseArrival(list.arrival);

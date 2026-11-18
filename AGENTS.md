@@ -71,6 +71,14 @@ je heen gaat: de groepen, de looproute, het boodschappenmoment) en `staples`
 (van welke winkels de minimums meetellen). Meestal gelijk; dan staat `staples`
 niet in de notitie. Minimums lopen altijd via `staples`, nooit via `shops`.
 
+**Open lijsten verdelen hun boodschappen samen.** Welke lijst een product
+haalt beslist `ShoppingLists.placement(product)`, nergens anders: de
+voorkeursvolgorde van het product, en de eerste lijst naar die winkel die op
+tijd is voor de maaltijd. Niet de vroegste lijst. De lijst die het haalt, haalt
+het voor alle lijsten samen; `need()` en `amount()` geven voor die lijst dus de
+gezamenlijke vraag. De verdeling wordt berekend en staat niet in de notitie —
+daarom dragen lijsten `ROUND_FORMAT` zodra er meer dan één open staat.
+
 **Het schap is per winkel.** Vraag het op met `shelfAt(product, winkel)`, nooit
 `product.shelf` rechtstreeks als je een winkel weet. `shelf` is het gewone
 schap, `shelves` de uitzonderingen per winkel; schrijven gaat via `placeAt()`.

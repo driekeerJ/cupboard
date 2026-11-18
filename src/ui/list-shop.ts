@@ -176,9 +176,9 @@ export class ShopStep {
 				.forEach((product) => this.drawRow(section, product, "never counted"));
 		}
 
-		// Staat al op een eerdere lijst: hier alleen ter herinnering, zodat je
-		// hem niet twee keer koopt — en het ziet als die andere lijst niet
-		// doorgaat.
+		// Een andere open lijst haalt dit (zie `ShoppingLists.placement`): hier
+		// alleen ter herinnering, zodat je het niet twee keer koopt — en het
+		// ziet als die andere lijst niet doorgaat.
 		if (elsewhere.length > 0) {
 			const section = this.section(body, "On another list", elsewhere.length);
 			[...elsewhere]

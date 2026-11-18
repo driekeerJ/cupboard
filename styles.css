@@ -2941,6 +2941,7 @@
 .workspace-leaf-content[data-type="pantry-home"] .view-content,
 .workspace-leaf-content[data-type="pantry-shopping-lists"] .view-content,
 .workspace-leaf-content[data-type="pantry-shopping-list"] .view-content,
+.workspace-leaf-content[data-type="pantry-stock-round"] .view-content,
 .workspace-leaf-content[data-type="pantry-products"] .view-content {
 	padding: 0;
 	overflow-x: hidden;
@@ -3458,6 +3459,28 @@
 .pantry-status.is-quiet {
 	color: var(--text-faint);
 	font-weight: 500;
+}
+
+/* Which list a product lands on, in the stock check across all lists. Quiet
+   next to "buy 2": that is the answer, this is where the answer goes. */
+.pantry-status-tag {
+	flex: none;
+	max-width: 46%;
+	padding: 2px 9px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.pantry-status-tag.is-late {
+	border-color: transparent;
+	color: var(--text-error);
+	background: color-mix(in srgb, var(--text-error) 13%, transparent);
 }
 
 .pantry-stock-controls {
@@ -5476,6 +5499,28 @@
 .pantry-done-icon svg {
 	width: 15px;
 	height: 15px;
+}
+
+/* --- Check stock for every open list at once --------------------------- */
+
+.pantry-app button.pantry-round-button {
+	height: 30px;
+	min-height: 0;
+	padding: 0 12px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-weight: 600;
+}
+
+.pantry-app button.pantry-round-button:hover {
+	background: var(--background-modifier-hover);
+}
+
+/* The lists this round counts for, under the title. */
+.pantry-round-lists {
+	margin-top: 4px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
 }
 
 /* Iets om te weten, niet om te kopen: geen tik, ingesprongen tot de naam. */

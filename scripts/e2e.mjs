@@ -753,6 +753,43 @@ async function main() {
 		await s.run(quietly(`${plugin}.lists.discard(${plugin}.lists.byPath(${JSON.stringify(path)}))`));
 	});
 
+	console.log("\nI. One stock check for every open list");
+	await check("Check stock on Shopping lists opens one round, with the list on each row", async () => {
+		// A second trip next to the demo's supermarket list: the market, a day
+		// earlier. Carrots lie only at the market, so that is where they go.
+		const path = await s.run(`(async () => {
+			const first = ${plugin}.lists.all()[0];
+			const list = await ${plugin}.lists.create({
+				date: first.date, arrival: null,
+				shops: ["Farmers market"], staples: ["Farmers market"], meals: [],
+			});
+			await ${plugin}.lists.refreshAll();
+			return list?.path ?? "";
+		})()`);
+		expect(path, "the second list was not created");
+		await s.run(quietly(command("open-shopping-lists")));
+		await until(`e2e.visible(document.querySelector("button.pantry-round-button"))`, "no Check stock button with two open lists", 2500);
+		await tap(`document.querySelector("button.pantry-round-button")`);
+		await until(`document.querySelector(".pantry-round .pantry-head-title")?.textContent === "Check stock"`, "Check stock did not open", 2500);
+		await until(`e2e.all(".pantry-round .pantry-stock-row").length > 0`, "the round shows no products", 2500);
+		const tags = await s.run(`e2e.all(".pantry-round .pantry-stock-row").map((row) => [
+			row.querySelector(".pantry-stock-name span")?.textContent ?? "",
+			row.querySelector(".pantry-status-tag")?.textContent ?? "",
+		])`);
+		const carrots = tags.find(([name]) => name === "Carrots");
+		expect(carrots, "carrots are not in the round");
+		expect(/^Farmers market/.test(carrots[1]), `carrots are labelled "${carrots[1]}", not with the market's list`);
+		expect(tags.some(([, tag]) => /^Supermarket/.test(tag)), "nothing is labelled with the supermarket's list");
+		await s.run(quietly(`${plugin}.lists.discard(${plugin}.lists.byPath(${JSON.stringify(path)}))`));
+	});
+
+	await check("with one open list there is no Check stock button", async () => {
+		await s.run(quietly(`${plugin}.lists.refreshAll()`));
+		await s.run(quietly(command("open-shopping-lists")));
+		await until(`!!document.querySelector(".pantry-lists .pantry-list-row")`, "Shopping lists did not open", 2500);
+		expect(!(await s.run(`e2e.visible(document.querySelector("button.pantry-round-button"))`)), "the button shows with a single list");
+	});
+
 	console.log("\nF. Console");
 	await check("no errors from Cupboard in the console", async () => {
 		const ours = s.errors.filter((e) => /cupboard|pantry/i.test(e));

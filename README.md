@@ -40,6 +40,16 @@ sorted in the order you walk through the shop.
 
 ![The shopping step: products grouped by shelf, in walking order](docs/screenshots/list-shop.png)
 
+**Count once for every trip.** Going to the market on Wednesday and the
+supermarket on Friday is two lists, and one round past the cupboards. **Check
+stock** on the shopping lists screen counts for every open list at once, and
+each row says which list it lands on. A product goes to the list for the shop
+it usually comes from, the first one in its note. If a meal needs it before
+that shop's groceries are in the house, the next shop in the note takes it;
+if no shop is in time, it stays a warning.
+
+![One stock check for two trips: each product labelled with the list that buys it](docs/screenshots/stock-round.png)
+
 **Skip a shop without skipping its groceries.** Where you go and whose standard
 groceries come along are two separate choices. No time for the market this
 week? Add its standard groceries to the supermarket trip. You check your stock
@@ -186,6 +196,7 @@ different versions cannot lose each other's work.
 | Open meal planner | This week's plan |
 | Open shopping lists | Every open list |
 | New shopping list | Start a trip |
+| Check stock for all shopping lists | One counting round for every open list |
 | Open all stock | Count anything, without a list |
 | Open products | The base list of what you keep in the house |
 | Open shop shelves | Sort products onto shelves, per shop |
