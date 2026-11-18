@@ -104,7 +104,21 @@ function launch() {
 	if (spawnSync("lsof", ["-ti", `tcp:${PORT}`]).stdout.length > 0) {
 		throw new Error(`Port ${PORT} is in use; set CUPBOARD_E2E_PORT.`);
 	}
-	execFileSync("open", ["-n", "-g", "-a", "Obsidian", "--args", `--user-data-dir=${USER_DATA}`, `--remote-debugging-port=${PORT}`]);
+	// The window opens in the background (`-g`), and whatever you keep working
+	// in ends up on top of it. Chromium then treats it as hidden: animation
+	// frames stop and timers drop to one a second. On 2026-11-18 that failed
+	// ten checks on an untouched `main` — a hold that never fired, a sheet
+	// still parked at 1635px because its slide-up never ran — and the first
+	// run did not even load the plugin within thirty seconds. These switches
+	// keep a covered window running at full speed.
+	execFileSync("open", [
+		"-n", "-g", "-a", "Obsidian", "--args",
+		`--user-data-dir=${USER_DATA}`,
+		`--remote-debugging-port=${PORT}`,
+		"--disable-renderer-backgrounding",
+		"--disable-backgrounding-occluded-windows",
+		"--disable-background-timer-throttling",
+	]);
 }
 
 /** Only ever our own instance: matched on its private user-data-dir. */
@@ -145,6 +159,10 @@ class Session {
 		const session = new Session(ws);
 		await session.send("Runtime.enable");
 		await session.send("Page.enable");
+		// The other half of the same problem: the page itself must believe it
+		// is visible and focused, or `document.hidden` pauses what the
+		// switches above keep alive. Older Electron may not know the call.
+		await session.send("Emulation.setFocusEmulationEnabled", { enabled: true }).catch(() => undefined);
 		return session;
 	}
 
