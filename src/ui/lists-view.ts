@@ -3,7 +3,7 @@ import { guarded } from "../guard";
 import type PantryPlugin from "../main";
 import { formatListDate, isOverdue, listLabel, type ShoppingList } from "../shopping-list";
 import { emptyState } from "./kit";
-import { LISTS_VIEW_TYPE, LIST_VIEW_TYPE, drawBackLink, openHere } from "./nav";
+import { LISTS_VIEW_TYPE, LIST_VIEW_TYPE, ROUND_VIEW_TYPE, drawBackLink, openHere } from "./nav";
 
 export { LISTS_VIEW_TYPE };
 
@@ -18,6 +18,7 @@ export class ListsView extends ItemView {
 	private plugin: PantryPlugin;
 	private bodyEl: HTMLElement | null = null;
 	private subEl: HTMLElement | null = null;
+	private roundEl: HTMLButtonElement | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: PantryPlugin) {
 		super(leaf);
@@ -60,6 +61,15 @@ export class ListsView extends ItemView {
 		this.subEl = titles.createDiv({ cls: "pantry-head-sub" });
 
 		const actions = top.createDiv({ cls: "pantry-head-actions" });
+		// Eén ronde langs de kast voor alle lijsten samen. Pas bij twee
+		// lijsten: met één lijst is dit precies haar eigen Check stock.
+		this.roundEl = actions.createEl("button", {
+			cls: "pantry-text-button pantry-round-button",
+			text: "Check stock",
+		});
+		this.roundEl.setAttr("aria-label", "Check stock for all open lists in one round");
+		this.roundEl.onclick = () =>
+			guarded("could not open the stock check", () => openHere(this, ROUND_VIEW_TYPE));
 		const add = actions.createEl("button", {
 			cls: "pantry-text-button pantry-primary-button",
 			text: "New list",
@@ -80,6 +90,7 @@ export class ListsView extends ItemView {
 		body.empty();
 
 		const lists = this.plugin.lists.all();
+		this.roundEl?.toggleClass("is-hidden", lists.length < 2);
 		const late = lists.filter((list) => isOverdue(list)).length;
 		const parts = [lists.length === 0 ? "none open" : `${lists.length} open`];
 		if (late > 0) parts.push(`${late} past ${late === 1 ? "its" : "their"} date`);

@@ -9,6 +9,8 @@ export const HOME_VIEW_TYPE = "pantry-home";
  */
 export const LISTS_VIEW_TYPE = "pantry-shopping-lists";
 export const LIST_VIEW_TYPE = "pantry-shopping-list";
+/** De telronde over alle open lijsten; het overzicht opent hem, hij wijst terug. */
+export const ROUND_VIEW_TYPE = "pantry-stock-round";
 
 /**
  * Cupboard is seven screens, and moving between them should feel like one app

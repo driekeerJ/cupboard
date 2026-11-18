@@ -93,4 +93,18 @@ export default tseslint.config(
 			"obsidianmd/no-tfile-tfolder-cast": "off",
 		},
 	},
+
+	{
+		// Deze twee bestanden bouwen ná wat Obsidian een plugin aanreikt: de
+		// pagina zelf, en `createDiv`, `show()` en vrienden daarop. De regels
+		// hieronder zeggen "gebruik Obsidians hulpje" — maar dit ís het hulpje,
+		// en buiten Obsidian is er geen tweede venster om rekening mee te houden.
+		files: ["tests/harness/dom.ts", "tests/harness/obsidian.ts"],
+		rules: {
+			"obsidianmd/prefer-create-el": "off",
+			"obsidianmd/no-global-this": "off",
+			"obsidianmd/prefer-window-timers": "off",
+			"obsidianmd/no-static-styles-assignment": "off",
+		},
+	},
 );

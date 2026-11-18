@@ -1,11 +1,18 @@
 /**
  * End-to-end checks in a real Obsidian, emulating a phone.
  *
- *   npm run e2e
+ *   npm run e2e            alles
+ *   npm run e2e -- A I     alleen die secties
  *
- * Wat de harnastests niet kunnen zien — een tik die afvinkt, vasthouden dat
- * bewerkt, een knop die onder de systeembalk valt — zit in de DOM van een
- * echte Obsidian. Dit script start daarvoor een *tweede* Obsidian met een
+ * Dit is de traagste laag en hoort de kleinste te zijn. Wat een scherm toont
+ * en wat een klik schrijft staat in `tests/ui/` en draait in Node, in
+ * milliseconden (zie tests/harness/dom.ts). Hier hoort alleen wat een echte
+ * Obsidian nodig heeft: een tik tegenover vasthouden tegenover scrollen, een
+ * knop die onder de systeembalk valt, een laag over het hele venster, en dat
+ * de plugin laadt. Staat een nieuwe check hier, vraag dan eerst of hij ook
+ * zonder Obsidian te bewijzen is.
+ *
+ * Wat die tests niet kunnen zien zit in de DOM van een echte Obsidian. Dit script start daarvoor een *tweede* Obsidian met een
  * eigen gebruikersmap (`--user-data-dir`) en een debugpoort, met alleen een
  * wegwerpkluis erin. De Obsidian waar je zelf in werkt merkt er niets van:
  * Electron houdt één instantie per gebruikersmap, niet per app.
@@ -97,7 +104,21 @@ function launch() {
 	if (spawnSync("lsof", ["-ti", `tcp:${PORT}`]).stdout.length > 0) {
 		throw new Error(`Port ${PORT} is in use; set CUPBOARD_E2E_PORT.`);
 	}
-	execFileSync("open", ["-n", "-g", "-a", "Obsidian", "--args", `--user-data-dir=${USER_DATA}`, `--remote-debugging-port=${PORT}`]);
+	// The window opens in the background (`-g`), and whatever you keep working
+	// in ends up on top of it. Chromium then treats it as hidden: animation
+	// frames stop and timers drop to one a second. On 2026-11-18 that failed
+	// ten checks on an untouched `main` — a hold that never fired, a sheet
+	// still parked at 1635px because its slide-up never ran — and the first
+	// run did not even load the plugin within thirty seconds. These switches
+	// keep a covered window running at full speed.
+	execFileSync("open", [
+		"-n", "-g", "-a", "Obsidian", "--args",
+		`--user-data-dir=${USER_DATA}`,
+		`--remote-debugging-port=${PORT}`,
+		"--disable-renderer-backgrounding",
+		"--disable-backgrounding-occluded-windows",
+		"--disable-background-timer-throttling",
+	]);
 }
 
 /** Only ever our own instance: matched on its private user-data-dir. */
@@ -138,6 +159,10 @@ class Session {
 		const session = new Session(ws);
 		await session.send("Runtime.enable");
 		await session.send("Page.enable");
+		// The other half of the same problem: the page itself must believe it
+		// is visible and focused, or `document.hidden` pauses what the
+		// switches above keep alive. Older Electron may not know the call.
+		await session.send("Emulation.setFocusEmulationEnabled", { enabled: true }).catch(() => undefined);
 		return session;
 	}
 
@@ -204,7 +229,24 @@ true;
 const results = [];
 let s;
 
+/**
+ * Which sections to run: `npm run e2e -- A I` runs only those. Starting a
+ * second Obsidian is slow enough already; nobody reruns thirty checks to see
+ * whether the one they just touched still passes, and a suite nobody runs
+ * protects nothing. No letters means everything.
+ */
+const ONLY = process.argv.slice(2).map((arg) => arg.toUpperCase());
+let active = true;
+
+function section(letter, title) {
+	// The console check closes every run, whatever was picked: an error the
+	// chosen sections caused is still an error.
+	active = ONLY.length === 0 || ONLY.includes(letter) || letter === "F";
+	if (active) console.log(`\n${letter}. ${title}`);
+}
+
 async function check(name, body) {
+	if (!active) return;
 	try {
 		await body();
 		results.push({ name, ok: true });
@@ -338,6 +380,24 @@ async function main() {
 		await sleep(250);
 	}
 	await sleep(1500);
+	// Without the plugin every check below fails with the same useless
+	// "reading 'lists' of undefined", and the reason is wiped a few lines down
+	// together with the startup noise. Stop here and say what Obsidian said.
+	const loaded = await s.run(`!!(app?.plugins?.plugins?.[${JSON.stringify(ID)}])`).catch(() => false);
+	if (!loaded) {
+		const enabled = await s.run(`JSON.stringify({
+			enabled: Array.from(app?.plugins?.enabledPlugins ?? []),
+			manifests: Object.keys(app?.plugins?.manifests ?? {}),
+			restricted: app?.vault?.getConfig?.("safeMode") ?? null,
+			version: typeof apiVersion === "string" ? apiVersion : null,
+		})`).catch((error) => String(error));
+		console.error(`\nCupboard did not load in the test Obsidian, so nothing was checked.`);
+		console.error(`  Obsidian says: ${enabled}`);
+		console.error(s.errors.length > 0 ? `  Console errors:\n    ${s.errors.slice(0, 8).join("\n    ")}` : "  No console errors were captured.");
+		s.close();
+		killOurs();
+		process.exit(1);
+	}
 	await s.run(HELPERS);
 	await s.run(`document.body.style.setProperty("--safe-area-inset-top", "${ANDROID.top}px");
 		document.body.style.setProperty("--safe-area-inset-bottom", "${ANDROID.bottom}px"); true`);
@@ -345,7 +405,7 @@ async function main() {
 	console.log(`  phone emulation: ${phone ? "on" : "OFF"}, insets top ${await s.run(`e2e.inset("top")`)}px / bottom ${await s.run(`e2e.inset("bottom")`)}px`);
 	s.errors.length = 0;
 
-	console.log("\nA. Shopping list (#3)");
+	section("A", "Shopping list (#3)");
 	let listPath = "";
 
 	await check("tapping a name ticks the row at once", async () => {
@@ -459,7 +519,7 @@ async function main() {
 		await until(`e2e.modal()?.querySelector(".pantry-sheet-name")?.textContent === "Flowers"`, "holding did not open the edit form", 1500);
 	});
 
-	console.log("\nB. Buttons clear the system bars (#2)");
+	section("B", "Buttons clear the system bars (#2)");
 
 	async function clearsBars(label, open) {
 		await check(`${label}: buttons above the bottom bar, head below the top bar`, async () => {
@@ -489,7 +549,7 @@ async function main() {
 		await hold(`e2e.row(${JSON.stringify(row)}).querySelector(".pantry-buy-main")`);
 	});
 
-	console.log("\nC. Adding shops and recipes (#1)");
+	section("C", "Adding shops and recipes (#1)");
 
 	await check("+ Shop on Shelves adds a shop and switches to it", async () => {
 		await s.run(quietly(command("open-shelves")));
@@ -546,7 +606,7 @@ async function main() {
 		for (const id of ["new-shop", "new-recipe"]) expect(ids.includes(`${ID}:${id}`), `${id} missing`);
 	});
 
-	console.log("\nD. Tick boxes on the right (#3)");
+	section("D", "Tick boxes on the right (#3)");
 
 	await check("the setting moves the tick to the right edge and back", async () => {
 		await s.run(`app.setting.open(); app.setting.openTabById(${JSON.stringify(ID)}); true`);
@@ -564,7 +624,7 @@ async function main() {
 		expect((await side()) === "left", "the tick did not go back to the left");
 	});
 
-	console.log("\nE. To check and explanations (#3)");
+	section("E", "To check and explanations (#3)");
 
 	await check("To check lists never-counted products", async () => {
 		await s.run(quietly(command("open-stock")));
@@ -611,7 +671,7 @@ async function main() {
 		expect(!notes.some((t) => t.includes("herschrijft")), "a plan note still has the Dutch comment");
 	});
 
-	console.log("\nG. Cook mode: focus");
+	section("G", "Cook mode: focus");
 
 	const overlay = `document.querySelector(".pantry-focus-overlay")`;
 	const slideTitle = () => s.run(`(${overlay})?.querySelector(".pantry-focus-title")?.textContent ?? null`);
@@ -709,51 +769,39 @@ async function main() {
 		expect(ids.includes(`${ID}:cook-focus`), "cook-focus missing");
 	});
 
-	console.log("\nH. Another shop's standard groceries, bought here");
-	await check("Standard groceries is its own choice on the setup step", async () => {
-		await s.run(quietly(command("new-shopping-list")));
-		await until(`e2e.all("button.pantry-pick-staple").some(e2e.visible)`, "no Standard groceries rows on the setup step", 2500);
-		// Until you pull them apart, the standard lists follow the shops.
-		await tap(`e2e.all("button.pantry-pick-row:not(.pantry-pick-staple)").find((b) => b.textContent.includes("Supermarket"))`);
-		await until(
-			`e2e.all("button.pantry-pick-staple").find((b) => b.textContent.includes("Supermarket"))?.getAttribute("aria-pressed") === "true"`,
-			"picking a shop did not take its standard groceries along",
-			1500
-		);
-	});
-
-	await check("a product with no shelf at this shop gets one in a tap", async () => {
-		// The farmers market's list, bought at the supermarket: carrots lie at
-		// "Vegetables" there, and the supermarket has no such shelf.
+	section("I", "One stock check for every open list");
+	await check("Check stock on Shopping lists opens one round, with the list on each row", async () => {
+		// A second trip next to the demo's supermarket list: the market, a day
+		// earlier. Carrots lie only at the market, so that is where they go.
 		const path = await s.run(`(async () => {
+			const first = ${plugin}.lists.all()[0];
 			const list = await ${plugin}.lists.create({
-				date: "2099-01-01", arrival: null,
-				shops: ["Supermarket"], staples: ["Farmers market"], meals: [],
+				date: first.date, arrival: null,
+				shops: ["Farmers market"], staples: ["Farmers market"], meals: [],
 			});
+			await ${plugin}.lists.refreshAll();
 			return list?.path ?? "";
 		})()`);
-		expect(path, "the list was not created");
-		await s.run(quietly(`${plugin}.openList(${JSON.stringify(path)}, "shop")`));
-		await until(
-			`e2e.all(".pantry-shelf").some((el) => el.textContent === "No shelf at Supermarket")`,
-			"no 'No shelf at Supermarket' heading",
-			2500
-		);
-		const row = `e2e.row("Products/Carrots.md")`;
-		await until(`!!${row}?.querySelector("button.pantry-place")`, "no Shelf button on the carrots row", 1500);
-		await tap(`${row}.querySelector("button.pantry-place")`);
-		await until(`e2e.modal()?.querySelector(".pantry-sheet-name")?.textContent === "Carrots"`, "Shelf did not open the picker", 1500);
-		await tap(`Array.from(e2e.modal().querySelectorAll("button.pantry-sheet-option")).find((b) => b.textContent.trim() === "Fruit & vegetables")`);
-		await until(`!e2e.modal()`, "the picker did not close", 1500);
-		await until(`!!${row} && !${row}.querySelector("button.pantry-place")`, "carrots still have no shelf", 2500);
-		const note = await s.run(`e2e.read("Products/Carrots.md")`);
-		expect(/^shelf: Vegetables$/m.test(note), "the farmers market shelf was overwritten");
-		expect(/^shelves:\n\s+Supermarket: Fruit & vegetables$/m.test(note), "no shelf for the supermarket in the note");
-		expect(!/Supermarket/.test(note.match(/^shop:.*$/m)?.[0] ?? ""), "the supermarket became one of the product's shops");
+		expect(path, "the second list was not created");
+		await s.run(quietly(command("open-shopping-lists")));
+		await until(`e2e.visible(document.querySelector("button.pantry-round-button"))`, "no Check stock button with two open lists", 2500);
+		await tap(`document.querySelector("button.pantry-round-button")`);
+		await until(`document.querySelector(".pantry-round .pantry-head-title")?.textContent === "Check stock"`, "Check stock did not open", 2500);
+		await until(`e2e.all(".pantry-round .pantry-stock-row").length > 0`, "the round shows no products", 2500);
+		const tags = await s.run(`e2e.all(".pantry-round .pantry-stock-row").map((row) => [
+			row.querySelector(".pantry-stock-name span")?.textContent ?? "",
+			row.querySelector(".pantry-status-tag")?.textContent ?? "",
+		])`);
+		const carrots = tags.find(([name]) => name === "Carrots");
+		expect(carrots, "carrots are not in the round");
+		expect(/^Farmers market/.test(carrots[1]), `carrots are labelled "${carrots[1]}", not with the market's list`);
+		expect(tags.some(([, tag]) => /^Supermarket/.test(tag)), "nothing is labelled with the supermarket's list");
 		await s.run(quietly(`${plugin}.lists.discard(${plugin}.lists.byPath(${JSON.stringify(path)}))`));
+		await s.run(quietly(`${plugin}.lists.refreshAll()`));
 	});
 
-	console.log("\nF. Console");
+
+	section("F", "Console");
 	await check("no errors from Cupboard in the console", async () => {
 		const ours = s.errors.filter((e) => /cupboard|pantry/i.test(e));
 		expect(ours.length === 0, ours.slice(0, 3).join("\n      "));

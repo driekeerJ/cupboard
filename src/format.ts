@@ -13,7 +13,7 @@
  * verkeerd zou lezen of iets zou weggooien. Een extra optioneel veld is geen
  * reden; een veld dat van betekenis verandert wel.
  */
-export const PANTRY_FORMAT = 3;
+export const PANTRY_FORMAT = 4;
 
 /**
  * Het formaat dat elke build sinds de formaatcontrole leest: weekplannen, en
@@ -35,6 +35,21 @@ export const WIDE_FORMAT = 2;
  * lezen, dus die build mag er niet aan komen.
  */
 export const STAPLES_FORMAT = 3;
+
+/**
+ * Een lijst die haar boodschappen met andere open lijsten verdeelt.
+ *
+ * Sinds 1.4 bepalen de open lijsten samen wie wat haalt: de primaire winkel
+ * van het product wint, niet de vroegste lijst (zie `ShoppingLists.placement`).
+ * Er staat daarvoor niets nieuws in de notitie — de verdeling wordt berekend —
+ * maar een oudere build berekent hem anders. Twee apparaten zouden dezelfde
+ * afvinklijst dan om beurten anders herschrijven, en wat je op je telefoon in
+ * de winkel ziet klopt niet met wat je thuis telde.
+ *
+ * Alleen zolang er meer dan één lijst open staat: één lijst alleen rekent op
+ * elke build hetzelfde uit en houdt haar oude nummer.
+ */
+export const ROUND_FORMAT = 4;
 
 /** De frontmatter-sleutel (lijsten) en YAML-sleutel (planblok) voor het formaat. */
 export const FORMAT_KEY = "format";
