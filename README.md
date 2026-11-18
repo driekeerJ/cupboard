@@ -137,6 +137,17 @@ and you can edit every note by hand.
   Something you never run out of and never measure, such as salt, gets
   `amount: any` instead of a size.
 
+  A product can come from more than one shop. The order is your preference:
+  the first shop is where it usually comes from, and that decides which
+  shopping list it lands on. The next one only takes over when a meal needs
+  the product before the first shop's groceries are in the house.
+
+  ```yaml
+  shop:
+    - "[[Supermarket]]"
+    - "[[Farmers market]]"
+  ```
+
   `shelf` holds for every shop that has a shelf by that name. Where a shop
   keeps it somewhere else, that shop gets its own line:
 
@@ -173,7 +184,10 @@ and you can edit every note by hand.
 
 Every note Cupboard writes carries a `format` number. A device running an older
 build reads newer notes but never overwrites them, so two devices on
-different versions cannot lose each other's work.
+different versions cannot lose each other's work. While more than one shopping
+list is open, the lists carry the newest number: they decide together which
+list buys what, and an older build would decide differently. Update Cupboard on
+every device before you plan two trips at once.
 
 ## Getting started
 
@@ -224,10 +238,19 @@ shopping lists are kept; and which side of a shopping row the tick box sits on.
 npm install
 npm run dev            # watch build
 npm run build          # tests, type check, minified main.js
+npm run test           # the tests alone: rules and screens, a few seconds
+npm run test:ui        # only the screen tests, no Obsidian needed
 npm run lint
 npm run e2e            # checks in a second, throwaway Obsidian in phone mode (macOS)
+npm run e2e -- A I     # only those sections
 node scripts/screenshots.mjs   # README screenshots from the demo vault (macOS)
 ```
+
+Tests come in three layers. The rules (what is calculated and written) and the
+screens (what a screen shows, what a click does) both run in Node against a
+fake vault and a simulated page, on any machine and in CI. The end-to-end
+checks start a real Obsidian and are kept for what only that can prove: touch,
+layout around the system bars, and that the plugin loads.
 
 The `demo/` folder holds a small sample vault: a household of four, eleven
 recipes, the products they use, two shops and a planned week. The screenshot

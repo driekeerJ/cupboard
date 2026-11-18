@@ -160,7 +160,7 @@ const PRODUCT_BODY = [
 	"> `unit` \u2014 what you count it in: piece, pack, kg.",
 	"> `size` \u2014 what one package holds, in the unit your recipes use. Turns \"500 g rice\" in a recipe into half a 1 kg bag on the list.",
 	"> `amount` set to `any` \u2014 the amount does not matter (salt, spices): recipes never add it to the list and cooking never takes it off stock. Only the minimum counts.",
-	"> `shop`, `shelf` \u2014 where you buy it and where it is in the shop.",
+	"> `shop`, `shelf` \u2014 where you buy it and where it is in the shop. With more than one shop, the first is where it usually comes from.",
 	"> `storage` \u2014 where it lives at home.",
 	"> `aliases` \u2014 other names your recipes use for this product.",
 	"> `url` \u2014 the link to this product at the shop.",
