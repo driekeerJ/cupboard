@@ -338,6 +338,24 @@ async function main() {
 		await sleep(250);
 	}
 	await sleep(1500);
+	// Without the plugin every check below fails with the same useless
+	// "reading 'lists' of undefined", and the reason is wiped a few lines down
+	// together with the startup noise. Stop here and say what Obsidian said.
+	const loaded = await s.run(`!!(app?.plugins?.plugins?.[${JSON.stringify(ID)}])`).catch(() => false);
+	if (!loaded) {
+		const enabled = await s.run(`JSON.stringify({
+			enabled: Array.from(app?.plugins?.enabledPlugins ?? []),
+			manifests: Object.keys(app?.plugins?.manifests ?? {}),
+			restricted: app?.vault?.getConfig?.("safeMode") ?? null,
+			version: typeof apiVersion === "string" ? apiVersion : null,
+		})`).catch((error) => String(error));
+		console.error(`\nCupboard did not load in the test Obsidian, so nothing was checked.`);
+		console.error(`  Obsidian says: ${enabled}`);
+		console.error(s.errors.length > 0 ? `  Console errors:\n    ${s.errors.slice(0, 8).join("\n    ")}` : "  No console errors were captured.");
+		s.close();
+		killOurs();
+		process.exit(1);
+	}
 	await s.run(HELPERS);
 	await s.run(`document.body.style.setProperty("--safe-area-inset-top", "${ANDROID.top}px");
 		document.body.style.setProperty("--safe-area-inset-bottom", "${ANDROID.bottom}px"); true`);
