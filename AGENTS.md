@@ -8,10 +8,11 @@ is, Engels in de code.
 
 ```bash
 npm run test          # node --test, draait ook binnen npm run build
+npm run test:ui       # alleen de schermtests (tests/ui), zonder Obsidian
 npm run build         # test + tsc -noEmit + esbuild -> main.js
 npm run build:deploy  # build + kopieer main.js/manifest.json/styles.css naar de vault
 npm run lint          # ESLint, type-aware
-npm run e2e           # tweede, losse Obsidian in telefoonmodus (macOS)
+npm run e2e           # tweede, losse Obsidian in telefoonmodus (macOS); `-- A I` draait alleen die secties
 npm run screenshots   # README-screenshots uit demo/ (macOS)
 ```
 
@@ -118,8 +119,10 @@ op de `body` van het venster van de kookweergave, buiten elke view. Daar geldt
 de view-selector niet: knoppen staan als `.pantry-focus-overlay button.x`. De
 laag bezit geen vinkjes; die gaan via `CookView.write` naar de sessienotitie,
 en de indeling in dia's staat los en getest in `src/cook-focus.ts`. Nieuwe
-schermen of commands: ook een check in `scripts/e2e.mjs` en, als het in de
-README hoort, een shot in `scripts/screenshots.mjs`.
+schermen of commands: een schermtest in `tests/ui/`, het commando in
+`tests/ui/laden.test.ts`, en, als het in de README hoort, een shot in
+`scripts/screenshots.mjs`. Een check in `scripts/e2e.mjs` alleen voor wat een
+echte Obsidian nodig heeft (zie Tests).
 
 Slepen: luisteraars op `window`, gekoppeld op `pointerId`, plus een inline
 `translateY`. Pointer capture sterft zodra het element in de DOM verplaatst
@@ -136,6 +139,20 @@ een jaar kwijt bent, hoort boven de code die hem uitvoert. Zie `products.ts`
 `tests/harness/` zet de echte indexen op een neppe vault (`Map<pad, markdown>`).
 Scenario's zijn markdownnotities onder `tests/fixtures/<scenario>/`. Verander de
 broncode niet om hem testbaar te maken — het harnas past zich aan.
+
+Drie lagen, van snel naar traag. Zet een test in de snelste laag die hem kan
+bewijzen:
+
+1. **Regels** (`tests/*.test.ts`, `tests/unit/`): wat er berekend en geschreven
+   wordt. Geen DOM.
+2. **Schermen** (`tests/ui/`): de echte schermklassen in een nagebootste pagina
+   (`tests/harness/dom.ts`, `screen.ts`). Wat er staat, wat een klik doet, wat
+   er daarna in de notitie staat, en dat `onload` doorloopt. Draait in Node,
+   dus ook in CI en op Linux. Bewijst geen CSS, layout, aanraking of animatie.
+3. **e2e** (`scripts/e2e.mjs`): alleen wat een echte Obsidian nodig heeft —
+   tik tegenover vasthouden tegenover scrollen, knoppen boven de systeembalk,
+   de focuslaag over het hele venster, en dat de bundel laadt. Traag en alleen
+   op macOS; houd hem klein.
 
 Bekende bugs staan als `test(..., { todo: "H1 — …" })` met de **gewenste**
 uitkomst. Repareer je zo'n bug, haal dan `{ todo }` weg; pas nooit de assertie
