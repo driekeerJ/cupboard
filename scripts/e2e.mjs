@@ -239,7 +239,9 @@ const ONLY = process.argv.slice(2).map((arg) => arg.toUpperCase());
 let active = true;
 
 function section(letter, title) {
-	active = ONLY.length === 0 || ONLY.includes(letter);
+	// The console check closes every run, whatever was picked: an error the
+	// chosen sections caused is still an error.
+	active = ONLY.length === 0 || ONLY.includes(letter) || letter === "F";
 	if (active) console.log(`\n${letter}. ${title}`);
 }
 

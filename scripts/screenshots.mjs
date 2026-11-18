@@ -121,7 +121,15 @@ async function quitObsidian() {
 
 async function startDebugObsidian() {
 	registerVault();
-	execFileSync("open", ["-a", "Obsidian", "--args", `--remote-debugging-port=${PORT}`]);
+	// Same switches as scripts/e2e.mjs: a window that is not in front is
+	// treated as hidden, and its animations and timers stall mid-shot.
+	execFileSync("open", [
+		"-a", "Obsidian", "--args",
+		`--remote-debugging-port=${PORT}`,
+		"--disable-renderer-backgrounding",
+		"--disable-backgrounding-occluded-windows",
+		"--disable-background-timer-throttling",
+	]);
 	for (let i = 0; i < 60; i++) {
 		if (await targets()) return;
 		await sleep(500);
