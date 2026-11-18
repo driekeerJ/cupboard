@@ -724,9 +724,11 @@ export class PlannerGrid {
 		if (input.value.length > 0) wrap.addClass("has-note");
 
 		// Meegroeien met wat je typt kan alleen gemeten worden, niet in CSS
-		// gezet: de hoogte volgt uit `scrollHeight` van dit ene veld.
+		// gezet: de hoogte volgt uit `scrollHeight` van dit ene veld. Eerst de
+		// gemeten hoogte weghalen, zodat het veld terugvalt op `height: auto`
+		// uit styles.css en ook weer krimpt als je tekst wist.
 		const grow = (): void => {
-			input.setCssStyles({ height: "auto" });
+			input.setCssStyles({ height: "" });
 			input.setCssStyles({ height: `${Math.max(input.scrollHeight, 28)}px` });
 		};
 		// Not laid out yet on the first draw, so scrollHeight is still 0.
@@ -1223,7 +1225,10 @@ export class PlannerGrid {
 		);
 		const cards = slot?.querySelectorAll(".pantry-planned-card");
 		const card = cards?.[cards.length - 1];
-		if (card instanceof HTMLElement) {
+		// `instanceOf` en niet `instanceof`: een rooster in een los venster
+		// (popout) heeft daar zijn eigen `HTMLElement`, en dan is de kaart
+		// geen instantie van die uit het hoofdvenster.
+		if (card?.instanceOf(HTMLElement)) {
 			card.addClass("is-new");
 			window.setTimeout(() => card.removeClass("is-new"), 400);
 		}

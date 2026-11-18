@@ -37,6 +37,13 @@ export class EatersPopover {
 	private target: MoveTarget | null;
 
 	private el: HTMLElement;
+	/**
+	 * Het venster waarin het paneel is geopend. Eén keer vastgelegd: wordt
+	 * intussen een ander venster actief, dan moeten `close()` en `place()` nog
+	 * steeds dít document hebben, anders blijven de luisteraars hangen.
+	 */
+	private doc: Document;
+	private win: Window;
 	private bodyEl: HTMLElement | null = null;
 	private footerEl: HTMLElement | null = null;
 	private sheet = false;
@@ -58,14 +65,19 @@ export class EatersPopover {
 		this.onOpenNote = onOpenNote;
 		this.target = target;
 
+		// Het venster waarin net op de kaart is getikt. In een los venster
+		// (popout) hoort het paneel dáár, niet in het hoofdvenster.
+		this.doc = activeDocument;
+		this.win = this.doc.defaultView ?? window;
+
 		// A floating panel anchored to a card is unusable on a phone, so narrow
 		// screens get a sheet that slides up from the bottom instead.
-		this.sheet = window.innerWidth < SHEET_BREAKPOINT;
+		this.sheet = this.win.innerWidth < SHEET_BREAKPOINT;
 		if (this.sheet) {
-			this.backdrop = document.body.createDiv({ cls: "pantry-sheet-backdrop" });
+			this.backdrop = this.doc.body.createDiv({ cls: "pantry-sheet-backdrop" });
 		}
 
-		this.el = document.body.createDiv({ cls: "pantry-popover" });
+		this.el = this.doc.body.createDiv({ cls: "pantry-popover" });
 		this.el.toggleClass("is-sheet", this.sheet);
 		this.draw();
 		if (!this.sheet) this.place(anchor);
@@ -82,11 +94,11 @@ export class EatersPopover {
 		// Deferred so the click that opened the panel does not close it again.
 		// Wel eerst kijken of hij intussen al dicht is: sluit er iets binnen die
 		// ene tick, dan hingen de luisteraars daarna aan een verdwenen paneel en
-		// bleven ze aan `document` hangen tot Obsidian herstartte.
+		// bleven ze aan het document hangen tot Obsidian herstartte.
 		window.setTimeout(() => {
 			if (EatersPopover.open !== this) return;
-			document.addEventListener("pointerdown", this.outsideClick);
-			document.addEventListener("keydown", this.onKeyDown);
+			this.doc.addEventListener("pointerdown", this.outsideClick);
+			this.doc.addEventListener("keydown", this.onKeyDown);
 		}, 0);
 	}
 
@@ -114,8 +126,8 @@ export class EatersPopover {
 	}
 
 	private close(): void {
-		document.removeEventListener("pointerdown", this.outsideClick);
-		document.removeEventListener("keydown", this.onKeyDown);
+		this.doc.removeEventListener("pointerdown", this.outsideClick);
+		this.doc.removeEventListener("keydown", this.onKeyDown);
 		this.el.remove();
 		this.backdrop?.remove();
 		this.backdrop = null;
@@ -126,12 +138,12 @@ export class EatersPopover {
 		const { offsetWidth: width, offsetHeight: height } = this.el;
 
 		let top = anchor.bottom + 6;
-		if (top + height > window.innerHeight - EDGE_MARGIN) {
+		if (top + height > this.win.innerHeight - EDGE_MARGIN) {
 			top = Math.max(EDGE_MARGIN, anchor.top - height - 6);
 		}
 
 		let left = anchor.left;
-		left = Math.min(left, window.innerWidth - width - EDGE_MARGIN);
+		left = Math.min(left, this.win.innerWidth - width - EDGE_MARGIN);
 		left = Math.max(EDGE_MARGIN, left);
 
 		this.el.style.top = `${Math.round(top)}px`;
